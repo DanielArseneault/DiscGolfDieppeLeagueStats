@@ -86,7 +86,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       {/* Hero banner */}
       <div className="-mx-4 -mt-14 relative overflow-hidden mb-2">
         <div
-          className="px-8 pt-24 pb-32 text-white relative bg-cover"
+          className="px-4 pt-16 pb-20 md:px-8 md:pt-24 md:pb-32 text-white relative bg-cover"
           style={{ backgroundImage: "url('/hero-basket.jpg')", backgroundPosition: "28% 30%" }}
         >
           {/* Dark overlay for text readability */}
@@ -95,20 +95,20 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/40 to-transparent pointer-events-none" />
           <div className="relative">
             <p className="text-white/60 text-xs font-semibold uppercase tracking-widest mb-1">Standings</p>
-            <h1 className="text-4xl font-black tracking-tight drop-shadow-sm">{league.name}</h1>
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight drop-shadow-sm">{league.name}</h1>
             <p className="text-white/80 mt-2 text-sm">
               {formatDate(league.startDate)} – {formatDate(league.endDate)} · {league.location}
             </p>
           </div>
         </div>
         <div className="absolute bottom-0 left-0 right-0">
-          <svg viewBox="0 0 1200 56" preserveAspectRatio="none" className="w-full h-14 fill-[#f8fafc]">
+          <svg viewBox="0 0 1200 56" preserveAspectRatio="none" className="w-full h-8 md:h-14 fill-[#f8fafc]">
             <path d="M0,56 L0,28 C150,56 300,8 500,22 C700,36 900,4 1200,22 L1200,56 Z" />
           </svg>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-4">
         <StatCard label="Blue Division Players" value={blueCount} />
         <StatCard label="Red Division Players" value={redCount} />
         <StatCard label="Players Qualified" value={qualifiedCount} />
@@ -160,9 +160,9 @@ function RecentRound({ round, leagueId }: { round: RoundData; leagueId: number }
   return (
     <Card className="border-slate-200">
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between gap-3">
           <CardTitle className="text-slate-900">Week {round.weekNumber} — Recent Results</CardTitle>
-          <Link href={`/rounds/${round.id}?league=${leagueId}`} className="text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 hover:border-blue-300 px-3 py-1 rounded-full transition-colors">
+          <Link href={`/rounds/${round.id}?league=${leagueId}`} className="shrink-0 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 hover:border-blue-300 px-3 py-1 rounded-full transition-colors">
             Full scorecard →
           </Link>
         </div>
@@ -171,7 +171,7 @@ function RecentRound({ round, leagueId }: { round: RoundData; leagueId: number }
         </p>
       </CardHeader>
       <CardContent>
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid md:grid-cols-2 gap-4 md:gap-6">
           {([Division.BLUE, Division.RED] as Division[]).map((div) => {
             const top3 = round.results.filter((r) => r.division === div).slice(0, 3);
             return (
@@ -226,21 +226,21 @@ function ChampionshipResults({ round, poolSummaries, leagueId }: { round: RoundD
   return (
     <Card className="border-amber-300 bg-gradient-to-br from-amber-50 to-white">
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">🏆</span>
-            <div>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-2 min-w-0">
+            <span className="text-2xl shrink-0 mt-0.5">🏆</span>
+            <div className="min-w-0">
               <CardTitle className="text-xl text-slate-900">Championship Results</CardTitle>
               <p className="text-sm text-slate-500 mt-0.5">{formatDate(round.date)} · {round._count.results} players</p>
             </div>
           </div>
-          <Link href={`/rounds/${round.id}?league=${leagueId}`} className="text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 hover:border-blue-300 px-3 py-1 rounded-full transition-colors">
+          <Link href={`/rounds/${round.id}?league=${leagueId}`} className="shrink-0 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 hover:border-blue-300 px-3 py-1 rounded-full transition-colors">
             Full scorecard →
           </Link>
         </div>
       </CardHeader>
       <CardContent>
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid md:grid-cols-2 gap-4 md:gap-6">
           <PoolColumn label="🔵 Blue Division" pools={bluePools} />
           <PoolColumn label="🔴 Red Division" pools={redPools} />
         </div>

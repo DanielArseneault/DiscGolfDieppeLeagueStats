@@ -36,7 +36,7 @@ export function StandingsTable({ standings, division, bestScoresCount }: Standin
             <th className="pb-3 pr-4 font-medium text-slate-500 text-center">
               Best {bestScoresCount}
             </th>
-            <th className="pb-3 pr-4 font-medium text-slate-500 text-center">Scores</th>
+            <th className="pb-3 pr-4 font-medium text-slate-500 text-center hidden md:table-cell">Scores</th>
             <th className="pb-3 font-medium text-slate-500 text-center">Pool</th>
           </tr>
         </thead>
@@ -50,7 +50,7 @@ export function StandingsTable({ standings, division, bestScoresCount }: Standin
               <td className="py-3 pr-4">
                 <span className="font-medium text-slate-900">{s.playerName}</span>
                 {!s.qualified && (
-                  <span className="ml-2 text-xs text-slate-400">(not yet qualified)</span>
+                  <span className="ml-2 text-xs text-slate-400 hidden sm:inline">(not yet qualified)</span>
                 )}
               </td>
               <td className="py-3 pr-4 text-center tabular-nums text-slate-600">
@@ -59,7 +59,7 @@ export function StandingsTable({ standings, division, bestScoresCount }: Standin
               <td className="py-3 pr-4 text-center tabular-nums font-semibold text-slate-900">
                 {s.qualified ? s.qualifyingTotal : "–"}
               </td>
-              <td className="py-3 pr-4">
+              <td className="py-3 pr-4 hidden md:table-cell">
                 <div className="flex gap-1 flex-wrap justify-center">
                   {s.allScores.map((score, i) => (
                     <span

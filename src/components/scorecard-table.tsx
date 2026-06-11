@@ -41,9 +41,9 @@ export function ScorecardTable({ results, holePars, divisionLabel }: ScorecardTa
         <table className="w-full text-xs min-w-max">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200">
-              <th className="px-3 py-2 text-center font-semibold text-slate-500 w-10">Pos</th>
-              <th className="px-3 py-2 text-left font-semibold text-slate-500 min-w-[150px]">Name</th>
-              <th className="px-3 py-2 text-center font-semibold text-slate-500 w-14">Total</th>
+              <th className="px-3 py-2 text-center font-semibold text-slate-500 w-10 sticky left-0 z-10 bg-slate-50">Pos</th>
+              <th className="px-3 py-2 text-left font-semibold text-slate-500 w-[120px] sticky left-10 z-10 bg-slate-50">Name</th>
+              <th className="px-3 py-2 text-center font-semibold text-slate-500 w-14 sticky left-[160px] z-10 bg-slate-50 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.1)]">Total</th>
               <th className="px-3 py-2 text-center font-semibold text-slate-400 w-10">Thru</th>
               {holes.map((h) => (
                 <th key={h.holeNumber} className="w-8 text-center font-semibold text-slate-600 p-0">
@@ -71,12 +71,16 @@ export function ScorecardTable({ results, holePars, divisionLabel }: ScorecardTa
                     idx % 2 === 1 ? "bg-slate-50/70" : "bg-white"
                   }`}
                 >
-                  <td className="px-3 py-2.5 text-center text-slate-500 font-medium">
+                  <td className={`px-3 py-2.5 text-center text-slate-500 font-medium sticky left-0 z-10 ${idx % 2 === 1 ? "bg-slate-50" : "bg-white"}`}>
                     {r.position === 0 ? "—" : posCounts[r.position] > 1 ? `T${r.position}` : r.position}
                   </td>
-                  <td className="px-3 py-2.5 font-medium text-slate-800">{r.playerName}</td>
+                  <td className={`px-3 py-2.5 sticky left-10 z-10 ${idx % 2 === 1 ? "bg-slate-50" : "bg-white"}`}>
+                    <div className="w-[96px] truncate font-medium text-slate-800">{r.playerName}</div>
+                  </td>
                   <td
-                    className={`px-2 py-2.5 text-center font-semibold tabular-nums ${
+                    className={`px-2 py-2.5 text-center font-semibold tabular-nums sticky left-[160px] z-10 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.1)] ${
+                      idx % 2 === 1 ? "bg-slate-50" : "bg-white"
+                    } ${
                       r.relativeScore < 0
                         ? "text-sky-600"
                         : r.relativeScore > 0
