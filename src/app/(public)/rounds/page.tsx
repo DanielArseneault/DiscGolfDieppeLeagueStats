@@ -45,7 +45,7 @@ export default async function RoundsPage({ searchParams }: { searchParams: Promi
       <div className="-mx-4 -mt-14 relative overflow-hidden mb-2">
         <div
           className="px-8 pt-24 pb-32 text-white relative bg-cover"
-          style={{ backgroundImage: "url('/hero-basket.jpg')", backgroundPosition: "28% 30%" }}
+          style={{ backgroundImage: "url('/hero-rounds.jpg')", backgroundPosition: "50% 40%" }}
         >
           <div className="absolute inset-0 bg-gradient-to-br from-black/65 via-black/40 to-black/30 pointer-events-none" />
           <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/40 to-transparent pointer-events-none" />

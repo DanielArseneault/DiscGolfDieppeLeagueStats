@@ -4,11 +4,20 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function RoundDetailLoading() {
   return (
     <div className="space-y-6">
-      {/* Breadcrumb + title */}
-      <div>
-        <Skeleton className="h-4 w-32 mb-3" />
-        <Skeleton className="h-9 w-56 mb-2" />
-        <Skeleton className="h-4 w-44" />
+      {/* Hero banner */}
+      <div className="-mx-4 -mt-14 relative overflow-hidden mb-2">
+        <div className="px-4 pt-16 pb-20 md:px-8 md:pt-24 md:pb-32 bg-slate-700 relative min-h-[200px]">
+          <div className="relative space-y-2 mt-4">
+            <Skeleton className="h-3 w-32 bg-slate-600" />
+            <Skeleton className="h-9 w-48 bg-slate-600" />
+            <Skeleton className="h-4 w-44 bg-slate-600" />
+          </div>
+        </div>
+        <div className="absolute bottom-0 left-0 right-0">
+          <svg viewBox="0 0 1200 56" preserveAspectRatio="none" className="w-full h-8 md:h-14 fill-[#f8fafc]">
+            <path d="M0,56 L0,28 C150,56 300,8 500,22 C700,36 900,4 1200,22 L1200,56 Z" />
+          </svg>
+        </div>
       </div>
 
       {/* Stat cards */}

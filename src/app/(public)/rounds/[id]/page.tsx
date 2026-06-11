@@ -113,22 +113,33 @@ export default async function RoundPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <div className="flex items-center gap-2 text-sm text-slate-400 mb-3">
-          <Link href={backUrl} className="hover:text-slate-600 transition-colors">
-            Rounds
-          </Link>
-          <span>/</span>
-          <span className="text-slate-600">
-            {round.isChampionship ? "Championship" : `Week ${round.weekNumber}`}
-          </span>
+      {/* Hero banner */}
+      <div className="-mx-4 -mt-14 relative overflow-hidden mb-2">
+        <div
+          className="px-4 pt-16 pb-20 md:px-8 md:pt-24 md:pb-32 text-white relative bg-cover"
+          style={{ backgroundImage: "url('/hero-rounds.jpg')", backgroundPosition: "50% 40%" }}
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-black/65 via-black/40 to-black/30 pointer-events-none" />
+          <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/40 to-transparent pointer-events-none" />
+          <div className="relative">
+            <div className="flex items-center gap-2 text-white/60 text-xs font-semibold uppercase tracking-widest mb-1">
+              <Link href={backUrl} className="hover:text-white/90 transition-colors">Rounds</Link>
+              <span>/</span>
+              <span>{round.isChampionship ? "Championship" : `Week ${round.weekNumber}`}</span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight drop-shadow-sm">
+              {round.isChampionship ? "🏆 Championship" : `Week ${round.weekNumber}`}
+            </h1>
+            <p className="text-white/80 mt-2 text-sm">
+              {formatDate(round.date)} · {round.league.name}
+            </p>
+          </div>
         </div>
-        <h1 className="text-3xl font-bold text-slate-900">
-          {round.isChampionship ? "🏆 Championship" : `Week ${round.weekNumber}`}
-        </h1>
-        <p className="text-slate-500 mt-1">
-          {formatDate(round.date)} · {round.league.name}
-        </p>
+        <div className="absolute bottom-0 left-0 right-0">
+          <svg viewBox="0 0 1200 56" preserveAspectRatio="none" className="w-full h-8 md:h-14 fill-[#f8fafc]">
+            <path d="M0,56 L0,28 C150,56 300,8 500,22 C700,36 900,4 1200,22 L1200,56 Z" />
+          </svg>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
