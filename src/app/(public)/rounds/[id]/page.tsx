@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getStandings } from "@/lib/standings";
+import { computePoolSummaries, PoolSummary } from "@/lib/pool-utils";
 import { notFound } from "next/navigation";
 import { ScorecardTable } from "@/components/scorecard-table";
 import { Badge } from "@/components/ui/badge";
@@ -9,13 +10,6 @@ import { formatDate, formatScore } from "@/lib/utils";
 import Link from "next/link";
 
 export const revalidate = 60;
-
-type PoolWinner = {
-  pool: string;
-  playerName: string;
-  score: number;
-  relativeScore: number;
-};
 
 type ResultRow = {
   position: number;
@@ -45,7 +39,7 @@ export default async function RoundPage({ params }: { params: Promise<{ id: stri
         orderBy: [{ division: "asc" }, { position: "asc" }],
       },
       ctpWinners: { orderBy: { hole: "asc" } },
-      poolWinners: { orderBy: { pool: "asc" } },
+      poolWinners: { orderBy: [{ pool: "asc" }, { place: "asc" }] },
       blueLayout: { include: { holePars: { orderBy: { holeNumber: "asc" } } } },
       redLayout: { include: { holePars: { orderBy: { holeNumber: "asc" } } } },
       league: true,
@@ -62,10 +56,13 @@ export default async function RoundPage({ params }: { params: Promise<{ id: stri
   let poolGroups: PoolGroup[] = [];
   let blueUnqualified: ResultRow[] = [];
   let redUnqualified: ResultRow[] = [];
-  const poolWinners: PoolWinner[] = [];
+  let poolSummaries: PoolSummary[] = [];
 
   if (round.isChampionship) {
     const standings = await getStandings(round.leagueId);
+
+    poolSummaries = computePoolSummaries(round.results, standings, round.poolWinners);
+
     const playerPoolMap = new Map<number, string>();
     for (const s of standings) {
       if (s.championshipPool) playerPoolMap.set(s.playerId, s.championshipPool);
@@ -92,10 +89,7 @@ export default async function RoundPage({ params }: { params: Promise<{ id: stri
     }
 
     const poolLabels: Record<string, string> = {
-      A: "🔵 Pool A",
-      B: "🔵 Pool B",
-      C: "🔴 Pool C",
-      D: "🔴 Pool D",
+      A: "🔵 Pool A", B: "🔵 Pool B", C: "🔴 Pool C", D: "🔴 Pool D",
     };
 
     poolGroups = (["A", "B", "C", "D"] as const)
@@ -104,22 +98,10 @@ export default async function RoundPage({ params }: { params: Promise<{ id: stri
 
     blueUnqualified = assignPositions(blueUnqualified);
     redUnqualified = assignPositions(redUnqualified);
-
-    // Pool winners: prefer saved overrides, fall back to position 1 in each pool
-    const savedOverrides = new Map<string, string>();
-    for (const pw of round.poolWinners) savedOverrides.set(pw.pool, pw.playerName);
-
-    for (const g of poolGroups) {
-      const overrideName = savedOverrides.get(g.pool);
-      const winner = overrideName
-        ? (g.rows.find((r) => r.playerName === overrideName) ?? g.rows.find((r) => r.position === 1))
-        : g.rows.find((r) => r.position === 1);
-      if (winner) poolWinners.push({ pool: g.pool, playerName: winner.playerName, score: winner.score, relativeScore: winner.relativeScore });
-    }
   }
 
-  const bluePools = poolWinners.filter((w) => ["A", "B"].includes(w.pool));
-  const redPools = poolWinners.filter((w) => ["C", "D"].includes(w.pool));
+  const blueSummaries = poolSummaries.filter((w) => ["A", "B"].includes(w.pool));
+  const redSummaries = poolSummaries.filter((w) => ["C", "D"].includes(w.pool));
 
   return (
     <div className="space-y-6">
@@ -156,18 +138,18 @@ export default async function RoundPage({ params }: { params: Promise<{ id: stri
         </Card>
       </div>
 
-      {round.isChampionship && poolWinners.length > 0 && (
+      {round.isChampionship && poolSummaries.length > 0 && (
         <Card className="border-amber-300 bg-gradient-to-br from-amber-50 to-white">
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
               <span className="text-2xl">🏆</span>
-              <CardTitle className="text-xl">Pool Champions</CardTitle>
+              <CardTitle className="text-xl">Pool Results</CardTitle>
             </div>
           </CardHeader>
           <CardContent>
             <div className="grid md:grid-cols-2 gap-6">
-              <PoolWinnersColumn label="🔵 Blue Division" pools={bluePools} />
-              <PoolWinnersColumn label="🔴 Red Division" pools={redPools} />
+              <PoolSummaryColumn label="🔵 Blue Division" pools={blueSummaries} />
+              <PoolSummaryColumn label="🔴 Red Division" pools={redSummaries} />
             </div>
           </CardContent>
         </Card>
@@ -249,7 +231,7 @@ export default async function RoundPage({ params }: { params: Promise<{ id: stri
   );
 }
 
-function PoolWinnersColumn({ label, pools }: { label: string; pools: PoolWinner[] }) {
+function PoolSummaryColumn({ label, pools }: { label: string; pools: PoolSummary[] }) {
   return (
     <div>
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">{label}</p>
@@ -258,19 +240,30 @@ function PoolWinnersColumn({ label, pools }: { label: string; pools: PoolWinner[
       ) : (
         <div className="space-y-3">
           {pools.map((w) => (
-            <div key={w.pool} className="flex items-center justify-between bg-white rounded-lg border border-amber-200 px-4 py-3">
-              <div>
-                <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-0.5">Pool {w.pool} Champion</p>
-                <p className="font-semibold text-slate-900 text-base">{w.playerName}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-lg font-bold tabular-nums text-slate-900">{w.score}</p>
-                <p className={`text-xs font-mono ${
-                  w.relativeScore < 0 ? "text-emerald-600" : w.relativeScore > 0 ? "text-red-500" : "text-slate-500"
-                }`}>
-                  {formatScore(w.relativeScore)}
-                </p>
-              </div>
+            <div key={w.pool} className="bg-white rounded-lg border border-amber-200 px-4 py-3 space-y-2">
+              <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide">Pool {w.pool}</p>
+              {w.first && (
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🥇</span>
+                  <span className="font-semibold text-slate-900 text-sm">{w.first.playerName}</span>
+                  <span className={`ml-auto font-mono text-xs ${
+                    w.first.relativeScore < 0 ? "text-emerald-600" : w.first.relativeScore > 0 ? "text-red-500" : "text-slate-500"
+                  }`}>
+                    {w.first.score} ({formatScore(w.first.relativeScore)})
+                  </span>
+                </div>
+              )}
+              {w.second && (
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🥈</span>
+                  <span className="text-slate-700 text-sm">{w.second.playerName}</span>
+                  <span className={`ml-auto font-mono text-xs ${
+                    w.second.relativeScore < 0 ? "text-emerald-600" : w.second.relativeScore > 0 ? "text-red-500" : "text-slate-500"
+                  }`}>
+                    {w.second.score} ({formatScore(w.second.relativeScore)})
+                  </span>
+                </div>
+              )}
             </div>
           ))}
         </div>

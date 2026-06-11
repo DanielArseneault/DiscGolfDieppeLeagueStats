@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getStandings } from "@/lib/standings";
+import { computePoolSummaries, PoolSummary } from "@/lib/pool-utils";
 import { StandingsTable } from "@/components/standings-table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,16 +11,9 @@ import Link from "next/link";
 
 export const revalidate = 60;
 
-type PoolWinner = {
-  pool: string;
-  playerName: string;
-  score: number;
-  relativeScore: number;
-};
-
 async function getData() {
   const league = await prisma.league.findFirst({ orderBy: { year: "desc" } });
-  if (!league) return { league: null, standings: [], recentRound: null, qualifyingRoundsPlayed: 0, poolWinners: [] as PoolWinner[] };
+  if (!league) return { league: null, standings: [], recentRound: null, qualifyingRoundsPlayed: 0, poolSummaries: [] as PoolSummary[], totalLeagues: 0 };
 
   const [standings, recentRound, qualifyingRoundsPlayed, totalLeagues] = await Promise.all([
     getStandings(league.id),
@@ -32,51 +26,23 @@ async function getData() {
           orderBy: [{ division: "asc" }, { position: "asc" }],
         },
         ctpWinners: { orderBy: { hole: "asc" } },
-        poolWinners: { orderBy: { pool: "asc" } },
+        poolWinners: { orderBy: [{ pool: "asc" }, { place: "asc" }] },
         _count: { select: { results: true } },
       },
     }),
-    prisma.round.count({
-      where: { leagueId: league.id, isChampionship: false },
-    }),
+    prisma.round.count({ where: { leagueId: league.id, isChampionship: false } }),
     prisma.league.count(),
   ]);
 
-  // Compute pool winners for championship rounds, preferring saved overrides.
-  const poolWinners: PoolWinner[] = [];
-  if (recentRound?.isChampionship) {
-    const savedOverrides = new Map<string, string>();
-    for (const pw of recentRound.poolWinners) savedOverrides.set(pw.pool, pw.playerName);
+  const poolSummaries: PoolSummary[] = recentRound?.isChampionship
+    ? computePoolSummaries(recentRound.results, standings, recentRound.poolWinners)
+    : [];
 
-    const playerPoolMap = new Map<number, string>();
-    for (const s of standings) {
-      if (s.championshipPool) playerPoolMap.set(s.playerId, s.championshipPool);
-    }
-
-    const seen = new Set<string>();
-    for (const result of recentRound.results) {
-      const pool = playerPoolMap.get(result.playerId);
-      if (!pool || seen.has(pool)) continue;
-      seen.add(pool);
-
-      const overrideName = savedOverrides.get(pool);
-      if (overrideName) {
-        const overrideResult = recentRound.results.find((r) => r.player.name === overrideName);
-        if (overrideResult) {
-          poolWinners.push({ pool, playerName: overrideName, score: overrideResult.score, relativeScore: overrideResult.relativeScore });
-          continue;
-        }
-      }
-      poolWinners.push({ pool, playerName: result.player.name, score: result.score, relativeScore: result.relativeScore });
-    }
-    poolWinners.sort((a, b) => a.pool.localeCompare(b.pool));
-  }
-
-  return { league, standings, recentRound, qualifyingRoundsPlayed, poolWinners, totalLeagues };
+  return { league, standings, recentRound, qualifyingRoundsPlayed, poolSummaries, totalLeagues };
 }
 
 export default async function HomePage() {
-  const { league, standings, recentRound, qualifyingRoundsPlayed, poolWinners, totalLeagues } = await getData();
+  const { league, standings, recentRound, qualifyingRoundsPlayed, poolSummaries, totalLeagues } = await getData();
 
   if (!league) {
     return (
@@ -120,7 +86,7 @@ export default async function HomePage() {
 
       {recentRound && (
         recentRound.isChampionship
-          ? <ChampionshipResults round={recentRound} poolWinners={poolWinners} />
+          ? <ChampionshipResults round={recentRound} poolSummaries={poolSummaries} />
           : <RecentRound round={recentRound} />
       )}
 
@@ -219,49 +185,47 @@ function RecentRound({ round }: { round: RoundData }) {
 
 // ── Championship round ────────────────────────────────────────────────────────
 
-function ChampionshipResults({ round, poolWinners }: { round: RoundData; poolWinners: PoolWinner[] }) {
-  const bluePools = poolWinners.filter((w) => ["A", "B"].includes(w.pool));
-  const redPools = poolWinners.filter((w) => ["C", "D"].includes(w.pool));
+function ChampionshipResults({ round, poolSummaries }: { round: RoundData; poolSummaries: PoolSummary[] }) {
+  const bluePools = poolSummaries.filter((w) => ["A", "B"].includes(w.pool));
+  const redPools = poolSummaries.filter((w) => ["C", "D"].includes(w.pool));
 
   return (
-    <div className="space-y-3">
-      <Card className="border-amber-300 bg-gradient-to-br from-amber-50 to-white overflow-hidden">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">🏆</span>
-              <div>
-                <CardTitle className="text-xl">Championship Results</CardTitle>
-                <p className="text-sm text-slate-500 mt-0.5">{formatDate(round.date)} · {round._count.results} players</p>
-              </div>
+    <Card className="border-amber-300 bg-gradient-to-br from-amber-50 to-white">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">🏆</span>
+            <div>
+              <CardTitle className="text-xl">Championship Results</CardTitle>
+              <p className="text-sm text-slate-500 mt-0.5">{formatDate(round.date)} · {round._count.results} players</p>
             </div>
-            <Link href={`/rounds/${round.id}`} className="text-sm text-blue-600 hover:underline">
-              Full scorecard →
-            </Link>
           </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid md:grid-cols-2 gap-6">
-            <PoolColumn label="🔵 Blue Division" pools={bluePools} />
-            <PoolColumn label="🔴 Red Division" pools={redPools} />
-          </div>
-          {round.ctpWinners.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-amber-100">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">🎯 CTP Winners</p>
-              <div className="flex flex-wrap gap-2">
-                {round.ctpWinners.map((c) => (
-                  <Badge key={c.id} variant="secondary">Hole {c.hole}: {c.playerName}</Badge>
-                ))}
-              </div>
+          <Link href={`/rounds/${round.id}`} className="text-sm text-blue-600 hover:underline">
+            Full scorecard →
+          </Link>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="grid md:grid-cols-2 gap-6">
+          <PoolColumn label="🔵 Blue Division" pools={bluePools} />
+          <PoolColumn label="🔴 Red Division" pools={redPools} />
+        </div>
+        {round.ctpWinners.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-amber-100">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">🎯 CTP Winners</p>
+            <div className="flex flex-wrap gap-2">
+              {round.ctpWinners.map((c) => (
+                <Badge key={c.id} variant="secondary">Hole {c.hole}: {c.playerName}</Badge>
+              ))}
             </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
-function PoolColumn({ label, pools }: { label: string; pools: PoolWinner[] }) {
+function PoolColumn({ label, pools }: { label: string; pools: PoolSummary[] }) {
   return (
     <div>
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">{label}</p>
@@ -270,19 +234,30 @@ function PoolColumn({ label, pools }: { label: string; pools: PoolWinner[] }) {
       ) : (
         <div className="space-y-3">
           {pools.map((w) => (
-            <div key={w.pool} className="flex items-center justify-between bg-white rounded-lg border border-amber-200 px-4 py-3">
-              <div>
-                <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-0.5">Pool {w.pool} Champion</p>
-                <p className="font-semibold text-slate-900 text-base">{w.playerName}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-lg font-bold tabular-nums text-slate-900">{w.score}</p>
-                <p className={`text-xs font-mono ${
-                  w.relativeScore < 0 ? "text-emerald-600" : w.relativeScore > 0 ? "text-red-500" : "text-slate-500"
-                }`}>
-                  {formatScore(w.relativeScore)}
-                </p>
-              </div>
+            <div key={w.pool} className="bg-white rounded-lg border border-amber-200 px-4 py-3 space-y-2">
+              <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide">Pool {w.pool}</p>
+              {w.first && (
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🥇</span>
+                  <span className="font-semibold text-slate-900 text-sm">{w.first.playerName}</span>
+                  <span className={`ml-auto font-mono text-xs ${
+                    w.first.relativeScore < 0 ? "text-emerald-600" : w.first.relativeScore > 0 ? "text-red-500" : "text-slate-500"
+                  }`}>
+                    {w.first.score} ({formatScore(w.first.relativeScore)})
+                  </span>
+                </div>
+              )}
+              {w.second && (
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🥈</span>
+                  <span className="text-slate-700 text-sm">{w.second.playerName}</span>
+                  <span className={`ml-auto font-mono text-xs ${
+                    w.second.relativeScore < 0 ? "text-emerald-600" : w.second.relativeScore > 0 ? "text-red-500" : "text-slate-500"
+                  }`}>
+                    {w.second.score} ({formatScore(w.second.relativeScore)})
+                  </span>
+                </div>
+              )}
             </div>
           ))}
         </div>

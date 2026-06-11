@@ -9,7 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NewspaperPreview } from "@/components/newspaper/newspaper-preview";
-import { generateFacebookPost, generateNewspaperBody } from "@/lib/post-generator";
+import { generateFacebookPost, generateChampionshipPost, generateNewspaperBody } from "@/lib/post-generator";
+import { computePoolSummaries } from "@/lib/pool-utils";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -20,11 +21,13 @@ interface CtpWinner {
 
 interface SavedPoolWinner {
   pool: string;
+  place: number;
   playerName: string;
 }
 
 interface RoundResult {
   id: number;
+  playerId: number;
   position: number;
   division: string;
   player: { name: string };
@@ -54,6 +57,7 @@ interface Round {
 }
 
 interface PlayerStanding {
+  playerId: number;
   playerName: string;
   championshipPool: string | null;
 }
@@ -71,9 +75,9 @@ function computePoolGroups(
   results: RoundResult[],
   standings: PlayerStanding[]
 ): { groups: PoolGroup[]; blueUnqualified: RoundResult[]; redUnqualified: RoundResult[] } {
-  const poolMap = new Map<string, string>();
+  const poolMap = new Map<number, string>();
   for (const s of standings) {
-    if (s.championshipPool) poolMap.set(s.playerName, s.championshipPool);
+    if (s.championshipPool) poolMap.set(s.playerId, s.championshipPool);
   }
 
   const buckets: Record<string, RoundResult[]> = { A: [], B: [], C: [], D: [] };
@@ -81,7 +85,7 @@ function computePoolGroups(
   const redUnqualified: RoundResult[] = [];
 
   for (const r of results) {
-    const pool = poolMap.get(r.player.name);
+    const pool = poolMap.get(r.playerId);
     if (pool) buckets[pool].push(r);
     else if (r.division === "BLUE") blueUnqualified.push(r);
     else redUnqualified.push(r);
@@ -119,14 +123,15 @@ export default function RoundManagePage({
 
   // Championship pool state
   const [standings, setStandings] = useState<PlayerStanding[]>([]);
+  // keyed by "${pool}-${place}", e.g. "A-1", "A-2"
   const [poolWinnerOverrides, setPoolWinnerOverrides] = useState<Record<string, string>>({});
   const [poolWinnerSaving, setPoolWinnerSaving] = useState(false);
 
   // CTP state
-  const [blueCtpPlayer, setBlueCtpPlayer] = useState("");
-  const [blueCtpHole, setBlueCtpHole] = useState(18);
-  const [redCtpPlayer, setRedCtpPlayer] = useState("");
-  const [redCtpHole, setRedCtpHole] = useState(18);
+  const [ctpEntries, setCtpEntries] = useState([
+    { player: "", hole: 18 },
+    { player: "", hole: 18 },
+  ]);
   const [ctpSaving, setCtpSaving] = useState(false);
 
   // Post state
@@ -144,29 +149,61 @@ export default function RoundManagePage({
   const [imageSaving, setImageSaving] = useState(false);
   const [imageGenerating, setImageGenerating] = useState(false);
 
+  function buildChampionshipPost(
+    data: Round,
+    sData: PlayerStanding[],
+    overrides: Record<string, string>
+  ): string {
+    const summaries = computePoolSummaries(data.results, sData, Object.entries(overrides).map(([key, name]) => {
+      const [pool, placeStr] = key.split("-");
+      return { pool, place: Number(placeStr), playerName: name };
+    }));
+    return generateChampionshipPost({
+      date: new Date(data.date),
+      totalPlayers: data.results.length,
+      poolResults: summaries.map((s) => ({
+        pool: s.pool,
+        first: s.first?.playerName ?? null,
+        second: s.second?.playerName ?? null,
+      })),
+      ctpWinners: data.ctpWinners,
+    });
+  }
+
   async function load() {
     const data: Round = await fetch(`/api/rounds/${roundId}`).then((r) => r.json());
     setRound(data);
 
-    if (data.ctpWinners?.length > 0) {
-      const blueNames = new Set(data.results.filter((r) => r.division === "BLUE").map((r) => r.player.name));
-      const redNames = new Set(data.results.filter((r) => r.division === "RED").map((r) => r.player.name));
-      for (const w of data.ctpWinners) {
-        if (blueNames.has(w.playerName)) { setBlueCtpPlayer(w.playerName); setBlueCtpHole(w.hole); }
-        else if (redNames.has(w.playerName)) { setRedCtpPlayer(w.playerName); setRedCtpHole(w.hole); }
-      }
-    }
+    const loaded = data.ctpWinners.map((w) => ({ player: w.playerName, hole: w.hole }));
+    while (loaded.length < 2) loaded.push({ player: "", hole: 18 });
+    setCtpEntries(loaded);
 
     if (data.isChampionship) {
       const sData: PlayerStanding[] = await fetch(`/api/standings?leagueId=${leagueId}`).then((r) => r.json());
       setStandings(sData);
 
-      if (data.poolWinners?.length > 0) {
-        const overrides: Record<string, string> = {};
-        for (const w of data.poolWinners) overrides[w.pool] = w.playerName;
-        setPoolWinnerOverrides(overrides);
-      }
+      const overrides: Record<string, string> = {};
+      for (const w of data.poolWinners) overrides[`${w.pool}-${w.place}`] = w.playerName;
+      setPoolWinnerOverrides(overrides);
+
+      setPostContent(data.post?.content ?? buildChampionshipPost(data, sData, overrides));
+    } else {
+      const blueTop3 = data.results.filter((r) => r.division === "BLUE").slice(0, 3).map((r) => ({
+        name: r.player.name, score: r.score, relativeScore: r.relativeScore, position: r.position,
+      }));
+      const redTop3 = data.results.filter((r) => r.division === "RED").slice(0, 3).map((r) => ({
+        name: r.player.name, score: r.score, relativeScore: r.relativeScore, position: r.position,
+      }));
+      setPostContent(
+        data.post?.content ??
+          generateFacebookPost({ weekNumber: data.weekNumber, date: new Date(data.date), totalPlayers: data.results.length, blueTop3, redTop3, ctpWinners: data.ctpWinners })
+      );
     }
+
+    setHeadline(data.newspaperImage?.headline ?? (data.isChampionship ? "CHAMPIONSHIP RESULTS" : `WEEK ${data.weekNumber} RESULTS`));
+    setDateline(data.newspaperImage?.dateline ?? "");
+    setCaption(data.newspaperImage?.caption ?? "");
+    setClosingText(data.newspaperImage?.closingText ?? DEFAULT_CLOSING);
 
     const blueTop3 = data.results.filter((r) => r.division === "BLUE").slice(0, 3).map((r) => ({
       name: r.player.name, score: r.score, relativeScore: r.relativeScore, position: r.position,
@@ -174,33 +211,9 @@ export default function RoundManagePage({
     const redTop3 = data.results.filter((r) => r.division === "RED").slice(0, 3).map((r) => ({
       name: r.player.name, score: r.score, relativeScore: r.relativeScore, position: r.position,
     }));
-
-    setPostContent(
-      data.post?.content ??
-        generateFacebookPost({
-          weekNumber: data.weekNumber,
-          date: new Date(data.date),
-          totalPlayers: data.results.length,
-          blueTop3,
-          redTop3,
-          ctpWinners: data.ctpWinners,
-        })
-    );
-
-    setHeadline(data.newspaperImage?.headline ?? (data.isChampionship ? "CHAMPIONSHIP RESULTS" : `WEEK ${data.weekNumber} RESULTS`));
-    setDateline(data.newspaperImage?.dateline ?? "");
-    setCaption(data.newspaperImage?.caption ?? "");
-    setClosingText(data.newspaperImage?.closingText ?? DEFAULT_CLOSING);
     setBodyText(
       data.newspaperImage?.bodyText ??
-        generateNewspaperBody({
-          weekNumber: data.weekNumber,
-          date: new Date(data.date),
-          totalPlayers: data.results.length,
-          blueTop3,
-          redTop3,
-          ctpWinners: data.ctpWinners,
-        })
+        generateNewspaperBody({ weekNumber: data.weekNumber, date: new Date(data.date), totalPlayers: data.results.length, blueTop3, redTop3, ctpWinners: data.ctpWinners })
     );
   }
 
@@ -211,10 +224,9 @@ export default function RoundManagePage({
   // CTP
   async function handleSaveCtp() {
     setCtpSaving(true);
-    const winners = [
-      blueCtpPlayer ? { hole: blueCtpHole, playerName: blueCtpPlayer } : null,
-      redCtpPlayer ? { hole: redCtpHole, playerName: redCtpPlayer } : null,
-    ].filter(Boolean);
+    const winners = ctpEntries
+      .filter((e) => e.player)
+      .map((e) => ({ hole: e.hole, playerName: e.player }));
     await fetch(`/api/rounds/${roundId}/ctp`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -229,7 +241,10 @@ export default function RoundManagePage({
     setPoolWinnerSaving(true);
     const winners = Object.entries(poolWinnerOverrides)
       .filter(([, name]) => name)
-      .map(([pool, playerName]) => ({ pool, playerName }));
+      .map(([key, playerName]) => {
+        const [pool, placeStr] = key.split("-");
+        return { pool, place: Number(placeStr), playerName };
+      });
     await fetch(`/api/rounds/${roundId}/pool-winners`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -265,20 +280,24 @@ export default function RoundManagePage({
 
   function handleRegeneratePost() {
     if (!round) return;
-    const blueTop3 = round.results.filter((r) => r.division === "BLUE").slice(0, 3).map((r) => ({
-      name: r.player.name, score: r.score, relativeScore: r.relativeScore, position: r.position,
-    }));
-    const redTop3 = round.results.filter((r) => r.division === "RED").slice(0, 3).map((r) => ({
-      name: r.player.name, score: r.score, relativeScore: r.relativeScore, position: r.position,
-    }));
-    setPostContent(generateFacebookPost({
-      weekNumber: round.weekNumber,
-      date: new Date(round.date),
-      totalPlayers: round.results.length,
-      blueTop3,
-      redTop3,
-      ctpWinners: round.ctpWinners,
-    }));
+    if (round.isChampionship) {
+      setPostContent(buildChampionshipPost(round, standings, poolWinnerOverrides));
+    } else {
+      const blueTop3 = round.results.filter((r) => r.division === "BLUE").slice(0, 3).map((r) => ({
+        name: r.player.name, score: r.score, relativeScore: r.relativeScore, position: r.position,
+      }));
+      const redTop3 = round.results.filter((r) => r.division === "RED").slice(0, 3).map((r) => ({
+        name: r.player.name, score: r.score, relativeScore: r.relativeScore, position: r.position,
+      }));
+      setPostContent(generateFacebookPost({
+        weekNumber: round.weekNumber,
+        date: new Date(round.date),
+        totalPlayers: round.results.length,
+        blueTop3,
+        redTop3,
+        ctpWinners: round.ctpWinners,
+      }));
+    }
   }
 
   // Image
@@ -299,10 +318,7 @@ export default function RoundManagePage({
     try {
       const html2canvas = (await import("html2canvas")).default;
       const canvas = await html2canvas(previewRef.current, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: "#f5f0e8",
+        scale: 2, useCORS: true, allowTaint: true, backgroundColor: "#f5f0e8",
       });
       const a = document.createElement("a");
       a.href = canvas.toDataURL("image/png");
@@ -336,6 +352,14 @@ export default function RoundManagePage({
   const blueResults = round.results.filter((r) => r.division === "BLUE");
   const redResults = round.results.filter((r) => r.division === "RED");
   const poolData = round.isChampionship ? computePoolGroups(round.results, standings) : null;
+
+  // Compute current champion names (override or computed) for display
+  const currentSummaries = round.isChampionship && standings.length > 0
+    ? computePoolSummaries(round.results, standings, Object.entries(poolWinnerOverrides).map(([key, name]) => {
+        const [pool, placeStr] = key.split("-");
+        return { pool, place: Number(placeStr), playerName: name };
+      }))
+    : [];
 
   const postDone = !!round.post;
   const imageDone = !!round.newspaperImage?.generatedAt;
@@ -401,17 +425,20 @@ export default function RoundManagePage({
                 <div className="space-y-5">
                   <div className="grid grid-cols-2 gap-5">
                     {poolData.groups.map((g) => {
-                      const winnerName = poolWinnerOverrides[g.pool] ?? g.results[0]?.player.name;
+                      const summary = currentSummaries.find((s) => s.pool === g.pool);
+                      const firstName = summary?.first?.playerName;
+                      const secondName = summary?.second?.playerName;
                       return (
                         <div key={g.pool}>
                           <p className="text-xs font-semibold uppercase tracking-wide text-amber-600 mb-2">{g.label}</p>
                           <ol className="space-y-1">
-                            {g.results.map((r, i) => {
-                              const isWinner = r.player.name === winnerName;
+                            {g.results.map((r) => {
+                              const isFirst = r.player.name === firstName;
+                              const isSecond = r.player.name === secondName;
                               return (
-                                <li key={r.id} className={`text-sm flex items-center gap-2 ${isWinner ? "font-semibold" : ""}`}>
-                                  <span className={`w-5 text-center ${isWinner ? "text-amber-500" : "text-slate-400"}`}>
-                                    {isWinner ? "🏆" : `${i + 1}.`}
+                                <li key={r.id} className={`text-sm flex items-center gap-2 ${isFirst || isSecond ? "font-semibold" : ""}`}>
+                                  <span className="w-5 text-center">
+                                    {isFirst ? "🥇" : isSecond ? "🥈" : <span className="text-slate-300">·</span>}
                                   </span>
                                   <span className="text-slate-900">{r.player.name}</span>
                                   <span className="ml-auto font-mono text-xs text-slate-500">{r.score}</span>
@@ -499,38 +526,63 @@ export default function RoundManagePage({
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                   {poolData.groups.map((g) => {
-                    const computedWinner = g.results[0]?.player.name ?? "";
-                    const currentValue = poolWinnerOverrides[g.pool] ?? computedWinner;
-                    const isOverridden = !!poolWinnerOverrides[g.pool] && poolWinnerOverrides[g.pool] !== computedWinner;
+                    const summary = currentSummaries.find((s) => s.pool === g.pool);
+                    const computedFirst = g.results[0]?.player.name ?? "";
+                    const computedSecond = g.results.find((r) => r.player.name !== computedFirst)?.player.name ?? "";
+                    const currentFirst = poolWinnerOverrides[`${g.pool}-1`] ?? computedFirst;
+                    const currentSecond = poolWinnerOverrides[`${g.pool}-2`] ?? computedSecond;
+                    const firstOverridden = !!poolWinnerOverrides[`${g.pool}-1`] && poolWinnerOverrides[`${g.pool}-1`] !== computedFirst;
+                    const secondOverridden = !!poolWinnerOverrides[`${g.pool}-2`] && poolWinnerOverrides[`${g.pool}-2`] !== computedSecond;
+
+                    void summary;
+
                     return (
-                      <div key={g.pool} className="space-y-1.5">
-                        <Label className="text-xs flex items-center gap-1.5">
-                          {g.label}
-                          {isOverridden && (
-                            <span className="text-amber-500 font-normal">(overridden)</span>
-                          )}
-                        </Label>
-                        <Select
-                          value={currentValue}
-                          onValueChange={(v) =>
-                            setPoolWinnerOverrides((prev) => ({ ...prev, [g.pool]: v }))
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select champion..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {g.results.map((r) => (
-                              <SelectItem key={r.id} value={r.player.name}>
-                                {r.player.name}
-                                {" "}
-                                <span className="text-slate-400 text-xs">({r.score})</span>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                      <div key={g.pool} className="space-y-3">
+                        <p className="text-xs font-semibold text-slate-700">{g.label}</p>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs flex items-center gap-1.5">
+                            🥇 1st Place
+                            {firstOverridden && <span className="text-amber-500 font-normal">(overridden)</span>}
+                          </Label>
+                          <Select
+                            value={currentFirst}
+                            onValueChange={(v) => setPoolWinnerOverrides((prev) => ({ ...prev, [`${g.pool}-1`]: v }))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {g.results.map((r) => (
+                                <SelectItem key={`${r.id}-1`} value={r.player.name}>
+                                  {r.player.name} ({r.score})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs flex items-center gap-1.5">
+                            🥈 2nd Place
+                            {secondOverridden && <span className="text-amber-500 font-normal">(overridden)</span>}
+                          </Label>
+                          <Select
+                            value={currentSecond}
+                            onValueChange={(v) => setPoolWinnerOverrides((prev) => ({ ...prev, [`${g.pool}-2`]: v }))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {g.results.map((r) => (
+                                <SelectItem key={`${r.id}-2`} value={r.player.name}>
+                                  {r.player.name} ({r.score})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                     );
                   })}
@@ -550,22 +602,22 @@ export default function RoundManagePage({
               <CardTitle className="text-base">🎯 CTP Winners</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {(
-                  [
-                    { label: "🔵 Blue Division", players: blueResults, player: blueCtpPlayer, setPlayer: setBlueCtpPlayer, hole: blueCtpHole, setHole: setBlueCtpHole },
-                    { label: "🔴 Red Division", players: redResults, player: redCtpPlayer, setPlayer: setRedCtpPlayer, hole: redCtpHole, setHole: setRedCtpHole },
-                  ] as const
-                ).map(({ label, players, player, setPlayer, hole, setHole }) => (
-                  <div key={label} className="grid grid-cols-[1fr_90px] gap-3 items-end">
+              <div className="space-y-3">
+                {ctpEntries.map((entry, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_90px_auto] gap-3 items-end">
                     <div className="space-y-1.5">
-                      <Label className="text-xs">{label}</Label>
-                      <Select value={player} onValueChange={setPlayer}>
+                      <Label className="text-xs">CTP {i + 1}</Label>
+                      <Select
+                        value={entry.player}
+                        onValueChange={(v) =>
+                          setCtpEntries((prev) => prev.map((e, j) => j === i ? { ...e, player: v } : e))
+                        }
+                      >
                         <SelectTrigger>
                           <SelectValue placeholder="Select player..." />
                         </SelectTrigger>
                         <SelectContent>
-                          {players.map((r) => (
+                          {round.results.map((r) => (
                             <SelectItem key={r.id} value={r.player.name}>
                               {r.player.name}
                             </SelectItem>
@@ -579,15 +631,34 @@ export default function RoundManagePage({
                         type="number"
                         min={1}
                         max={18}
-                        value={hole}
-                        onChange={(e) => setHole(Number(e.target.value))}
+                        value={entry.hole}
+                        onChange={(e) =>
+                          setCtpEntries((prev) => prev.map((en, j) => j === i ? { ...en, hole: Number(e.target.value) } : en))
+                        }
                       />
                     </div>
+                    {ctpEntries.length > 2 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-slate-400 hover:text-red-500 mb-0.5"
+                        onClick={() => setCtpEntries((prev) => prev.filter((_, j) => j !== i))}
+                      >
+                        ✕
+                      </Button>
+                    )}
                   </div>
                 ))}
-                <div className="pt-1">
+                <div className="flex items-center gap-3 pt-1">
                   <Button size="sm" onClick={handleSaveCtp} disabled={ctpSaving}>
                     {ctpSaving ? "Saving..." : "Save CTP Winners"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCtpEntries((prev) => [...prev, { player: "", hole: 18 }])}
+                  >
+                    + Add CTP
                   </Button>
                 </div>
               </div>
@@ -671,83 +742,47 @@ export default function RoundManagePage({
 
             <div className="space-y-4 sticky top-4">
               <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm">Headline</CardTitle>
-                </CardHeader>
+                <CardHeader className="pb-3"><CardTitle className="text-sm">Headline</CardTitle></CardHeader>
                 <CardContent>
                   <Input value={headline} onChange={(e) => setHeadline(e.target.value)} />
                 </CardContent>
               </Card>
 
               <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm">Photos (up to 3)</CardTitle>
-                </CardHeader>
+                <CardHeader className="pb-3"><CardTitle className="text-sm">Photos (up to 3)</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
                   {photos.map((url, i) => (
                     <div key={i} className="flex items-center gap-2">
                       <img src={url} alt="" className="w-16 h-12 object-cover rounded border" />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handlePhotoRemove(i)}
-                        className="text-red-500 text-xs"
-                      >
-                        Remove
-                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => handlePhotoRemove(i)} className="text-red-500 text-xs">Remove</Button>
                     </div>
                   ))}
-                  {photos.length < 3 && (
-                    <Input type="file" accept="image/*" multiple onChange={handlePhotoUpload} />
-                  )}
+                  {photos.length < 3 && <Input type="file" accept="image/*" multiple onChange={handlePhotoUpload} />}
                   <div className="space-y-1">
                     <Label className="text-xs">Caption</Label>
-                    <Input
-                      value={caption}
-                      onChange={(e) => setCaption(e.target.value)}
-                      placeholder="Caption text..."
-                    />
+                    <Input value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Caption text..." />
                   </div>
                 </CardContent>
               </Card>
 
               <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm">Dateline / Opening</CardTitle>
-                </CardHeader>
+                <CardHeader className="pb-3"><CardTitle className="text-sm">Dateline / Opening</CardTitle></CardHeader>
                 <CardContent>
-                  <Textarea
-                    value={dateline}
-                    onChange={(e) => setDateline(e.target.value)}
-                    rows={3}
-                    placeholder="DIEPPE, N.B. — What looked like a washout..."
-                  />
+                  <Textarea value={dateline} onChange={(e) => setDateline(e.target.value)} rows={3} placeholder="DIEPPE, N.B. — What looked like a washout..." />
                 </CardContent>
               </Card>
 
               <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm">Body Text</CardTitle>
-                </CardHeader>
+                <CardHeader className="pb-3"><CardTitle className="text-sm">Body Text</CardTitle></CardHeader>
                 <CardContent>
-                  <Textarea
-                    value={bodyText}
-                    onChange={(e) => setBodyText(e.target.value)}
-                    rows={10}
-                  />
+                  <Textarea value={bodyText} onChange={(e) => setBodyText(e.target.value)} rows={10} />
                 </CardContent>
               </Card>
 
               <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm">Closing / Sponsor Line</CardTitle>
-                </CardHeader>
+                <CardHeader className="pb-3"><CardTitle className="text-sm">Closing / Sponsor Line</CardTitle></CardHeader>
                 <CardContent>
-                  <Textarea
-                    value={closingText}
-                    onChange={(e) => setClosingText(e.target.value)}
-                    rows={3}
-                  />
+                  <Textarea value={closingText} onChange={(e) => setClosingText(e.target.value)} rows={3} />
                 </CardContent>
               </Card>
             </div>

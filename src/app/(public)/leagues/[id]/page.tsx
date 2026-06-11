@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getStandings } from "@/lib/standings";
+import { computePoolSummaries, PoolSummary } from "@/lib/pool-utils";
 import { notFound } from "next/navigation";
 import { StandingsTable } from "@/components/standings-table";
 import { Badge } from "@/components/ui/badge";
@@ -10,8 +11,6 @@ import { formatDate, formatScore } from "@/lib/utils";
 import Link from "next/link";
 
 export const revalidate = 60;
-
-type PoolWinner = { pool: string; playerName: string; score: number; relativeScore: number };
 
 async function getData(leagueId: number) {
   const [league, standings] = await Promise.all([
@@ -28,7 +27,7 @@ async function getData(leagueId: number) {
       include: {
         _count: { select: { results: true } },
         ctpWinners: true,
-        poolWinners: { orderBy: { pool: "asc" } },
+        poolWinners: { orderBy: [{ pool: "asc" }, { place: "asc" }] },
         results: {
           include: { player: true },
           orderBy: [{ division: "asc" }, { position: "asc" }],
@@ -38,40 +37,14 @@ async function getData(leagueId: number) {
     prisma.round.count({ where: { leagueId, isChampionship: false } }),
   ]);
 
-  // Championship round = the most recent round marked isChampionship
   const championshipRound = rounds.find((r) => r.isChampionship) ?? null;
-  // Most recent non-championship round (for the summary card if no championship)
-  const recentRound = rounds[0] ?? null;
+  const summaryRound = championshipRound ?? (rounds[0] ?? null);
 
-  // Compute pool winners (with saved overrides)
-  const poolWinners: PoolWinner[] = [];
-  const summaryRound = championshipRound ?? recentRound;
+  const poolSummaries: PoolSummary[] = summaryRound?.isChampionship
+    ? computePoolSummaries(summaryRound.results, standings, summaryRound.poolWinners)
+    : [];
 
-  if (summaryRound?.isChampionship) {
-    const savedOverrides = new Map<string, string>();
-    for (const pw of summaryRound.poolWinners) savedOverrides.set(pw.pool, pw.playerName);
-
-    const playerPoolMap = new Map<number, string>();
-    for (const s of standings) {
-      if (s.championshipPool) playerPoolMap.set(s.playerId, s.championshipPool);
-    }
-
-    const seen = new Set<string>();
-    for (const result of summaryRound.results) {
-      const pool = playerPoolMap.get(result.playerId);
-      if (!pool || seen.has(pool)) continue;
-      seen.add(pool);
-      const overrideName = savedOverrides.get(pool);
-      if (overrideName) {
-        const or = summaryRound.results.find((r) => r.player.name === overrideName);
-        if (or) { poolWinners.push({ pool, playerName: overrideName, score: or.score, relativeScore: or.relativeScore }); continue; }
-      }
-      poolWinners.push({ pool, playerName: result.player.name, score: result.score, relativeScore: result.relativeScore });
-    }
-    poolWinners.sort((a, b) => a.pool.localeCompare(b.pool));
-  }
-
-  return { league, standings, rounds, qualifyingRoundsPlayed, summaryRound, poolWinners };
+  return { league, standings, rounds, qualifyingRoundsPlayed, summaryRound, poolSummaries };
 }
 
 export default async function LeaguePage({ params }: { params: Promise<{ id: string }> }) {
@@ -79,15 +52,15 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
   const data = await getData(Number(id));
   if (!data) notFound();
 
-  const { league, standings, rounds, qualifyingRoundsPlayed, summaryRound, poolWinners } = data;
+  const { league, standings, rounds, qualifyingRoundsPlayed, summaryRound, poolSummaries } = data;
 
   const blueCount = standings.filter((s) => s.division === Division.BLUE).length;
   const redCount = standings.filter((s) => s.division === Division.RED).length;
   const qualifiedCount = standings.filter((s) => s.qualified).length;
   const isComplete = rounds.some((r) => r.isChampionship);
 
-  const bluePools = poolWinners.filter((w) => ["A", "B"].includes(w.pool));
-  const redPools = poolWinners.filter((w) => ["C", "D"].includes(w.pool));
+  const blueSummaries = poolSummaries.filter((w) => ["A", "B"].includes(w.pool));
+  const redSummaries = poolSummaries.filter((w) => ["C", "D"].includes(w.pool));
 
   return (
     <div className="space-y-8">
@@ -115,8 +88,7 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
         <StatCard label="Rounds Played" value={qualifyingRoundsPlayed} />
       </div>
 
-      {/* Championship summary */}
-      {summaryRound?.isChampionship && poolWinners.length > 0 && (
+      {summaryRound?.isChampionship && poolSummaries.length > 0 && (
         <Card className="border-amber-300 bg-gradient-to-br from-amber-50 to-white">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
@@ -134,8 +106,8 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
           </CardHeader>
           <CardContent>
             <div className="grid md:grid-cols-2 gap-6">
-              <PoolColumn label="🔵 Blue Division" pools={bluePools} />
-              <PoolColumn label="🔴 Red Division" pools={redPools} />
+              <PoolSummaryColumn label="🔵 Blue Division" pools={blueSummaries} />
+              <PoolSummaryColumn label="🔴 Red Division" pools={redSummaries} />
             </div>
             {summaryRound.ctpWinners.length > 0 && (
               <div className="mt-4 pt-4 border-t border-amber-100">
@@ -151,7 +123,6 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
         </Card>
       )}
 
-      {/* Recent regular round (no championship) */}
       {summaryRound && !summaryRound.isChampionship && (
         <Card>
           <CardHeader>
@@ -195,7 +166,6 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
         </Card>
       )}
 
-      {/* Standings */}
       <div>
         <h2 className="text-xl font-semibold text-slate-900 mb-4">
           {isComplete ? "Final Standings" : "Season Standings"}
@@ -218,7 +188,6 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
         </Card>
       </div>
 
-      {/* Rounds list */}
       <div>
         <h2 className="text-xl font-semibold text-slate-900 mb-4">Rounds</h2>
         {rounds.length === 0 ? (
@@ -253,7 +222,7 @@ export default async function LeaguePage({ params }: { params: Promise<{ id: str
   );
 }
 
-function PoolColumn({ label, pools }: { label: string; pools: PoolWinner[] }) {
+function PoolSummaryColumn({ label, pools }: { label: string; pools: PoolSummary[] }) {
   return (
     <div>
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">{label}</p>
@@ -262,19 +231,30 @@ function PoolColumn({ label, pools }: { label: string; pools: PoolWinner[] }) {
       ) : (
         <div className="space-y-3">
           {pools.map((w) => (
-            <div key={w.pool} className="flex items-center justify-between bg-white rounded-lg border border-amber-200 px-4 py-3">
-              <div>
-                <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-0.5">Pool {w.pool} Champion</p>
-                <p className="font-semibold text-slate-900 text-base">{w.playerName}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-lg font-bold tabular-nums text-slate-900">{w.score}</p>
-                <p className={`text-xs font-mono ${
-                  w.relativeScore < 0 ? "text-emerald-600" : w.relativeScore > 0 ? "text-red-500" : "text-slate-500"
-                }`}>
-                  {formatScore(w.relativeScore)}
-                </p>
-              </div>
+            <div key={w.pool} className="bg-white rounded-lg border border-amber-200 px-4 py-3 space-y-2">
+              <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide">Pool {w.pool}</p>
+              {w.first && (
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🥇</span>
+                  <span className="font-semibold text-slate-900 text-sm">{w.first.playerName}</span>
+                  <span className={`ml-auto font-mono text-xs ${
+                    w.first.relativeScore < 0 ? "text-emerald-600" : w.first.relativeScore > 0 ? "text-red-500" : "text-slate-500"
+                  }`}>
+                    {w.first.score} ({formatScore(w.first.relativeScore)})
+                  </span>
+                </div>
+              )}
+              {w.second && (
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🥈</span>
+                  <span className="text-slate-700 text-sm">{w.second.playerName}</span>
+                  <span className={`ml-auto font-mono text-xs ${
+                    w.second.relativeScore < 0 ? "text-emerald-600" : w.second.relativeScore > 0 ? "text-red-500" : "text-slate-500"
+                  }`}>
+                    {w.second.score} ({formatScore(w.second.relativeScore)})
+                  </span>
+                </div>
+              )}
             </div>
           ))}
         </div>

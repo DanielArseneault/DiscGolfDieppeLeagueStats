@@ -1,14 +1,3 @@
-import { Division } from "@/generated/prisma/client";
-
-export interface RoundSummary {
-  weekNumber: number;
-  date: Date;
-  totalPlayers: number;
-  blueTop3: { name: string; score: number; relativeScore: number; position: number }[];
-  redTop3: { name: string; score: number; relativeScore: number; position: number }[];
-  ctpWinners: { hole: number; playerName: string }[];
-}
-
 const HASHTAGS = `#dieppediscdemons #dieppediscgolf #discgolfleague #discgolfdieppe #discgolfawesome #discgolflife #discgolfing #udisc #cityofdieppe #villededieppe #atlanticdiscgolf #CTP`;
 
 function formatScore(score: number, relative: number): string {
@@ -21,6 +10,26 @@ function ordinalWin(n: number): string {
   if (n === 2) return "2nd";
   if (n === 3) return "3rd";
   return `${n}th`;
+}
+
+export interface RoundSummary {
+  weekNumber: number;
+  date: Date;
+  totalPlayers: number;
+  blueTop3: { name: string; score: number; relativeScore: number; position: number }[];
+  redTop3: { name: string; score: number; relativeScore: number; position: number }[];
+  ctpWinners: { hole: number; playerName: string }[];
+}
+
+export interface ChampionshipSummary {
+  date: Date;
+  totalPlayers: number;
+  poolResults: Array<{
+    pool: string;
+    first: string | null;
+    second: string | null;
+  }>;
+  ctpWinners: { hole: number; playerName: string }[];
 }
 
 export function generateFacebookPost(summary: RoundSummary): string {
@@ -50,10 +59,40 @@ ${bluePodium}
 🏆 Red Division Podium:
 ${redPodium}
 
-${ctpLines ? `🎯 CTP Winners:\n${ctpLines}\n` : ""}
-Huge thanks to Atlantic Disc Golf for sponsoring the ADGDDGMSL Championship Series. Be sure to check out their store online and in person!
+${ctpLines ? `🎯 CTP Winners:\n${ctpLines}\n` : ""}Huge thanks to Atlantic Disc Golf for sponsoring the ADGDDGMSL Championship Series. Be sure to check out their store online and in person!
 
 Same discin' time, same discin' place!
+
+${HASHTAGS}`;
+}
+
+export function generateChampionshipPost(summary: ChampionshipSummary): string {
+  const poolSection = summary.poolResults
+    .filter((p) => p.first || p.second)
+    .map((p) => {
+      const lines = [`Pool ${p.pool}`];
+      if (p.first) lines.push(`🥇 ${p.first}`);
+      if (p.second) lines.push(`🥈 ${p.second}`);
+      return lines.join("\n");
+    })
+    .join("\n\n");
+
+  const ctpLines = summary.ctpWinners
+    .map((c) => `🎯 Hole ${c.hole} – ${c.playerName}`)
+    .join("\n");
+
+  return `🏆 Championship Night Recap – ADG Dieppe Summer League 🏆
+Last night marked the conclusion of the Atlantic Disc Golf Dieppe Disc Golf Mixed Summer League. ${summary.totalPlayers} players came out for an unforgettable finale.
+
+Highlights:
+✅ ${summary.totalPlayers} players came out for the final night
+
+Championship Results
+${poolSection}
+
+${ctpLines ? `CTP Winners\n${ctpLines}\n\n` : ""}A massive thank you to Atlantic Disc Golf for their ongoing support of this league. Be sure to show them some love in-store or online for all your disc golf needs.
+
+And of course, thank you to every volunteer and every player who helped make this series such a success. Stay tuned for what's coming next!
 
 ${HASHTAGS}`;
 }

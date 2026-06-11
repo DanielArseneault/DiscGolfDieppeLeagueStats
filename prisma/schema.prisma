@@ -124,11 +124,12 @@ model ChampionshipPoolWinner {
   id         Int    @id @default(autoincrement())
   roundId    Int
   pool       String
+  place      Int    @default(1)
   playerName String
 
   round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
 
-  @@unique([roundId, pool])
+  @@unique([roundId, pool, place])
 }
 
 model Post {
