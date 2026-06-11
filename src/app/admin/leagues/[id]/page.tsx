@@ -2,14 +2,16 @@ import { prisma } from "@/lib/db";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
+import { getStandings } from "@/lib/standings";
+import { PoolExclusions } from "@/components/admin/pool-exclusions";
 
 export default async function LeagueDashboard({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const [league, rounds] = await Promise.all([
+  const [league, rounds, standings] = await Promise.all([
     prisma.league.findUnique({ where: { id: Number(id) } }),
     prisma.round.findMany({
       where: { leagueId: Number(id) },
@@ -21,6 +23,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
         ctpWinners: { select: { id: true } },
       },
     }),
+    getStandings(Number(id)),
   ]);
 
   if (!league) notFound();
@@ -94,6 +97,30 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
             );
           })}
         </div>
+      )}
+
+      {standings.some((s) => s.qualified) && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Championship Pool Assignment</CardTitle>
+            <p className="text-xs text-slate-500">Qualified players and their assigned pools. Exclude players who won&apos;t participate in the championship.</p>
+          </CardHeader>
+          <CardContent>
+            <PoolExclusions
+              players={standings
+                .filter((s) => s.qualified)
+                .map((s) => ({
+                  playerId: s.playerId,
+                  playerName: s.playerName,
+                  division: s.division,
+                  qualifyingTotal: s.qualifyingTotal,
+                  championshipPool: s.championshipPool,
+                  excludeFromChampionship: s.excludeFromChampionship,
+                  championshipPoolOverride: s.championshipPoolOverride,
+                }))}
+            />
+          </CardContent>
+        </Card>
       )}
     </div>
   );

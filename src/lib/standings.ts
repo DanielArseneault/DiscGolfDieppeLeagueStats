@@ -10,6 +10,8 @@ export interface PlayerStanding {
   bestScores: number[];
   qualifyingTotal: number;
   qualified: boolean;
+  excludeFromChampionship: boolean;
+  championshipPoolOverride: string | null;
   rank: number;
   championshipPool: string | null;
 }
@@ -33,13 +35,15 @@ export async function getStandings(leagueId: number): Promise<PlayerStanding[]> 
     include: { player: true },
   });
 
-  const playerMap = new Map<number, { name: string; division: Division; scores: number[] }>();
+  const playerMap = new Map<number, { name: string; division: Division; scores: number[]; excludeFromChampionship: boolean; championshipPoolOverride: string | null }>();
 
   for (const result of results) {
     if (!playerMap.has(result.playerId)) {
       playerMap.set(result.playerId, {
         name: result.player.name,
         division: result.player.division,
+        excludeFromChampionship: result.player.excludeFromChampionship,
+        championshipPoolOverride: result.player.championshipPoolOverride,
         scores: [],
       });
     }
@@ -63,6 +67,8 @@ export async function getStandings(leagueId: number): Promise<PlayerStanding[]> 
       bestScores,
       qualifyingTotal,
       qualified,
+      excludeFromChampionship: data.excludeFromChampionship,
+      championshipPoolOverride: data.championshipPoolOverride,
       rank: 0,
       championshipPool: null,
     });
@@ -87,17 +93,20 @@ function rankAndAssignPools(
     .filter((s) => s.division === division)
     .sort((a, b) => {
       if (a.qualified !== b.qualified) return a.qualified ? -1 : 1;
-      return a.qualifyingTotal - b.qualifyingTotal;
+      if (a.qualifyingTotal !== b.qualifyingTotal) return a.qualifyingTotal - b.qualifyingTotal;
+      return a.playerName.localeCompare(b.playerName);
     });
 
-  const qualified = divisionStandings.filter((s) => s.qualified);
+  const qualified = divisionStandings.filter((s) => s.qualified && !s.excludeFromChampionship);
   const cutoff = Math.ceil(qualified.length / 2);
+  const cutoffScore = qualified[cutoff - 1]?.qualifyingTotal;
 
   divisionStandings.forEach((s, i) => {
     s.rank = i + 1;
-    const qualifiedIndex = qualified.indexOf(s);
-    if (qualifiedIndex !== -1) {
-      s.championshipPool = qualifiedIndex < cutoff ? topPool : bottomPool;
-    }
+    if (!s.qualified || s.excludeFromChampionship) return;
+
+    // Auto-assign based on score; override replaces the result afterward
+    const autoPool = s.qualifyingTotal <= cutoffScore ? topPool : bottomPool;
+    s.championshipPool = s.championshipPoolOverride ?? autoPool;
   });
 }

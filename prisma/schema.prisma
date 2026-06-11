@@ -61,10 +61,12 @@ model Player {
   name         String
   pdgaNumber   String?
   username     String?      @unique
-  division     Division
-  memberStatus MemberStatus @default(NON_MEMBER)
-  leagueId     Int
-  createdAt    DateTime     @default(now())
+  division                Division
+  memberStatus            MemberStatus @default(NON_MEMBER)
+  excludeFromChampionship  Boolean      @default(false)
+  championshipPoolOverride String?
+  leagueId                Int
+  createdAt               DateTime     @default(now())
 
   league  League   @relation(fields: [leagueId], references: [id])
   results Result[]
