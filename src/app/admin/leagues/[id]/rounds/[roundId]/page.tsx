@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, use } from "react";
+import { useState, useEffect, useRef, use, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +13,7 @@ import { generateFacebookPost, generateChampionshipPost, generateNewspaperBody }
 import { computePoolSummaries } from "@/lib/pool-utils";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface CtpWinner {
   hole: number;
@@ -347,11 +348,30 @@ export default function RoundManagePage({
     setPhotos(photos.filter((_, j) => j !== index));
   }
 
-  if (!round) return <div className="text-slate-500 py-12 text-center">Loading...</div>;
+  if (!round) {
+    return (
+      <div className="space-y-6 max-w-6xl">
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-8 w-48" />
+        </div>
+        <div className="grid grid-cols-3 gap-4">
+          {[0, 1, 2].map((i) => <Skeleton key={i} className="h-20 w-full rounded-lg" />)}
+        </div>
+        <Skeleton className="h-10 w-64 rounded-md" />
+        <div className="space-y-3">
+          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+        </div>
+      </div>
+    );
+  }
 
-  const blueResults = round.results.filter((r) => r.division === "BLUE");
-  const redResults = round.results.filter((r) => r.division === "RED");
-  const poolData = round.isChampionship ? computePoolGroups(round.results, standings) : null;
+  const blueResults = useMemo(() => round.results.filter((r) => r.division === "BLUE"), [round.results]);
+  const redResults = useMemo(() => round.results.filter((r) => r.division === "RED"), [round.results]);
+  const poolData = useMemo(
+    () => round.isChampionship ? computePoolGroups(round.results, standings) : null,
+    [round.isChampionship, round.results, standings]
+  );
 
   // Compute current champion names (override or computed) for display
   const currentSummaries = round.isChampionship && standings.length > 0

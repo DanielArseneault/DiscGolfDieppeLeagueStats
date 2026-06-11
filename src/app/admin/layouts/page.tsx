@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface HolePar {
   holeNumber: number;
@@ -117,13 +118,19 @@ function LayoutForm({
 
 export default function LayoutsPage() {
   const [layouts, setLayouts] = useState<Layout[]>([]);
+  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Layout | undefined>();
 
   async function load() {
-    const res = await fetch("/api/layouts");
-    const data = await res.json();
-    setLayouts(data);
+    setLoading(true);
+    try {
+      const res = await fetch("/api/layouts");
+      const data = await res.json();
+      setLayouts(data);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => { load(); }, []);
@@ -158,7 +165,34 @@ export default function LayoutsPage() {
         </Dialog>
       </div>
 
-      {layouts.length === 0 ? (
+      {loading ? (
+        <div className="space-y-4">
+          {[0, 1].map((i) => (
+            <Card key={i}>
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-2">
+                    <Skeleton className="h-5 w-36" />
+                    <Skeleton className="h-4 w-20" />
+                  </div>
+                  <div className="flex gap-2">
+                    <Skeleton className="h-8 w-14 rounded-md" />
+                    <Skeleton className="h-8 w-16 rounded-md" />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-4 w-24 mb-2" />
+                <div className="grid grid-cols-9 gap-1">
+                  {Array.from({ length: 18 }).map((_, j) => (
+                    <Skeleton key={j} className="h-10 w-full rounded" />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : layouts.length === 0 ? (
         <Card className="border-dashed border-2">
           <CardContent className="py-8 text-center text-slate-500">
             No layouts yet. Add a Blue and Red layout to track per-hole par values.

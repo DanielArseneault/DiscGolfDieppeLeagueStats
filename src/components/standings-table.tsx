@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { PlayerStanding } from "@/lib/standings";
 import { Badge } from "@/components/ui/badge";
 import { formatScore } from "@/lib/utils";
@@ -19,7 +20,10 @@ const POOL_COLORS: Record<string, "blue" | "green" | "red" | "yellow"> = {
 };
 
 export function StandingsTable({ standings, division, bestScoresCount }: StandingsTableProps) {
-  const filtered = standings.filter((s) => s.division === division);
+  const filtered = useMemo(
+    () => standings.filter((s) => s.division === division),
+    [standings, division]
+  );
 
   if (filtered.length === 0) {
     return <p className="text-slate-500 text-sm py-4">No results yet for this division.</p>;

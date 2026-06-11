@@ -8,7 +8,9 @@ export async function GET() {
     },
     orderBy: { name: "asc" },
   });
-  return NextResponse.json(layouts);
+  return NextResponse.json(layouts, {
+    headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120" },
+  });
 }
 
 export async function POST(req: Request) {

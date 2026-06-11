@@ -5,7 +5,9 @@ export async function GET() {
   const leagues = await prisma.league.findMany({
     orderBy: { year: "desc" },
   });
-  return NextResponse.json(leagues);
+  return NextResponse.json(leagues, {
+    headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60" },
+  });
 }
 
 export async function POST(req: Request) {

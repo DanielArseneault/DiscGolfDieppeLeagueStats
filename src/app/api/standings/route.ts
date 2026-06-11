@@ -5,5 +5,7 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const leagueId = Number(searchParams.get("leagueId") ?? 1);
   const standings = await getStandings(leagueId);
-  return NextResponse.json(standings);
+  return NextResponse.json(standings, {
+    headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60" },
+  });
 }

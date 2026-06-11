@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { prisma } from "@/lib/db";
 import { Division } from "@/generated/prisma/client";
 
@@ -16,7 +17,7 @@ export interface PlayerStanding {
   championshipPool: string | null;
 }
 
-export async function getStandings(leagueId: number): Promise<PlayerStanding[]> {
+export const getStandings = cache(async function getStandings(leagueId: number): Promise<PlayerStanding[]> {
   const league = await prisma.league.findUnique({ where: { id: leagueId } });
   if (!league) return [];
 
@@ -81,7 +82,7 @@ export async function getStandings(leagueId: number): Promise<PlayerStanding[]> 
     if (a.division !== b.division) return a.division === Division.BLUE ? -1 : 1;
     return a.rank - b.rank;
   });
-}
+});
 
 function rankAndAssignPools(
   standings: PlayerStanding[],

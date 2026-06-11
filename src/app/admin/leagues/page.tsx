@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 
 interface League {
@@ -127,14 +128,20 @@ function LeagueForm({
 
 export default function LeaguesPage() {
   const [leagues, setLeagues] = useState<League[]>([]);
+  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<League | undefined>();
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function load() {
-    const res = await fetch("/api/leagues");
-    const data = await res.json();
-    setLeagues(data);
+    setLoading(true);
+    try {
+      const res = await fetch("/api/leagues");
+      const data = await res.json();
+      setLeagues(data);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => { load(); }, []);
@@ -181,7 +188,34 @@ export default function LeaguesPage() {
         </div>
       )}
 
-      {leagues.length === 0 ? (
+      {loading ? (
+        <div className="space-y-4">
+          {[0, 1, 2].map((i) => (
+            <Card key={i}>
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-2">
+                    <Skeleton className="h-5 w-48" />
+                    <Skeleton className="h-4 w-28" />
+                  </div>
+                  <div className="flex gap-2">
+                    <Skeleton className="h-8 w-24 rounded-md" />
+                    <Skeleton className="h-8 w-14 rounded-md" />
+                    <Skeleton className="h-8 w-16 rounded-md" />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-3 gap-4">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : leagues.length === 0 ? (
         <Card className="border-dashed border-2">
           <CardContent className="py-8 text-center text-slate-500">
             No leagues yet. Add one to get started.

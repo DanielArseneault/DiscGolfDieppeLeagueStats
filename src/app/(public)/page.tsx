@@ -11,10 +11,9 @@ import Link from "next/link";
 
 export const revalidate = 60;
 
-async function getData(leagueId: number) {
-  const league = await prisma.league.findUnique({ where: { id: leagueId } });
-  if (!league) return null;
+type League = Awaited<ReturnType<typeof prisma.league.findMany>>[number];
 
+async function getData(league: League) {
   const [standings, recentRound, qualifyingRoundsPlayed] = await Promise.all([
     getStandings(league.id),
     prisma.round.findFirst({
@@ -40,42 +39,42 @@ async function getData(leagueId: number) {
   return { league, standings, recentRound, qualifyingRoundsPlayed, poolSummaries };
 }
 
+const emptyState = (
+  <div className="text-center py-24">
+    <div className="text-5xl mb-4">🥏</div>
+    <h1 className="text-2xl font-bold text-slate-900 mb-2">Welcome to Dieppe DGC League</h1>
+    <p className="text-slate-500">No league data yet. Visit the admin panel to get started.</p>
+    <Link href="/admin" className="mt-4 inline-block text-sm text-blue-600 hover:text-blue-800 hover:underline">
+      Go to Admin →
+    </Link>
+  </div>
+);
+
 export default async function HomePage({ searchParams }: { searchParams: Promise<{ league?: string }> }) {
   const { league: leagueParam } = await searchParams;
+  const leagueId = leagueParam ? Number(leagueParam) : null;
 
-  const allLeagues = await prisma.league.findMany({ orderBy: { year: "desc" } });
+  // When leagueId is known, run allLeagues and the league's data fetch in parallel.
+  // When unknown, we need allLeagues first to discover the default.
+  let allLeagues: League[];
+  let data: Awaited<ReturnType<typeof getData>>;
 
-  if (allLeagues.length === 0) {
-    return (
-      <div className="text-center py-24">
-        <div className="text-5xl mb-4">🥏</div>
-        <h1 className="text-2xl font-bold text-slate-900 mb-2">Welcome to Dieppe DGC League</h1>
-        <p className="text-slate-500">No league data yet. Visit the admin panel to get started.</p>
-        <Link href="/admin" className="mt-4 inline-block text-sm text-blue-600 hover:text-blue-800 hover:underline">
-          Go to Admin →
-        </Link>
-      </div>
-    );
+  if (leagueId) {
+    const [leagues, leagueRow] = await Promise.all([
+      prisma.league.findMany({ orderBy: { year: "desc" } }),
+      prisma.league.findUnique({ where: { id: leagueId } }),
+    ]);
+    allLeagues = leagues;
+    if (allLeagues.length === 0) return emptyState;
+    const selectedLeague = leagueRow ?? allLeagues[0];
+    data = await getData(selectedLeague);
+  } else {
+    allLeagues = await prisma.league.findMany({ orderBy: { year: "desc" } });
+    if (allLeagues.length === 0) return emptyState;
+    data = await getData(allLeagues[0]);
   }
-
-  const selectedLeague = allLeagues.find((l) => l.id === Number(leagueParam)) ?? allLeagues[0];
-  const data = await getData(selectedLeague.id);
-  if (!data) return null;
 
   const { league, standings, recentRound, qualifyingRoundsPlayed, poolSummaries } = data;
-
-  if (!league) {
-    return (
-      <div className="text-center py-24">
-        <div className="text-5xl mb-4">🥏</div>
-        <h1 className="text-2xl font-bold text-slate-900 mb-2">Welcome to Dieppe DGC League</h1>
-        <p className="text-slate-500">No league data yet. Visit the admin panel to get started.</p>
-        <Link href="/admin" className="mt-4 inline-block text-sm text-blue-600 hover:text-blue-800 hover:underline">
-          Go to Admin →
-        </Link>
-      </div>
-    );
-  }
 
   const blueCount = standings.filter((s) => s.division === Division.BLUE).length;
   const redCount = standings.filter((s) => s.division === Division.RED).length;
