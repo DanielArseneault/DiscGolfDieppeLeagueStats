@@ -28,8 +28,16 @@ function assignPositions(rows: ResultRow[]): ResultRow[] {
   });
 }
 
-export default async function RoundPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function RoundPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ league?: string }>;
+}) {
   const { id } = await params;
+  const { league: leagueParam } = await searchParams;
+  const backUrl = leagueParam ? `/rounds?league=${leagueParam}` : "/rounds";
 
   const round = await prisma.round.findUnique({
     where: { id: Number(id) },
@@ -106,9 +114,15 @@ export default async function RoundPage({ params }: { params: Promise<{ id: stri
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/rounds" className="text-sm text-green-600 hover:text-green-800 mb-2 inline-block transition-colors">
-          ← All Rounds
-        </Link>
+        <div className="flex items-center gap-2 text-sm text-slate-400 mb-3">
+          <Link href={backUrl} className="hover:text-slate-600 transition-colors">
+            Rounds
+          </Link>
+          <span>/</span>
+          <span className="text-slate-600">
+            {round.isChampionship ? "Championship" : `Week ${round.weekNumber}`}
+          </span>
+        </div>
         <h1 className="text-3xl font-bold text-slate-900">
           {round.isChampionship ? "🏆 Championship" : `Week ${round.weekNumber}`}
         </h1>
