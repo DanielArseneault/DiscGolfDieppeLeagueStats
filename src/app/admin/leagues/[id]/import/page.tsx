@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, use } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,17 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 interface Layout {
   id: number;
   name: string;
-}
-
-interface PreviewResult {
-  name: string;
-  score: number;
-  relativeScore: number;
-  position: number;
 }
 
 interface ImportPreview {
@@ -30,7 +24,8 @@ interface ImportPreview {
   inferredRedPar: number;
 }
 
-export default function ImportPage() {
+export default function ImportPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id: leagueId } = use(params);
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -44,14 +39,8 @@ export default function ImportPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  async function loadLayouts() {
-    const res = await fetch("/api/layouts");
-    const data = await res.json();
-    setLayouts(data);
-  }
-
   useEffect(() => {
-    loadLayouts();
+    fetch("/api/layouts").then((r) => r.json()).then(setLayouts);
   }, []);
 
   async function handleImport(e: React.FormEvent) {
@@ -63,7 +52,7 @@ export default function ImportPage() {
 
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("leagueId", "1");
+    formData.append("leagueId", leagueId);
     formData.append("weekNumber", weekNumber);
     formData.append("date", date);
     if (blueLayoutId) formData.append("blueLayoutId", blueLayoutId);
@@ -76,8 +65,7 @@ export default function ImportPage() {
         setError(err.error ?? "Import failed");
         return;
       }
-      const data = await res.json();
-      setPreview(data);
+      setPreview(await res.json());
     } catch {
       setError("Failed to import. Check the file format.");
     } finally {
@@ -89,8 +77,11 @@ export default function ImportPage() {
     return (
       <div className="space-y-6 max-w-2xl">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Import Complete</h1>
-          <p className="text-slate-500 mt-1">Week {preview.weekNumber} data has been imported.</p>
+          <Link href={`/admin/leagues/${leagueId}`} className="text-sm text-slate-500 hover:text-slate-700">
+            ← League Dashboard
+          </Link>
+          <h1 className="text-2xl font-bold text-slate-900 mt-1">Import Complete</h1>
+          <p className="text-slate-500 mt-0.5">Week {preview.weekNumber} data has been imported.</p>
         </div>
         <Card>
           <CardContent className="pt-6 space-y-4">
@@ -107,8 +98,8 @@ export default function ImportPage() {
               </div>
             </div>
             <div className="flex gap-3 pt-2">
-              <Button onClick={() => router.push(`/admin/rounds/${preview.roundId}`)}>
-                Manage Round
+              <Button onClick={() => router.push(`/admin/leagues/${leagueId}/rounds/${preview.roundId}`)}>
+                Manage Round →
               </Button>
               <Button variant="outline" onClick={() => setPreview(null)}>
                 Import Another
@@ -123,9 +114,12 @@ export default function ImportPage() {
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Import Round</h1>
-        <p className="text-slate-500 mt-1">
-          Upload a UDisc export file (.xlsx or .csv) to import league night results.
+        <Link href={`/admin/leagues/${leagueId}`} className="text-sm text-slate-500 hover:text-slate-700">
+          ← League Dashboard
+        </Link>
+        <h1 className="text-2xl font-bold text-slate-900 mt-1">Import Round</h1>
+        <p className="text-slate-500 mt-0.5">
+          Upload a UDisc export file (.xlsx) to import league night results.
         </p>
       </div>
 
@@ -136,7 +130,7 @@ export default function ImportPage() {
         <CardContent>
           <form onSubmit={handleImport} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="file">File (.xlsx or .csv)</Label>
+              <Label htmlFor="file">File (.xlsx)</Label>
               <Input
                 ref={fileRef}
                 id="file"
@@ -157,7 +151,7 @@ export default function ImportPage() {
                   id="week"
                   type="number"
                   min={1}
-                  max={10}
+                  max={52}
                   value={weekNumber}
                   onChange={(e) => setWeekNumber(e.target.value)}
                   placeholder="e.g. 5"
@@ -207,9 +201,9 @@ export default function ImportPage() {
 
             {layouts.length === 0 && (
               <p className="text-xs text-amber-600 bg-amber-50 rounded p-2">
-                No layouts configured yet. You can{" "}
-                <a href="/admin/layouts" className="underline">add layouts</a>{" "}
-                to track per-hole par values, or import without a layout.
+                No layouts configured yet.{" "}
+                <Link href="/admin/layouts" className="underline">Add layouts</Link>{" "}
+                to track per-hole par values, or import without one.
               </p>
             )}
 

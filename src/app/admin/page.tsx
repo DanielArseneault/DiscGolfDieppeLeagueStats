@@ -1,98 +1,51 @@
 import { prisma } from "@/lib/db";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { formatDate } from "@/lib/utils";
+import { redirect } from "next/navigation";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
-export default async function AdminDashboard() {
-  const [league, rounds] = await Promise.all([
-    prisma.league.findFirst({ orderBy: { year: "desc" } }),
-    prisma.round.findMany({
-      orderBy: { weekNumber: "desc" },
-      include: {
-        _count: { select: { results: true } },
-        post: { select: { id: true } },
-        newspaperImage: { select: { id: true, generatedAt: true } },
-        ctpWinners: true,
-      },
-      take: 20,
-    }),
-  ]);
+export default async function AdminPage() {
+  const leagues = await prisma.league.findMany({ orderBy: { year: "desc" } });
+
+  if (leagues.length === 1) {
+    redirect(`/admin/leagues/${leagues[0].id}`);
+  }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 max-w-2xl">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Admin Dashboard</h1>
-          {league && <p className="text-slate-500 text-sm mt-1">{league.name}</p>}
-        </div>
-        <div className="flex gap-3">
-          <Button asChild variant="outline">
-            <Link href="/admin/layouts">Manage Layouts</Link>
-          </Button>
-          <Button asChild>
-            <Link href="/admin/import">Import Round</Link>
-          </Button>
-        </div>
+        <h1 className="text-2xl font-bold text-slate-900">Admin</h1>
+        <Button asChild variant="outline">
+          <Link href="/admin/leagues">Manage Leagues</Link>
+        </Button>
       </div>
 
-      {!league && (
+      {leagues.length === 0 ? (
         <Card className="border-dashed border-2">
-          <CardContent className="py-8 text-center">
-            <p className="text-slate-500 mb-4">No league set up yet. Create one to get started.</p>
+          <CardContent className="py-12 text-center">
+            <p className="text-slate-500 mb-4">No leagues yet. Create one to get started.</p>
             <Button asChild>
-              <Link href="/admin/league/new">Create League</Link>
+              <Link href="/admin/leagues">Create League</Link>
             </Button>
           </CardContent>
         </Card>
-      )}
-
-      {rounds.length > 0 && (
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900 mb-4">Rounds</h2>
-          <div className="space-y-3">
-            {rounds.map((round) => (
-              <Card key={round.id}>
-                <CardContent className="py-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="flex items-center gap-3">
-                        <span className="font-semibold text-slate-900">Week {round.weekNumber}</span>
-                        <span className="text-sm text-slate-500">{formatDate(round.date)}</span>
-                        <Badge variant="secondary">{round._count.results} players</Badge>
-                      </div>
-                      <div className="flex gap-2 mt-1.5">
-                        {round.ctpWinners.length > 0 && (
-                          <span className="text-xs text-slate-400">🎯 {round.ctpWinners.length} CTP</span>
-                        )}
-                        {round.post && (
-                          <span className="text-xs text-emerald-600">✓ Post saved</span>
-                        )}
-                        {round.newspaperImage?.generatedAt && (
-                          <span className="text-xs text-emerald-600">✓ Image generated</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button asChild variant="outline" size="sm">
-                        <Link href={`/rounds/${round.id}`}>View</Link>
-                      </Button>
-                      <Button asChild variant="outline" size="sm">
-                        <Link href={`/admin/rounds/${round.id}`}>Manage</Link>
-                      </Button>
-                      <Button asChild variant="outline" size="sm">
-                        <Link href={`/admin/rounds/${round.id}/image`}>Image</Link>
-                      </Button>
-                      <Button asChild variant="outline" size="sm">
-                        <Link href={`/admin/rounds/${round.id}/post`}>Post</Link>
-                      </Button>
-                    </div>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-sm text-slate-500">Select a league to manage.</p>
+          {leagues.map((league) => (
+            <Link key={league.id} href={`/admin/leagues/${league.id}`}>
+              <Card className="hover:shadow-md transition-shadow cursor-pointer">
+                <CardContent className="py-4 flex items-center justify-between">
+                  <div>
+                    <div className="font-semibold text-slate-900">{league.name}</div>
+                    <div className="text-sm text-slate-500">{league.location}</div>
                   </div>
+                  <Badge variant="secondary">{league.year}</Badge>
                 </CardContent>
               </Card>
-            ))}
-          </div>
+            </Link>
+          ))}
         </div>
       )}
     </div>
