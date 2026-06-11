@@ -167,16 +167,20 @@ function ChampionshipCard({ round, standings, leagueId }: { round: Round; standi
           <div className="flex-1 min-w-0">
 
             {/* Header */}
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-2xl">🏆</span>
-              <h3 className="text-lg font-bold text-slate-900">Championship</h3>
-              <span className="text-xs bg-amber-200 text-amber-800 font-semibold px-2 py-0.5 rounded-full">
-                Season Final
-              </span>
+            <div className="flex items-start gap-2 mb-4">
+              <span className="text-2xl shrink-0 mt-0.5">🏆</span>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-lg font-bold text-slate-900">Championship</h3>
+                  <span className="text-xs bg-amber-200 text-amber-800 font-semibold px-2 py-0.5 rounded-full whitespace-nowrap">
+                    Season Final
+                  </span>
+                </div>
+                <p className="text-sm text-slate-500 mt-0.5">
+                  {formatDate(round.date)} · {round.results.length} players
+                </p>
+              </div>
             </div>
-            <p className="text-sm text-slate-500 mb-4">
-              {formatDate(round.date)} · {round.results.length} players
-            </p>
 
             {/* Pool winners */}
             {(bluePools.length > 0 || redPools.length > 0) && (
