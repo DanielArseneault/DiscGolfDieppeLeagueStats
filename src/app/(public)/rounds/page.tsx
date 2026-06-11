@@ -17,6 +17,7 @@ async function getRounds(leagueId: number) {
     orderBy: { weekNumber: "desc" },
     include: {
       ctpWinners: { orderBy: { hole: "asc" } },
+      aceWinners: { orderBy: { hole: "asc" } },
       poolWinners: { orderBy: [{ pool: "asc" }, { place: "asc" }] },
       results: {
         include: { player: true },
@@ -130,11 +131,16 @@ function RegularRoundCard({ round, leagueId }: { round: Round; leagueId: number 
               </div>
             )}
 
-            {round.ctpWinners.length > 0 && (
+            {(round.ctpWinners.length > 0 || round.aceWinners.length > 0) && (
               <div className="flex flex-wrap gap-2">
                 {round.ctpWinners.map((c) => (
                   <Badge key={c.id} className="bg-orange-100 text-orange-800 border border-orange-200 hover:bg-orange-100">
                     🎯 Hole {c.hole}: {c.playerName}
+                  </Badge>
+                ))}
+                {round.aceWinners.map((a) => (
+                  <Badge key={a.id} className="bg-purple-100 text-purple-800 border border-purple-200 hover:bg-purple-100">
+                    🦅 Hole {a.hole}: {a.playerName}{a.prizeAmount != null ? ` · $${a.prizeAmount.toFixed(2)}` : ""}
                   </Badge>
                 ))}
               </div>
@@ -216,11 +222,16 @@ function ChampionshipCard({ round, standings, leagueId }: { round: Round; standi
               </div>
             )}
 
-            {round.ctpWinners.length > 0 && (
+            {(round.ctpWinners.length > 0 || round.aceWinners.length > 0) && (
               <div className="flex flex-wrap gap-2">
                 {round.ctpWinners.map((c) => (
                   <Badge key={c.id} className="bg-orange-100 text-orange-800 border border-orange-200 hover:bg-orange-100">
                     🎯 Hole {c.hole}: {c.playerName}
+                  </Badge>
+                ))}
+                {round.aceWinners.map((a) => (
+                  <Badge key={a.id} className="bg-purple-100 text-purple-800 border border-purple-200 hover:bg-purple-100">
+                    🦅 Hole {a.hole}: {a.playerName}{a.prizeAmount != null ? ` · $${a.prizeAmount.toFixed(2)}` : ""}
                   </Badge>
                 ))}
               </div>

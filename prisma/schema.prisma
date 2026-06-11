@@ -89,6 +89,7 @@ model Round {
   redLayout     CourseLayout?  @relation("RedLayout", fields: [redLayoutId], references: [id])
   results       Result[]
   ctpWinners    CtpWinner[]
+  aceWinners    AceWinner[]
   poolWinners   ChampionshipPoolWinner[]
   post          Post?
   newspaperImage NewspaperImage?
@@ -118,6 +119,16 @@ model CtpWinner {
   roundId    Int
   hole       Int
   playerName String
+
+  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+}
+
+model AceWinner {
+  id          Int     @id @default(autoincrement())
+  roundId     Int
+  hole        Int
+  playerName  String
+  prizeAmount Float?
 
   round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
 }

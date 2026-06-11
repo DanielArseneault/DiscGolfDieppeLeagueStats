@@ -47,6 +47,7 @@ export default async function RoundPage({
         orderBy: [{ division: "asc" }, { position: "asc" }],
       },
       ctpWinners: { orderBy: { hole: "asc" } },
+      aceWinners: { orderBy: { hole: "asc" } },
       poolWinners: { orderBy: [{ pool: "asc" }, { place: "asc" }] },
       blueLayout: { include: { holePars: { orderBy: { holeNumber: "asc" } } } },
       redLayout: { include: { holePars: { orderBy: { holeNumber: "asc" } } } },
@@ -190,6 +191,23 @@ export default async function RoundPage({
               {round.ctpWinners.map((c) => (
                 <Badge key={c.id} className="bg-orange-100 text-orange-800 border border-orange-200 hover:bg-orange-100 text-sm">
                   Hole {c.hole}: {c.playerName}
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {round.aceWinners.length > 0 && (
+        <Card className="border-purple-200 bg-gradient-to-br from-purple-50 to-white">
+          <CardHeader>
+            <CardTitle className="text-base text-slate-900">🦅 Ace Winners</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {round.aceWinners.map((a) => (
+                <Badge key={a.id} className="bg-purple-100 text-purple-800 border border-purple-200 hover:bg-purple-100 text-sm">
+                  Hole {a.hole}: {a.playerName}{a.prizeAmount != null ? ` · $${a.prizeAmount.toFixed(2)}` : ""}
                 </Badge>
               ))}
             </div>

@@ -20,6 +20,12 @@ interface CtpWinner {
   playerName: string;
 }
 
+interface AceWinner {
+  hole: number;
+  playerName: string;
+  prizeAmount: number | null;
+}
+
 interface SavedPoolWinner {
   pool: string;
   place: number;
@@ -44,6 +50,7 @@ interface Round {
   notes: string | null;
   results: RoundResult[];
   ctpWinners: CtpWinner[];
+  aceWinners: AceWinner[];
   poolWinners: SavedPoolWinner[];
   post: { content: string } | null;
   newspaperImage: {
@@ -135,6 +142,10 @@ export default function RoundManagePage({
   ]);
   const [ctpSaving, setCtpSaving] = useState(false);
 
+  // Ace state
+  const [aceEntries, setAceEntries] = useState<{ player: string; hole: number; prizeAmount: string }[]>([]);
+  const [aceSaving, setAceSaving] = useState(false);
+
   // Post state
   const [postContent, setPostContent] = useState("");
   const [postSaving, setPostSaving] = useState(false);
@@ -168,6 +179,7 @@ export default function RoundManagePage({
         second: s.second?.playerName ?? null,
       })),
       ctpWinners: data.ctpWinners,
+      aceWinners: data.aceWinners,
     });
   }
 
@@ -178,6 +190,12 @@ export default function RoundManagePage({
     const loaded = data.ctpWinners.map((w) => ({ player: w.playerName, hole: w.hole }));
     while (loaded.length < 2) loaded.push({ player: "", hole: 18 });
     setCtpEntries(loaded);
+
+    setAceEntries(data.aceWinners.map((w) => ({
+      player: w.playerName,
+      hole: w.hole,
+      prizeAmount: w.prizeAmount != null ? String(w.prizeAmount) : "",
+    })));
 
     if (data.isChampionship) {
       const sData: PlayerStanding[] = await fetch(`/api/standings?leagueId=${leagueId}`).then((r) => r.json());
@@ -197,7 +215,7 @@ export default function RoundManagePage({
       }));
       setPostContent(
         data.post?.content ??
-          generateFacebookPost({ weekNumber: data.weekNumber, date: new Date(data.date), totalPlayers: data.results.length, blueTop3, redTop3, ctpWinners: data.ctpWinners })
+          generateFacebookPost({ weekNumber: data.weekNumber, date: new Date(data.date), totalPlayers: data.results.length, blueTop3, redTop3, ctpWinners: data.ctpWinners, aceWinners: data.aceWinners })
       );
     }
 
@@ -214,13 +232,32 @@ export default function RoundManagePage({
     }));
     setBodyText(
       data.newspaperImage?.bodyText ??
-        generateNewspaperBody({ weekNumber: data.weekNumber, date: new Date(data.date), totalPlayers: data.results.length, blueTop3, redTop3, ctpWinners: data.ctpWinners })
+        generateNewspaperBody({ weekNumber: data.weekNumber, date: new Date(data.date), totalPlayers: data.results.length, blueTop3, redTop3, ctpWinners: data.ctpWinners, aceWinners: data.aceWinners })
     );
   }
 
   useEffect(() => {
     load();
   }, [roundId]);
+
+  // Ace
+  async function handleSaveAce() {
+    setAceSaving(true);
+    const winners = aceEntries
+      .filter((e) => e.player)
+      .map((e) => ({
+        hole: e.hole,
+        playerName: e.player,
+        prizeAmount: e.prizeAmount ? Number(e.prizeAmount) : null,
+      }));
+    await fetch(`/api/rounds/${roundId}/ace`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ aceWinners: winners }),
+    });
+    await load();
+    setAceSaving(false);
+  }
 
   // CTP
   async function handleSaveCtp() {
@@ -297,6 +334,7 @@ export default function RoundManagePage({
         blueTop3,
         redTop3,
         ctpWinners: round.ctpWinners,
+        aceWinners: round.aceWinners,
       }));
     }
   }
@@ -348,6 +386,13 @@ export default function RoundManagePage({
     setPhotos(photos.filter((_, j) => j !== index));
   }
 
+  const blueResults = useMemo(() => round?.results.filter((r) => r.division === "BLUE") ?? [], [round?.results]);
+  const redResults = useMemo(() => round?.results.filter((r) => r.division === "RED") ?? [], [round?.results]);
+  const poolData = useMemo(
+    () => round?.isChampionship ? computePoolGroups(round.results, standings) : null,
+    [round?.isChampionship, round?.results, standings]
+  );
+
   if (!round) {
     return (
       <div className="space-y-6 max-w-6xl">
@@ -365,13 +410,6 @@ export default function RoundManagePage({
       </div>
     );
   }
-
-  const blueResults = useMemo(() => round.results.filter((r) => r.division === "BLUE"), [round.results]);
-  const redResults = useMemo(() => round.results.filter((r) => r.division === "RED"), [round.results]);
-  const poolData = useMemo(
-    () => round.isChampionship ? computePoolGroups(round.results, standings) : null,
-    [round.isChampionship, round.results, standings]
-  );
 
   // Compute current champion names (override or computed) for display
   const currentSummaries = round.isChampionship && standings.length > 0
@@ -411,7 +449,7 @@ export default function RoundManagePage({
 
       <Tabs defaultValue="results">
         <TabsList className="mb-2">
-          <TabsTrigger value="results">Results & CTP</TabsTrigger>
+          <TabsTrigger value="results">Results, CTP & Aces</TabsTrigger>
           <TabsTrigger value="post">
             Facebook Post
             {postDone && <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />}
@@ -679,6 +717,89 @@ export default function RoundManagePage({
                     onClick={() => setCtpEntries((prev) => [...prev, { player: "", hole: 18 }])}
                   >
                     + Add CTP
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Aces */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">🦅 Ace Winners</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {aceEntries.length === 0 && (
+                  <p className="text-sm text-slate-400">No aces recorded for this round.</p>
+                )}
+                {aceEntries.map((entry, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_80px_120px_auto] gap-3 items-end">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Ace {i + 1}</Label>
+                      <Select
+                        value={entry.player}
+                        onValueChange={(v) =>
+                          setAceEntries((prev) => prev.map((e, j) => j === i ? { ...e, player: v } : e))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select player..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {round.results.map((r) => (
+                            <SelectItem key={r.id} value={r.player.name}>
+                              {r.player.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Hole</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={18}
+                        value={entry.hole}
+                        onChange={(e) =>
+                          setAceEntries((prev) => prev.map((en, j) => j === i ? { ...en, hole: Number(e.target.value) } : en))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Prize ($)</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        placeholder="0.00"
+                        value={entry.prizeAmount}
+                        onChange={(e) =>
+                          setAceEntries((prev) => prev.map((en, j) => j === i ? { ...en, prizeAmount: e.target.value } : en))
+                        }
+                      />
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-slate-400 hover:text-red-500 mb-0.5"
+                      onClick={() => setAceEntries((prev) => prev.filter((_, j) => j !== i))}
+                    >
+                      ✕
+                    </Button>
+                  </div>
+                ))}
+                <div className="flex items-center gap-3 pt-1">
+                  <Button size="sm" onClick={handleSaveAce} disabled={aceSaving}>
+                    {aceSaving ? "Saving..." : "Save Ace Winners"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setAceEntries((prev) => [...prev, { player: "", hole: 18, prizeAmount: "" }])}
+                  >
+                    + Add Ace
                   </Button>
                 </div>
               </div>

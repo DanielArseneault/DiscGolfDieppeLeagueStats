@@ -19,6 +19,7 @@ export interface RoundSummary {
   blueTop3: { name: string; score: number; relativeScore: number; position: number }[];
   redTop3: { name: string; score: number; relativeScore: number; position: number }[];
   ctpWinners: { hole: number; playerName: string }[];
+  aceWinners: { hole: number; playerName: string; prizeAmount?: number | null }[];
 }
 
 export interface ChampionshipSummary {
@@ -30,6 +31,7 @@ export interface ChampionshipSummary {
     second: string | null;
   }>;
   ctpWinners: { hole: number; playerName: string }[];
+  aceWinners: { hole: number; playerName: string; prizeAmount?: number | null }[];
 }
 
 export function generateFacebookPost(summary: RoundSummary): string {
@@ -48,6 +50,10 @@ export function generateFacebookPost(summary: RoundSummary): string {
     .map((c) => `• Hole ${c.hole} – ${c.playerName}`)
     .join("\n");
 
+  const aceLines = summary.aceWinners
+    .map((a) => `• Hole ${a.hole} – ${a.playerName}${a.prizeAmount ? ` ($${a.prizeAmount.toFixed(2)})` : ""}`)
+    .join("\n");
+
   return `Week ${summary.weekNumber} is in the books! We had an incredible ${summary.totalPlayers} players out on the course.
 
 ${blueWinner ? `Blue Division was led by ${blueWinner.name} with a sharp ${formatScore(blueWinner.score, blueWinner.relativeScore)}.` : ""}
@@ -59,7 +65,7 @@ ${bluePodium}
 🏆 Red Division Podium:
 ${redPodium}
 
-${ctpLines ? `🎯 CTP Winners:\n${ctpLines}\n` : ""}Huge thanks to Atlantic Disc Golf for sponsoring the ADGDDGMSL Championship Series. Be sure to check out their store online and in person!
+${ctpLines ? `🎯 CTP Winners:\n${ctpLines}\n` : ""}${aceLines ? `🦅 Ace Winners:\n${aceLines}\n` : ""}Huge thanks to Atlantic Disc Golf for sponsoring the ADGDDGMSL Championship Series. Be sure to check out their store online and in person!
 
 Same discin' time, same discin' place!
 
@@ -81,6 +87,10 @@ export function generateChampionshipPost(summary: ChampionshipSummary): string {
     .map((c) => `🎯 Hole ${c.hole} – ${c.playerName}`)
     .join("\n");
 
+  const aceLines = summary.aceWinners
+    .map((a) => `🦅 Hole ${a.hole} – ${a.playerName}${a.prizeAmount ? ` ($${a.prizeAmount.toFixed(2)})` : ""}`)
+    .join("\n");
+
   return `🏆 Championship Night Recap – ADG Dieppe Summer League 🏆
 Last night marked the conclusion of the Atlantic Disc Golf Dieppe Disc Golf Mixed Summer League. ${summary.totalPlayers} players came out for an unforgettable finale.
 
@@ -90,7 +100,7 @@ Highlights:
 Championship Results
 ${poolSection}
 
-${ctpLines ? `CTP Winners\n${ctpLines}\n\n` : ""}A massive thank you to Atlantic Disc Golf for their ongoing support of this league. Be sure to show them some love in-store or online for all your disc golf needs.
+${ctpLines ? `CTP Winners\n${ctpLines}\n\n` : ""}${aceLines ? `Ace Winners\n${aceLines}\n\n` : ""}A massive thank you to Atlantic Disc Golf for their ongoing support of this league. Be sure to show them some love in-store or online for all your disc golf needs.
 
 And of course, thank you to every volunteer and every player who helped make this series such a success. Stay tuned for what's coming next!
 
@@ -119,6 +129,7 @@ Blue Division: ${bluePodium}
 Red Division: ${redPodium}
 
 ${summary.ctpWinners.length > 0 ? `CTP winners: ${summary.ctpWinners.map(c => `${c.playerName} (Hole ${c.hole})`).join(", ")}.` : ""}
+${summary.aceWinners.length > 0 ? `Ace winners: ${summary.aceWinners.map(a => `${a.playerName} (Hole ${a.hole}${a.prizeAmount ? `, $${a.prizeAmount.toFixed(2)}` : ""})`).join(", ")}.` : ""}
 
 A special thank you to Atlantic Disc Golf for their continued support of the ADGDDGMSL Championship Series.`;
 }
