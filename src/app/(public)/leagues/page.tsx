@@ -48,7 +48,7 @@ export default async function LeaguesPage() {
 
             return (
               <Link key={league.id} href={`/leagues/${league.id}`}>
-                <Card className="hover:shadow-md transition-shadow cursor-pointer">
+                <Card className="hover:shadow-md hover:border-green-300 transition-all cursor-pointer border-slate-200">
                   <CardContent className="py-5">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">

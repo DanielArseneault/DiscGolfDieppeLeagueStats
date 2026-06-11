@@ -32,16 +32,20 @@ export default async function RoundsPage() {
         <div className="space-y-3">
           {rounds.map((round) => (
             <Link key={round.id} href={`/rounds/${round.id}`}>
-              <Card className="hover:shadow-md transition-shadow cursor-pointer">
+              <Card className="hover:shadow-md hover:border-green-300 transition-all cursor-pointer border-slate-200">
                 <CardContent className="py-4 flex items-center justify-between">
                   <div>
-                    <div className="font-semibold text-slate-900">{round.isChampionship ? "Championship" : `Week ${round.weekNumber}`}</div>
+                    <div className="font-semibold text-slate-900">
+                      {round.isChampionship ? "🏆 Championship" : `Week ${round.weekNumber}`}
+                    </div>
                     <div className="text-sm text-slate-500 mt-0.5">{formatDate(round.date)}</div>
                   </div>
                   <div className="flex items-center gap-3 text-sm text-slate-500">
                     <span>{round._count.results} players</span>
                     {round.ctpWinners.length > 0 && (
-                      <Badge variant="secondary">🎯 {round.ctpWinners.length} CTP</Badge>
+                      <Badge className="bg-orange-100 text-orange-800 border border-orange-200 hover:bg-orange-100">
+                        🎯 {round.ctpWinners.length} CTP
+                      </Badge>
                     )}
                     <span className="text-slate-300">→</span>
                   </div>

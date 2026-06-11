@@ -106,11 +106,11 @@ export default async function RoundPage({ params }: { params: Promise<{ id: stri
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/rounds" className="text-sm text-slate-500 hover:text-slate-700 mb-2 inline-block">
+        <Link href="/rounds" className="text-sm text-green-600 hover:text-green-800 mb-2 inline-block transition-colors">
           ← All Rounds
         </Link>
         <h1 className="text-3xl font-bold text-slate-900">
-          {round.isChampionship ? "Championship" : `Week ${round.weekNumber}`}
+          {round.isChampionship ? "🏆 Championship" : `Week ${round.weekNumber}`}
         </h1>
         <p className="text-slate-500 mt-1">
           {formatDate(round.date)} · {round.league.name}
@@ -118,21 +118,21 @@ export default async function RoundPage({ params }: { params: Promise<{ id: stri
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <Card>
+        <Card className="border-slate-200">
           <CardContent className="pt-4 pb-4">
-            <div className="text-2xl font-bold tabular-nums">{round.results.length}</div>
+            <div className="text-2xl font-bold text-slate-900 tabular-nums">{round.results.length}</div>
             <div className="text-xs text-slate-500">Total Players</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-slate-200">
           <CardContent className="pt-4 pb-4">
-            <div className="text-2xl font-bold tabular-nums">{blueResults.length}</div>
+            <div className="text-2xl font-bold text-slate-900 tabular-nums">{blueResults.length}</div>
             <div className="text-xs text-slate-500">Blue Division</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-slate-200">
           <CardContent className="pt-4 pb-4">
-            <div className="text-2xl font-bold tabular-nums">{redResults.length}</div>
+            <div className="text-2xl font-bold text-slate-900 tabular-nums">{redResults.length}</div>
             <div className="text-xs text-slate-500">Red Division</div>
           </CardContent>
         </Card>
@@ -143,7 +143,7 @@ export default async function RoundPage({ params }: { params: Promise<{ id: stri
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
               <span className="text-2xl">🏆</span>
-              <CardTitle className="text-xl">Pool Results</CardTitle>
+              <CardTitle className="text-xl text-slate-900">Pool Results</CardTitle>
             </div>
           </CardHeader>
           <CardContent>
@@ -156,14 +156,14 @@ export default async function RoundPage({ params }: { params: Promise<{ id: stri
       )}
 
       {round.ctpWinners.length > 0 && (
-        <Card>
+        <Card className="border-green-200">
           <CardHeader>
-            <CardTitle className="text-base">🎯 CTP Winners</CardTitle>
+            <CardTitle className="text-base text-slate-900">🎯 CTP Winners</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
               {round.ctpWinners.map((c) => (
-                <Badge key={c.id} variant="secondary" className="text-sm">
+                <Badge key={c.id} className="bg-orange-100 text-orange-800 border border-orange-200 hover:bg-orange-100 text-sm">
                   Hole {c.hole}: {c.playerName}
                 </Badge>
               ))}
@@ -247,7 +247,7 @@ function PoolSummaryColumn({ label, pools }: { label: string; pools: PoolSummary
                   <span className="text-base">🥇</span>
                   <span className="font-semibold text-slate-900 text-sm">{w.first.playerName}</span>
                   <span className={`ml-auto font-mono text-xs ${
-                    w.first.relativeScore < 0 ? "text-emerald-600" : w.first.relativeScore > 0 ? "text-red-500" : "text-slate-500"
+                    w.first.relativeScore < 0 ? "text-emerald-600" : w.first.relativeScore > 0 ? "text-orange-500" : "text-slate-500"
                   }`}>
                     {w.first.score} ({formatScore(w.first.relativeScore)})
                   </span>
@@ -258,7 +258,7 @@ function PoolSummaryColumn({ label, pools }: { label: string; pools: PoolSummary
                   <span className="text-base">🥈</span>
                   <span className="text-slate-700 text-sm">{w.second.playerName}</span>
                   <span className={`ml-auto font-mono text-xs ${
-                    w.second.relativeScore < 0 ? "text-emerald-600" : w.second.relativeScore > 0 ? "text-red-500" : "text-slate-500"
+                    w.second.relativeScore < 0 ? "text-emerald-600" : w.second.relativeScore > 0 ? "text-orange-500" : "text-slate-500"
                   }`}>
                     {w.second.score} ({formatScore(w.second.relativeScore)})
                   </span>

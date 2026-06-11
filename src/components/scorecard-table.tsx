@@ -40,7 +40,7 @@ export function ScorecardTable({ results, holePars, divisionLabel }: ScorecardTa
       <div className="overflow-x-auto rounded-lg border border-slate-200 shadow-sm">
         <table className="w-full text-xs min-w-max">
           <thead>
-            <tr className="bg-slate-100 border-b border-slate-200">
+            <tr className="bg-slate-50 border-b border-slate-200">
               <th className="px-3 py-2 text-center font-semibold text-slate-500 w-10">Pos</th>
               <th className="px-3 py-2 text-left font-semibold text-slate-500 min-w-[150px]">Name</th>
               <th className="px-3 py-2 text-center font-semibold text-slate-500 w-14">Total</th>
@@ -67,7 +67,7 @@ export function ScorecardTable({ results, holePars, divisionLabel }: ScorecardTa
               return (
                 <tr
                   key={idx}
-                  className={`border-b border-slate-100 hover:bg-blue-50/40 transition-colors ${
+                  className={`border-b border-slate-100 hover:bg-green-50/40 transition-colors ${
                     idx % 2 === 1 ? "bg-slate-50/70" : "bg-white"
                   }`}
                 >
@@ -78,7 +78,7 @@ export function ScorecardTable({ results, holePars, divisionLabel }: ScorecardTa
                   <td
                     className={`px-2 py-2.5 text-center font-semibold tabular-nums ${
                       r.relativeScore < 0
-                        ? "text-blue-600"
+                        ? "text-sky-600"
                         : r.relativeScore > 0
                         ? "text-orange-500"
                         : "text-slate-500"
@@ -110,23 +110,20 @@ function HoleScore({ score, par }: { score: number | undefined; par: number }) {
   const diff = score - par;
 
   if (diff <= -2) {
-    // Eagle or better: blue circle with outer ring
     return (
-      <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-500 text-white font-bold text-[11px] ring-2 ring-blue-400 ring-offset-1">
+      <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-sky-500 text-white font-bold text-[11px] ring-2 ring-sky-400 ring-offset-1">
         {score}
       </span>
     );
   }
   if (diff === -1) {
-    // Birdie: solid blue circle
     return (
-      <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-400 text-white font-medium text-[11px]">
+      <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-sky-400 text-white font-medium text-[11px]">
         {score}
       </span>
     );
   }
   if (diff === 1) {
-    // Bogey: soft orange circle
     return (
       <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-orange-300 text-white font-medium text-[11px]">
         {score}
@@ -134,13 +131,11 @@ function HoleScore({ score, par }: { score: number | undefined; par: number }) {
     );
   }
   if (diff >= 2) {
-    // Double bogey or worse: deeper orange with outer ring
     return (
       <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-orange-500 text-white font-medium text-[11px] ring-2 ring-orange-400 ring-offset-1">
         {score}
       </span>
     );
   }
-  // Par: plain text
   return <span className="text-slate-700 text-[11px]">{score}</span>;
 }
