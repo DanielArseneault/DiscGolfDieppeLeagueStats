@@ -1,0 +1,145 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Division {
+  BLUE
+  RED
+}
+
+enum MemberStatus {
+  MEMBER
+  NON_MEMBER
+}
+
+model League {
+  id              Int      @id @default(autoincrement())
+  name            String
+  year            Int
+  location        String
+  startDate       DateTime
+  endDate         DateTime
+  qualifyingWeeks Int      @default(9)
+  bestScoresCount Int      @default(5)
+  minWeeks        Int      @default(5)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  rounds  Round[]
+  players Player[]
+}
+
+model CourseLayout {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+
+  holePars    HolePar[]
+  blueRounds  Round[]   @relation("BlueLayout")
+  redRounds   Round[]   @relation("RedLayout")
+}
+
+model HolePar {
+  id             Int          @id @default(autoincrement())
+  courseLayoutId Int
+  holeNumber     Int
+  par            Int
+
+  courseLayout CourseLayout @relation(fields: [courseLayoutId], references: [id], onDelete: Cascade)
+
+  @@unique([courseLayoutId, holeNumber])
+}
+
+model Player {
+  id           Int          @id @default(autoincrement())
+  name         String
+  pdgaNumber   String?
+  username     String?      @unique
+  division     Division
+  memberStatus MemberStatus @default(NON_MEMBER)
+  leagueId     Int
+  createdAt    DateTime     @default(now())
+
+  league  League   @relation(fields: [leagueId], references: [id])
+  results Result[]
+}
+
+model Round {
+  id            Int      @id @default(autoincrement())
+  leagueId      Int
+  weekNumber    Int
+  date          DateTime
+  blueLayoutId  Int?
+  redLayoutId   Int?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  league        League         @relation(fields: [leagueId], references: [id])
+  blueLayout    CourseLayout?  @relation("BlueLayout", fields: [blueLayoutId], references: [id])
+  redLayout     CourseLayout?  @relation("RedLayout", fields: [redLayoutId], references: [id])
+  results       Result[]
+  ctpWinners    CtpWinner[]
+  post          Post?
+  newspaperImage NewspaperImage?
+
+  @@unique([leagueId, weekNumber])
+}
+
+model Result {
+  id            Int      @id @default(autoincrement())
+  roundId       Int
+  playerId      Int
+  division      Division
+  position      Int
+  score         Int
+  relativeScore Int
+  holeScores    Json
+  createdAt     DateTime @default(now())
+
+  round  Round  @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  player Player @relation(fields: [playerId], references: [id])
+
+  @@unique([roundId, playerId])
+}
+
+model CtpWinner {
+  id         Int    @id @default(autoincrement())
+  roundId    Int
+  hole       Int
+  playerName String
+
+  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+}
+
+model Post {
+  id        Int      @id @default(autoincrement())
+  roundId   Int      @unique
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+}
+
+model NewspaperImage {
+  id          Int      @id @default(autoincrement())
+  roundId     Int      @unique
+  headline    String
+  dateline    String?
+  bodyText    String?
+  photoUrls   Json     @default("[]")
+  caption     String?
+  closingText String?
+  generatedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+}
