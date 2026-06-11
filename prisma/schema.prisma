@@ -77,15 +77,17 @@ model Round {
   date          DateTime
   blueLayoutId  Int?
   redLayoutId   Int?
-  notes         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  notes            String?
+  isChampionship   Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   league        League         @relation(fields: [leagueId], references: [id])
   blueLayout    CourseLayout?  @relation("BlueLayout", fields: [blueLayoutId], references: [id])
   redLayout     CourseLayout?  @relation("RedLayout", fields: [redLayoutId], references: [id])
   results       Result[]
   ctpWinners    CtpWinner[]
+  poolWinners   ChampionshipPoolWinner[]
   post          Post?
   newspaperImage NewspaperImage?
 
@@ -116,6 +118,17 @@ model CtpWinner {
   playerName String
 
   round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+}
+
+model ChampionshipPoolWinner {
+  id         Int    @id @default(autoincrement())
+  roundId    Int
+  pool       String
+  playerName String
+
+  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@unique([roundId, pool])
 }
 
 model Post {

@@ -10,6 +10,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
           <nav className="flex items-center gap-6 text-sm text-slate-600">
             <a href="/" className="hover:text-slate-900 transition-colors">Standings</a>
             <a href="/rounds" className="hover:text-slate-900 transition-colors">Rounds</a>
+            <a href="/leagues" className="hover:text-slate-900 transition-colors">Leagues</a>
             <a href="/admin" className="hover:text-slate-900 transition-colors font-medium">Admin</a>
           </nav>
         </div>

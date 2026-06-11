@@ -5,10 +5,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+
+function parseFilename(name: string): { date: string | null; weekNumber: string | null } {
+  const base = name.replace(/\.(xlsx?|csv)$/i, "");
+  const dateMatch = base.match(/(\d{4}-\d{2}-\d{2})/);
+  const weekMatch = base.match(/(?:week\s*#?\s*)(\d+)/i);
+  return {
+    date: dateMatch ? dateMatch[1] : null,
+    weekNumber: weekMatch ? weekMatch[1] : null,
+  };
+}
 
 interface Layout {
   id: number;
@@ -32,6 +41,7 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
   const [file, setFile] = useState<File | null>(null);
   const [weekNumber, setWeekNumber] = useState("");
   const [date, setDate] = useState("");
+  const [isChampionship, setIsChampionship] = useState(false);
   const [blueLayoutId, setBlueLayoutId] = useState("");
   const [redLayoutId, setRedLayoutId] = useState("");
   const [layouts, setLayouts] = useState<Layout[]>([]);
@@ -40,12 +50,22 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch("/api/layouts").then((r) => r.json()).then(setLayouts);
+    fetch("/api/layouts")
+      .then((r) => r.json())
+      .then((data: Layout[]) => {
+        setLayouts(data);
+        const blue = data.find((l) => /blue/i.test(l.name));
+        const red = data.find((l) => /red/i.test(l.name));
+        if (blue) setBlueLayoutId(String(blue.id));
+        else if (data[0]) setBlueLayoutId(String(data[0].id));
+        if (red) setRedLayoutId(String(red.id));
+        else if (data[1]) setRedLayoutId(String(data[1].id));
+      });
   }, []);
 
   async function handleImport(e: React.FormEvent) {
     e.preventDefault();
-    if (!file || !weekNumber || !date) return;
+    if (!file || (!isChampionship && !weekNumber) || !date) return;
 
     setLoading(true);
     setError("");
@@ -53,8 +73,9 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
     const formData = new FormData();
     formData.append("file", file);
     formData.append("leagueId", leagueId);
-    formData.append("weekNumber", weekNumber);
+    formData.append("weekNumber", isChampionship ? "99" : weekNumber);
     formData.append("date", date);
+    formData.append("isChampionship", String(isChampionship));
     if (blueLayoutId) formData.append("blueLayoutId", blueLayoutId);
     if (redLayoutId) formData.append("redLayoutId", redLayoutId);
 
@@ -81,7 +102,7 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
             ← League Dashboard
           </Link>
           <h1 className="text-2xl font-bold text-slate-900 mt-1">Import Complete</h1>
-          <p className="text-slate-500 mt-0.5">Week {preview.weekNumber} data has been imported.</p>
+          <p className="text-slate-500 mt-0.5">{isChampionship ? "Championship round" : `Week ${preview.weekNumber}`} data has been imported.</p>
         </div>
         <Card>
           <CardContent className="pt-6 space-y-4">
@@ -136,7 +157,15 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
                 id="file"
                 type="file"
                 accept=".xlsx,.csv,.xls"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                onChange={(e) => {
+                  const f = e.target.files?.[0] ?? null;
+                  setFile(f);
+                  if (f) {
+                    const parsed = parseFilename(f.name);
+                    if (parsed.date) setDate(parsed.date);
+                    if (parsed.weekNumber) setWeekNumber(parsed.weekNumber);
+                  }
+                }}
                 required
               />
               <p className="text-xs text-slate-400">
@@ -144,20 +173,35 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="week">Week Number</Label>
-                <Input
-                  id="week"
-                  type="number"
-                  min={1}
-                  max={52}
-                  value={weekNumber}
-                  onChange={(e) => setWeekNumber(e.target.value)}
-                  placeholder="e.g. 5"
-                  required
-                />
+            <label className="flex items-center gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={isChampionship}
+                onChange={(e) => setIsChampionship(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-300"
+              />
+              <div>
+                <span className="text-sm font-medium text-slate-900">Championship round</span>
+                <p className="text-xs text-slate-500">Excluded from qualifying standings</p>
               </div>
+            </label>
+
+            <div className="grid grid-cols-2 gap-4">
+              {!isChampionship && (
+                <div className="space-y-2">
+                  <Label htmlFor="week">Week Number</Label>
+                  <Input
+                    id="week"
+                    type="number"
+                    min={1}
+                    max={52}
+                    value={weekNumber}
+                    onChange={(e) => setWeekNumber(e.target.value)}
+                    placeholder="e.g. 5"
+                    required
+                  />
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="date">Date</Label>
                 <Input

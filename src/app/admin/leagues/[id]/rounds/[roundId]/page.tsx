@@ -18,6 +18,11 @@ interface CtpWinner {
   playerName: string;
 }
 
+interface SavedPoolWinner {
+  pool: string;
+  playerName: string;
+}
+
 interface RoundResult {
   id: number;
   position: number;
@@ -30,10 +35,12 @@ interface RoundResult {
 interface Round {
   id: number;
   weekNumber: number;
+  isChampionship: boolean;
   date: string;
   notes: string | null;
   results: RoundResult[];
   ctpWinners: CtpWinner[];
+  poolWinners: SavedPoolWinner[];
   post: { content: string } | null;
   newspaperImage: {
     headline: string;
@@ -46,8 +53,56 @@ interface Round {
   } | null;
 }
 
+interface PlayerStanding {
+  playerName: string;
+  championshipPool: string | null;
+}
+
+interface PoolGroup {
+  pool: string;
+  label: string;
+  results: RoundResult[];
+}
+
 const DEFAULT_CLOSING =
   "A special thank you to Atlantic Disc Golf for their continued support of the ADGDDGMSL Championship Series. Same discin' time, same discin' place!";
+
+function computePoolGroups(
+  results: RoundResult[],
+  standings: PlayerStanding[]
+): { groups: PoolGroup[]; blueUnqualified: RoundResult[]; redUnqualified: RoundResult[] } {
+  const poolMap = new Map<string, string>();
+  for (const s of standings) {
+    if (s.championshipPool) poolMap.set(s.playerName, s.championshipPool);
+  }
+
+  const buckets: Record<string, RoundResult[]> = { A: [], B: [], C: [], D: [] };
+  const blueUnqualified: RoundResult[] = [];
+  const redUnqualified: RoundResult[] = [];
+
+  for (const r of results) {
+    const pool = poolMap.get(r.player.name);
+    if (pool) buckets[pool].push(r);
+    else if (r.division === "BLUE") blueUnqualified.push(r);
+    else redUnqualified.push(r);
+  }
+
+  const poolLabels: Record<string, string> = { A: "🔵 Pool A", B: "🔵 Pool B", C: "🔴 Pool C", D: "🔴 Pool D" };
+
+  const groups = (["A", "B", "C", "D"] as const)
+    .filter((p) => buckets[p].length > 0)
+    .map((p) => ({
+      pool: p,
+      label: poolLabels[p],
+      results: [...buckets[p]].sort((a, b) => a.relativeScore - b.relativeScore),
+    }));
+
+  return {
+    groups,
+    blueUnqualified: [...blueUnqualified].sort((a, b) => a.relativeScore - b.relativeScore),
+    redUnqualified: [...redUnqualified].sort((a, b) => a.relativeScore - b.relativeScore),
+  };
+}
 
 export default function RoundManagePage({
   params,
@@ -61,6 +116,11 @@ export default function RoundManagePage({
   const [round, setRound] = useState<Round | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [resultsExpanded, setResultsExpanded] = useState(false);
+
+  // Championship pool state
+  const [standings, setStandings] = useState<PlayerStanding[]>([]);
+  const [poolWinnerOverrides, setPoolWinnerOverrides] = useState<Record<string, string>>({});
+  const [poolWinnerSaving, setPoolWinnerSaving] = useState(false);
 
   // CTP state
   const [blueCtpPlayer, setBlueCtpPlayer] = useState("");
@@ -97,6 +157,17 @@ export default function RoundManagePage({
       }
     }
 
+    if (data.isChampionship) {
+      const sData: PlayerStanding[] = await fetch(`/api/standings?leagueId=${leagueId}`).then((r) => r.json());
+      setStandings(sData);
+
+      if (data.poolWinners?.length > 0) {
+        const overrides: Record<string, string> = {};
+        for (const w of data.poolWinners) overrides[w.pool] = w.playerName;
+        setPoolWinnerOverrides(overrides);
+      }
+    }
+
     const blueTop3 = data.results.filter((r) => r.division === "BLUE").slice(0, 3).map((r) => ({
       name: r.player.name, score: r.score, relativeScore: r.relativeScore, position: r.position,
     }));
@@ -116,7 +187,7 @@ export default function RoundManagePage({
         })
     );
 
-    setHeadline(data.newspaperImage?.headline ?? `WEEK ${data.weekNumber} RESULTS`);
+    setHeadline(data.newspaperImage?.headline ?? (data.isChampionship ? "CHAMPIONSHIP RESULTS" : `WEEK ${data.weekNumber} RESULTS`));
     setDateline(data.newspaperImage?.dateline ?? "");
     setCaption(data.newspaperImage?.caption ?? "");
     setClosingText(data.newspaperImage?.closingText ?? DEFAULT_CLOSING);
@@ -151,6 +222,21 @@ export default function RoundManagePage({
     });
     await load();
     setCtpSaving(false);
+  }
+
+  // Pool winners
+  async function handleSavePoolWinners() {
+    setPoolWinnerSaving(true);
+    const winners = Object.entries(poolWinnerOverrides)
+      .filter(([, name]) => name)
+      .map(([pool, playerName]) => ({ pool, playerName }));
+    await fetch(`/api/rounds/${roundId}/pool-winners`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ poolWinners: winners }),
+    });
+    await load();
+    setPoolWinnerSaving(false);
   }
 
   async function handleDelete() {
@@ -220,7 +306,7 @@ export default function RoundManagePage({
       });
       const a = document.createElement("a");
       a.href = canvas.toDataURL("image/png");
-      a.download = `week-${round?.weekNumber}-results.png`;
+      a.download = round?.isChampionship ? "championship-results.png" : `week-${round?.weekNumber}-results.png`;
       a.click();
       await fetch(`/api/newspaper/${roundId}`, {
         method: "PUT",
@@ -249,6 +335,7 @@ export default function RoundManagePage({
 
   const blueResults = round.results.filter((r) => r.division === "BLUE");
   const redResults = round.results.filter((r) => r.division === "RED");
+  const poolData = round.isChampionship ? computePoolGroups(round.results, standings) : null;
 
   const postDone = !!round.post;
   const imageDone = !!round.newspaperImage?.generatedAt;
@@ -262,17 +349,14 @@ export default function RoundManagePage({
 
       <div className="flex items-center justify-between">
         <div>
-          <Link
-            href={`/admin/leagues/${leagueId}`}
-            className="text-sm text-slate-500 hover:text-slate-700"
-          >
+          <Link href={`/admin/leagues/${leagueId}`} className="text-sm text-slate-500 hover:text-slate-700">
             ← League Dashboard
           </Link>
           <h1 className="text-2xl font-bold text-slate-900 mt-1">
-            Week {round.weekNumber}
+            {round.isChampionship ? "Championship" : `Week ${round.weekNumber}`}
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            {new Date(round.date).toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" })}
+            {new Date(round.date).toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" })}
             {" · "}{round.results.length} players
           </p>
         </div>
@@ -296,49 +380,171 @@ export default function RoundManagePage({
 
         {/* ── RESULTS & CTP ── */}
         <TabsContent value="results" className="space-y-6 mt-4 max-w-3xl">
+
+          {/* Results summary */}
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">Results Summary</CardTitle>
-                {(blueResults.length > 5 || redResults.length > 5) && (
+                {!round.isChampionship && (blueResults.length > 5 || redResults.length > 5) && (
                   <button
                     onClick={() => setResultsExpanded((v) => !v)}
                     className="text-xs text-slate-500 hover:text-slate-800 transition-colors"
                   >
-                    {resultsExpanded ? "Show less ↑" : `Show all ↓`}
+                    {resultsExpanded ? "Show less ↑" : "Show all ↓"}
                   </button>
                 )}
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 gap-6">
-                {[
-                  { label: "🔵 Blue Division", results: blueResults },
-                  { label: "🔴 Red Division", results: redResults },
-                ].map(({ label, results }) => {
-                  const visible = resultsExpanded ? results : results.slice(0, 5);
-                  return (
-                    <div key={label}>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">{label}</p>
-                      <ol className="space-y-1">
-                        {visible.map((r) => (
-                          <li key={r.id} className="text-sm flex items-center gap-2">
-                            <span className="text-slate-400 w-4">{r.position}.</span>
-                            <span className="text-slate-900">{r.player.name}</span>
-                            <span className="ml-auto font-mono text-xs text-slate-500">{r.score}</span>
-                          </li>
-                        ))}
-                        {!resultsExpanded && results.length > 5 && (
-                          <li className="text-xs text-slate-400">+{results.length - 5} more</li>
+              {round.isChampionship && poolData ? (
+                <div className="space-y-5">
+                  <div className="grid grid-cols-2 gap-5">
+                    {poolData.groups.map((g) => {
+                      const winnerName = poolWinnerOverrides[g.pool] ?? g.results[0]?.player.name;
+                      return (
+                        <div key={g.pool}>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-amber-600 mb-2">{g.label}</p>
+                          <ol className="space-y-1">
+                            {g.results.map((r, i) => {
+                              const isWinner = r.player.name === winnerName;
+                              return (
+                                <li key={r.id} className={`text-sm flex items-center gap-2 ${isWinner ? "font-semibold" : ""}`}>
+                                  <span className={`w-5 text-center ${isWinner ? "text-amber-500" : "text-slate-400"}`}>
+                                    {isWinner ? "🏆" : `${i + 1}.`}
+                                  </span>
+                                  <span className="text-slate-900">{r.player.name}</span>
+                                  <span className="ml-auto font-mono text-xs text-slate-500">{r.score}</span>
+                                </li>
+                              );
+                            })}
+                          </ol>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {(poolData.blueUnqualified.length > 0 || poolData.redUnqualified.length > 0) && (
+                    <div className="pt-3 border-t border-slate-100">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">Did Not Qualify</p>
+                      <div className="grid grid-cols-2 gap-5">
+                        {poolData.blueUnqualified.length > 0 && (
+                          <div>
+                            <p className="text-xs text-slate-400 mb-1">🔵 Blue</p>
+                            <ol className="space-y-1">
+                              {poolData.blueUnqualified.map((r, i) => (
+                                <li key={r.id} className="text-sm flex items-center gap-2">
+                                  <span className="text-slate-400 w-4">{i + 1}.</span>
+                                  <span className="text-slate-500">{r.player.name}</span>
+                                  <span className="ml-auto font-mono text-xs text-slate-400">{r.score}</span>
+                                </li>
+                              ))}
+                            </ol>
+                          </div>
                         )}
-                      </ol>
+                        {poolData.redUnqualified.length > 0 && (
+                          <div>
+                            <p className="text-xs text-slate-400 mb-1">🔴 Red</p>
+                            <ol className="space-y-1">
+                              {poolData.redUnqualified.map((r, i) => (
+                                <li key={r.id} className="text-sm flex items-center gap-2">
+                                  <span className="text-slate-400 w-4">{i + 1}.</span>
+                                  <span className="text-slate-500">{r.player.name}</span>
+                                  <span className="ml-auto font-mono text-xs text-slate-400">{r.score}</span>
+                                </li>
+                              ))}
+                            </ol>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  );
-                })}
-              </div>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-6">
+                  {[
+                    { label: "🔵 Blue Division", results: blueResults },
+                    { label: "🔴 Red Division", results: redResults },
+                  ].map(({ label, results }) => {
+                    const visible = resultsExpanded ? results : results.slice(0, 5);
+                    return (
+                      <div key={label}>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">{label}</p>
+                        <ol className="space-y-1">
+                          {visible.map((r) => (
+                            <li key={r.id} className="text-sm flex items-center gap-2">
+                              <span className="text-slate-400 w-4">{r.position}.</span>
+                              <span className="text-slate-900">{r.player.name}</span>
+                              <span className="ml-auto font-mono text-xs text-slate-500">{r.score}</span>
+                            </li>
+                          ))}
+                          {!resultsExpanded && results.length > 5 && (
+                            <li className="text-xs text-slate-400">+{results.length - 5} more</li>
+                          )}
+                        </ol>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
 
+          {/* Pool Champions override (championship only) */}
+          {round.isChampionship && poolData && poolData.groups.length > 0 && (
+            <Card className="border-amber-200">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">🏆 Pool Champions</CardTitle>
+                <p className="text-xs text-slate-500">
+                  Champions are automatically determined by best score. Override here if there&apos;s a tie.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  {poolData.groups.map((g) => {
+                    const computedWinner = g.results[0]?.player.name ?? "";
+                    const currentValue = poolWinnerOverrides[g.pool] ?? computedWinner;
+                    const isOverridden = !!poolWinnerOverrides[g.pool] && poolWinnerOverrides[g.pool] !== computedWinner;
+                    return (
+                      <div key={g.pool} className="space-y-1.5">
+                        <Label className="text-xs flex items-center gap-1.5">
+                          {g.label}
+                          {isOverridden && (
+                            <span className="text-amber-500 font-normal">(overridden)</span>
+                          )}
+                        </Label>
+                        <Select
+                          value={currentValue}
+                          onValueChange={(v) =>
+                            setPoolWinnerOverrides((prev) => ({ ...prev, [g.pool]: v }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select champion..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {g.results.map((r) => (
+                              <SelectItem key={r.id} value={r.player.name}>
+                                {r.player.name}
+                                {" "}
+                                <span className="text-slate-400 text-xs">({r.score})</span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="pt-1">
+                  <Button size="sm" onClick={handleSavePoolWinners} disabled={poolWinnerSaving}>
+                    {poolWinnerSaving ? "Saving..." : "Save Pool Champions"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* CTP */}
           <Card>
             <CardHeader>
               <CardTitle className="text-base">🎯 CTP Winners</CardTitle>

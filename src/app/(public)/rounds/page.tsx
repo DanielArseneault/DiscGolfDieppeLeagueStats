@@ -35,7 +35,7 @@ export default async function RoundsPage() {
               <Card className="hover:shadow-md transition-shadow cursor-pointer">
                 <CardContent className="py-4 flex items-center justify-between">
                   <div>
-                    <div className="font-semibold text-slate-900">Week {round.weekNumber}</div>
+                    <div className="font-semibold text-slate-900">{round.isChampionship ? "Championship" : `Week ${round.weekNumber}`}</div>
                     <div className="text-sm text-slate-500 mt-0.5">{formatDate(round.date)}</div>
                   </div>
                   <div className="flex items-center gap-3 text-sm text-slate-500">

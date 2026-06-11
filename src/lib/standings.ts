@@ -21,6 +21,7 @@ export async function getStandings(leagueId: number): Promise<PlayerStanding[]> 
   const qualifyingRounds = await prisma.round.findMany({
     where: {
       leagueId,
+      isChampionship: false,
       weekNumber: { lte: league.qualifyingWeeks },
     },
     select: { id: true },
