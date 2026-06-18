@@ -138,7 +138,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           <h2 className="text-xl font-semibold text-slate-900">
             {recentRound?.isChampionship ? "Final Standings" : "Season Standings"}
           </h2>
-          <Link href="/rounds" className="text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 hover:border-blue-300 px-3 py-1 rounded-full transition-colors">
+          <Link href={`/rounds?league=${league.id}`} className="text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 hover:border-blue-300 px-3 py-1 rounded-full transition-colors">
             All rounds →
           </Link>
         </div>
