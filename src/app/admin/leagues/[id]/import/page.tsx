@@ -169,7 +169,15 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
                 required
               />
               <p className="text-xs text-slate-400">
-                Export from UDisc: Scoring › League › Export scores
+                Export from UDisc: Scoring › League › Export scores ·{" "}
+                <a
+                  href="https://udisc.com/leagues/dieppe-dgc-league-f9TbbX/schedule"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-slate-600"
+                >
+                  Open UDisc schedule ↗
+                </a>
               </p>
             </div>
 
