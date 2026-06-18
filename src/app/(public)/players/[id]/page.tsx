@@ -187,6 +187,10 @@ export default async function PlayerPage({
 
       {/* Season stats */}
       {standing && (
+        <div className="space-y-3">
+        <h2 className="text-lg font-semibold text-slate-900">
+          {league.name} <span className="text-slate-400 font-normal">· {league.year}</span>
+        </h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <StatCard label="Division Rank" value={`#${standing.rank}`} />
           <StatCard label="Rounds Played" value={standing.roundsPlayed} />
@@ -209,6 +213,7 @@ export default async function PlayerPage({
             value={standing.qualified ? "Qualified" : "Not Qualified"}
             valueClass={standing.qualified ? "text-emerald-600" : "text-orange-500"}
           />
+        </div>
         </div>
       )}
 
