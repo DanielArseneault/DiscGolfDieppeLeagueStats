@@ -33,6 +33,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       weekNumber: body.weekNumber,
       date: body.date ? new Date(body.date) : undefined,
       notes: body.notes,
+      facebookUrl: body.facebookUrl !== undefined ? (body.facebookUrl || null) : undefined,
+      facebookLabel: body.facebookLabel !== undefined ? (body.facebookLabel || null) : undefined,
     },
   });
   return NextResponse.json(round);

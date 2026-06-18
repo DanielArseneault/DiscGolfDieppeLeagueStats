@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getStandings } from "@/lib/standings";
 import { computePoolSummaries, PoolSummary } from "@/lib/pool-utils";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDate, formatScore } from "@/lib/utils";
 import Link from "next/link";
@@ -87,75 +86,101 @@ function RegularRoundCard({ round, leagueId }: { round: Round; leagueId: number 
   const redResults = round.results.filter((r) => r.division === Division.RED);
   const blueLeader = blueResults.find((r) => r.position === 1);
   const redLeader = redResults.find((r) => r.position === 1);
+  const hasExtras = round.ctpWinners.length > 0 || round.aceWinners.length > 0;
 
   return (
-    <Card className="hover:shadow-md hover:border-blue-200 transition-all border-slate-200">
-      <CardContent className="p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            <h3 className="text-lg font-bold text-slate-900 mb-1">Week {round.weekNumber}</h3>
-            <p className="text-sm text-slate-500 mb-4">
-              {formatDate(round.date)}
-              {blueResults.length > 0 && <span className="ml-3">🔵 {blueResults.length} Blue</span>}
-              {redResults.length > 0 && <span className="ml-2">🔴 {redResults.length} Red</span>}
-            </p>
-
-            {(blueLeader || redLeader) && (
-              <div className="grid sm:grid-cols-2 gap-3 mb-3">
-                {blueLeader && (
-                  <div className="bg-blue-50 rounded-lg px-4 py-2.5">
-                    <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-1">🔵 Blue Leader</p>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-slate-900 text-sm truncate">{blueLeader.player.name}</span>
-                      <span className={`font-mono text-xs font-semibold shrink-0 ${
-                        blueLeader.relativeScore < 0 ? "text-emerald-600" : blueLeader.relativeScore > 0 ? "text-orange-500" : "text-slate-500"
-                      }`}>
-                        {formatScore(blueLeader.relativeScore)}
-                      </span>
-                    </div>
-                  </div>
-                )}
-                {redLeader && (
-                  <div className="bg-red-50 rounded-lg px-4 py-2.5">
-                    <p className="text-xs font-semibold text-red-500 uppercase tracking-wide mb-1">🔴 Red Leader</p>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-slate-900 text-sm truncate">{redLeader.player.name}</span>
-                      <span className={`font-mono text-xs font-semibold shrink-0 ${
-                        redLeader.relativeScore < 0 ? "text-emerald-600" : redLeader.relativeScore > 0 ? "text-orange-500" : "text-slate-500"
-                      }`}>
-                        {formatScore(redLeader.relativeScore)}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {(round.ctpWinners.length > 0 || round.aceWinners.length > 0) && (
-              <div className="flex flex-wrap gap-2">
-                {round.ctpWinners.map((c) => (
-                  <Badge key={c.id} className="bg-orange-100 text-orange-800 border border-orange-200 hover:bg-orange-100">
-                    🎯 Hole {c.hole}: {c.playerName}
-                  </Badge>
-                ))}
-                {round.aceWinners.map((a) => (
-                  <Badge key={a.id} className="bg-purple-100 text-purple-800 border border-purple-200 hover:bg-purple-100">
-                    🦅 Hole {a.hole}: {a.playerName}{a.prizeAmount != null ? ` · $${a.prizeAmount.toFixed(2)}` : ""}
-                  </Badge>
-                ))}
-              </div>
-            )}
-          </div>
-
+    <div className="rounded-xl overflow-hidden border border-slate-200 hover:shadow-md transition-all">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-slate-700 to-slate-600 px-5 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="flex items-baseline gap-3 min-w-0">
+          <h3 className="text-white font-bold text-lg shrink-0">Week {round.weekNumber}</h3>
+          <span className="text-slate-300 text-sm truncate">{formatDate(round.date)}</span>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {round.facebookUrl && (
+            <a
+              href={round.facebookUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-medium text-white bg-white/15 hover:bg-white/25 border border-white/20 px-3 py-0.5 rounded-full transition-colors"
+            >
+              {round.facebookLabel ?? "Recap"} ↗
+            </a>
+          )}
           <Link
             href={`/rounds/${round.id}?league=${leagueId}`}
-            className="shrink-0 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 hover:border-blue-300 px-3 py-1 rounded-full transition-colors"
+            className="text-sm font-medium text-white bg-white/15 hover:bg-white/25 border border-white/20 px-3 py-0.5 rounded-full transition-colors"
           >
             Scorecard →
           </Link>
+          {blueResults.length > 0 && (
+            <span className="text-sm text-white bg-white/15 px-2.5 py-0.5 rounded-full">🔵 {blueResults.length}</span>
+          )}
+          {redResults.length > 0 && (
+            <span className="text-sm text-white bg-white/15 px-2.5 py-0.5 rounded-full">🔴 {redResults.length}</span>
+          )}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+
+      {/* Body */}
+      <div className="bg-slate-50 px-5 py-4 space-y-3">
+        {(blueLeader || redLeader) && (
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Leaders</p>
+            <div className="grid sm:grid-cols-2 gap-x-6 gap-y-2">
+              {blueLeader && (
+                <div className="flex items-center gap-2">
+                  <span className="text-blue-500 shrink-0">🔵</span>
+                  <span className="font-semibold text-slate-800 text-sm truncate">{blueLeader.player.name}</span>
+                  <span className={`font-mono text-sm font-bold shrink-0 ${
+                    blueLeader.relativeScore < 0 ? "text-emerald-600" : blueLeader.relativeScore > 0 ? "text-orange-500" : "text-slate-500"
+                  }`}>
+                    {formatScore(blueLeader.relativeScore)}
+                  </span>
+                </div>
+              )}
+              {redLeader && (
+                <div className="flex items-center gap-2">
+                  <span className="text-red-500 shrink-0">🔴</span>
+                  <span className="font-semibold text-slate-800 text-sm truncate">{redLeader.player.name}</span>
+                  <span className={`font-mono text-sm font-bold shrink-0 ${
+                    redLeader.relativeScore < 0 ? "text-emerald-600" : redLeader.relativeScore > 0 ? "text-orange-500" : "text-slate-500"
+                  }`}>
+                    {formatScore(redLeader.relativeScore)}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {round.ctpWinners.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Closest to Pin</p>
+            <div className="flex flex-wrap gap-2">
+              {round.ctpWinners.map((c) => (
+                <Badge key={c.id} className="bg-orange-100 text-orange-800 border border-orange-200 hover:bg-orange-100">
+                  🎯 Hole {c.hole}: {c.playerName}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {round.aceWinners.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Ace Winners</p>
+            <div className="flex flex-wrap gap-2">
+              {round.aceWinners.map((a) => (
+                <Badge key={a.id} className="bg-purple-100 text-purple-800 border border-purple-200 hover:bg-purple-100">
+                  🦅 Hole {a.hole}: {a.playerName}{a.prizeAmount != null ? ` · $${a.prizeAmount.toFixed(2)}` : ""}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -167,85 +192,98 @@ function ChampionshipCard({ round, standings, leagueId }: { round: Round; standi
   const redPools = poolSummaries.filter((s) => ["C", "D"].includes(s.pool));
 
   return (
-    <Card className="border-amber-300 bg-gradient-to-br from-amber-50 to-white hover:shadow-md transition-all">
-      <CardContent className="p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 min-w-0">
-
-            {/* Header */}
-            <div className="flex items-start gap-2 mb-4">
-              <span className="text-2xl shrink-0 mt-0.5">🏆</span>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-lg font-bold text-slate-900">Championship</h3>
-                  <span className="text-xs bg-amber-200 text-amber-800 font-semibold px-2 py-0.5 rounded-full whitespace-nowrap">
-                    Season Final
-                  </span>
-                </div>
-                <p className="text-sm text-slate-500 mt-0.5">
-                  {formatDate(round.date)} · {round.results.length} players
-                </p>
-              </div>
-            </div>
-
-            {/* Pool winners */}
-            {(bluePools.length > 0 || redPools.length > 0) && (
-              <div className="grid sm:grid-cols-2 gap-4 mb-3">
-                {bluePools.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-2">🔵 Blue Division</p>
-                    <div className="space-y-1.5">
-                      {bluePools.map((s) => s.first && (
-                        <div key={s.pool} className="flex items-center gap-2 bg-white border border-amber-200 rounded-lg px-3 py-2">
-                          <span className="text-base">🥇</span>
-                          <span className="text-xs font-semibold text-amber-700 w-14 shrink-0">Pool {s.pool}</span>
-                          <span className="font-medium text-slate-900 text-sm truncate">{s.first.playerName}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {redPools.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-red-500 uppercase tracking-wide mb-2">🔴 Red Division</p>
-                    <div className="space-y-1.5">
-                      {redPools.map((s) => s.first && (
-                        <div key={s.pool} className="flex items-center gap-2 bg-white border border-amber-200 rounded-lg px-3 py-2">
-                          <span className="text-base">🥇</span>
-                          <span className="text-xs font-semibold text-amber-700 w-14 shrink-0">Pool {s.pool}</span>
-                          <span className="font-medium text-slate-900 text-sm truncate">{s.first.playerName}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {(round.ctpWinners.length > 0 || round.aceWinners.length > 0) && (
-              <div className="flex flex-wrap gap-2">
-                {round.ctpWinners.map((c) => (
-                  <Badge key={c.id} className="bg-orange-100 text-orange-800 border border-orange-200 hover:bg-orange-100">
-                    🎯 Hole {c.hole}: {c.playerName}
-                  </Badge>
-                ))}
-                {round.aceWinners.map((a) => (
-                  <Badge key={a.id} className="bg-purple-100 text-purple-800 border border-purple-200 hover:bg-purple-100">
-                    🦅 Hole {a.hole}: {a.playerName}{a.prizeAmount != null ? ` · $${a.prizeAmount.toFixed(2)}` : ""}
-                  </Badge>
-                ))}
-              </div>
-            )}
-          </div>
-
+    <div className="rounded-xl overflow-hidden border border-amber-300 hover:shadow-md transition-all">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-amber-700 to-amber-600 px-5 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="flex items-baseline gap-3 min-w-0">
+          <h3 className="text-white font-bold text-lg shrink-0">🏆 Championship</h3>
+          <span className="text-amber-100 text-sm truncate">{formatDate(round.date)}</span>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {round.facebookUrl && (
+            <a
+              href={round.facebookUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-medium text-white bg-white/15 hover:bg-white/25 border border-white/20 px-3 py-0.5 rounded-full transition-colors"
+            >
+              {round.facebookLabel ?? "Recap"} ↗
+            </a>
+          )}
           <Link
             href={`/rounds/${round.id}?league=${leagueId}`}
-            className="shrink-0 text-sm font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-300 hover:border-amber-400 px-3 py-1 rounded-full transition-colors"
+            className="text-sm font-medium text-white bg-white/15 hover:bg-white/25 border border-white/20 px-3 py-0.5 rounded-full transition-colors"
           >
             Scorecard →
           </Link>
+          <span className="text-sm text-white bg-white/15 px-2.5 py-0.5 rounded-full">{round.results.length} players</span>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+
+      {/* Body */}
+      <div className="bg-amber-50 px-5 py-4 space-y-3">
+        {(bluePools.length > 0 || redPools.length > 0) && (
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide">Pool Winners</p>
+            <div className="grid sm:grid-cols-2 gap-x-6 gap-y-3">
+              {bluePools.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-2">🔵 Blue</p>
+                  <div className="space-y-1.5">
+                    {bluePools.map((s) => s.first && (
+                      <div key={s.pool} className="flex items-center gap-2">
+                        <span className="text-base shrink-0">🥇</span>
+                        <span className="text-xs font-semibold text-amber-700 w-14 shrink-0">Pool {s.pool}</span>
+                        <span className="font-medium text-slate-800 text-sm truncate">{s.first.playerName}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {redPools.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-red-500 uppercase tracking-wide mb-2">🔴 Red</p>
+                  <div className="space-y-1.5">
+                    {redPools.map((s) => s.first && (
+                      <div key={s.pool} className="flex items-center gap-2">
+                        <span className="text-base shrink-0">🥇</span>
+                        <span className="text-xs font-semibold text-amber-700 w-14 shrink-0">Pool {s.pool}</span>
+                        <span className="font-medium text-slate-800 text-sm truncate">{s.first.playerName}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {round.ctpWinners.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide">Closest to Pin</p>
+            <div className="flex flex-wrap gap-2">
+              {round.ctpWinners.map((c) => (
+                <Badge key={c.id} className="bg-orange-100 text-orange-800 border border-orange-200 hover:bg-orange-100">
+                  🎯 Hole {c.hole}: {c.playerName}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {round.aceWinners.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide">Ace Winners</p>
+            <div className="flex flex-wrap gap-2">
+              {round.aceWinners.map((a) => (
+                <Badge key={a.id} className="bg-purple-100 text-purple-800 border border-purple-200 hover:bg-purple-100">
+                  🦅 Hole {a.hole}: {a.playerName}{a.prizeAmount != null ? ` · $${a.prizeAmount.toFixed(2)}` : ""}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

@@ -27,6 +27,8 @@ model League {
   qualifyingWeeks Int      @default(9)
   bestScoresCount Int      @default(5)
   minWeeks        Int      @default(5)
+  facebookUrl     String?
+  facebookLabel   String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -81,6 +83,8 @@ model Round {
   redLayoutId   Int?
   notes            String?
   isChampionship   Boolean  @default(false)
+  facebookUrl      String?
+  facebookLabel    String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 

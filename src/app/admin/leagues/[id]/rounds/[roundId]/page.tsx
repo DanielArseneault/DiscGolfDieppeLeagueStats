@@ -48,6 +48,8 @@ interface Round {
   isChampionship: boolean;
   date: string;
   notes: string | null;
+  facebookUrl: string | null;
+  facebookLabel: string | null;
   results: RoundResult[];
   ctpWinners: CtpWinner[];
   aceWinners: AceWinner[];
@@ -146,6 +148,11 @@ export default function RoundManagePage({
   const [aceEntries, setAceEntries] = useState<{ player: string; hole: number; prizeAmount: string }[]>([]);
   const [aceSaving, setAceSaving] = useState(false);
 
+  // Facebook link state
+  const [facebookUrl, setFacebookUrl] = useState("");
+  const [facebookLabel, setFacebookLabel] = useState("");
+  const [facebookSaving, setFacebookSaving] = useState(false);
+
   // Post state
   const [postContent, setPostContent] = useState("");
   const [postSaving, setPostSaving] = useState(false);
@@ -197,6 +204,9 @@ export default function RoundManagePage({
       prizeAmount: w.prizeAmount != null ? String(w.prizeAmount) : "",
     })));
 
+    setFacebookUrl(data.facebookUrl ?? "");
+    setFacebookLabel(data.facebookLabel ?? "");
+
     if (data.isChampionship) {
       const sData: PlayerStanding[] = await fetch(`/api/standings?leagueId=${leagueId}`).then((r) => r.json());
       setStandings(sData);
@@ -239,6 +249,18 @@ export default function RoundManagePage({
   useEffect(() => {
     load();
   }, [roundId]);
+
+  // Facebook link
+  async function handleSaveFacebook() {
+    setFacebookSaving(true);
+    await fetch(`/api/rounds/${roundId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ facebookUrl, facebookLabel }),
+    });
+    await load();
+    setFacebookSaving(false);
+  }
 
   // Ace
   async function handleSaveAce() {
@@ -803,6 +825,37 @@ export default function RoundManagePage({
                   </Button>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Facebook link */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">📘 Facebook Link</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">URL</Label>
+                <Input
+                  type="url"
+                  value={facebookUrl}
+                  onChange={(e) => setFacebookUrl(e.target.value)}
+                  placeholder="https://www.facebook.com/share/p/..."
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Button Label</Label>
+                <Input
+                  value={facebookLabel}
+                  onChange={(e) => setFacebookLabel(e.target.value)}
+                  placeholder="More Info"
+                  disabled={!facebookUrl}
+                />
+              </div>
+              <p className="text-xs text-slate-400">Shown as a button on the public round page and round list.</p>
+              <Button size="sm" onClick={handleSaveFacebook} disabled={facebookSaving}>
+                {facebookSaving ? "Saving..." : "Save Facebook Link"}
+              </Button>
             </CardContent>
           </Card>
 

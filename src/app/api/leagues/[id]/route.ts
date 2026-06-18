@@ -22,6 +22,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       qualifyingWeeks: body.qualifyingWeeks ?? 9,
       bestScoresCount: body.bestScoresCount ?? 5,
       minWeeks: body.minWeeks ?? 5,
+      facebookUrl: body.facebookUrl || null,
+      facebookLabel: body.facebookLabel || null,
     },
   });
   return NextResponse.json(league);

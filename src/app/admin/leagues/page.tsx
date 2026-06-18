@@ -20,6 +20,8 @@ interface League {
   qualifyingWeeks: number;
   bestScoresCount: number;
   minWeeks: number;
+  facebookUrl: string | null;
+  facebookLabel: string | null;
 }
 
 function toDateInput(iso: string) {
@@ -43,6 +45,8 @@ function LeagueForm({
   const [qualifyingWeeks, setQualifyingWeeks] = useState(initial?.qualifyingWeeks ?? 9);
   const [bestScoresCount, setBestScoresCount] = useState(initial?.bestScoresCount ?? 5);
   const [minWeeks, setMinWeeks] = useState(initial?.minWeeks ?? 5);
+  const [facebookUrl, setFacebookUrl] = useState(initial?.facebookUrl ?? "");
+  const [facebookLabel, setFacebookLabel] = useState(initial?.facebookLabel ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -56,7 +60,7 @@ function LeagueForm({
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, year, location, startDate, endDate, qualifyingWeeks, bestScoresCount, minWeeks }),
+        body: JSON.stringify({ name, year, location, startDate, endDate, qualifyingWeeks, bestScoresCount, minWeeks, facebookUrl, facebookLabel }),
       });
       if (!res.ok) throw new Error("Save failed");
       onSave();
@@ -86,6 +90,28 @@ function LeagueForm({
       <div className="space-y-2">
         <Label>Location</Label>
         <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Dieppe, NB" />
+      </div>
+
+      <div className="space-y-3">
+        <div className="space-y-2">
+          <Label>Facebook Post URL <span className="text-slate-400 font-normal">(optional)</span></Label>
+          <Input
+            value={facebookUrl}
+            onChange={(e) => setFacebookUrl(e.target.value)}
+            placeholder="https://www.facebook.com/share/p/..."
+            type="url"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Button Label <span className="text-slate-400 font-normal">(optional)</span></Label>
+          <Input
+            value={facebookLabel}
+            onChange={(e) => setFacebookLabel(e.target.value)}
+            placeholder="More Info"
+            disabled={!facebookUrl}
+          />
+        </div>
+        <p className="text-xs text-slate-400">Shown as a button in the hero banner on the public homepage.</p>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
