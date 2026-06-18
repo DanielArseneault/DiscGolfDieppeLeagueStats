@@ -15,27 +15,16 @@ export interface PlayerStanding {
   championshipPoolOverride: string | null;
   rank: number;
   championshipPool: string | null;
+  rankChange: number | null; // null = new player, positive = moved up, negative = moved down
 }
 
-export const getStandings = cache(async function getStandings(leagueId: number): Promise<PlayerStanding[]> {
-  const league = await prisma.league.findUnique({ where: { id: leagueId } });
-  if (!league) return [];
+type ResultWithPlayer = Awaited<ReturnType<typeof prisma.result.findMany<{ include: { player: true } }>>>[number];
 
-  const qualifyingRounds = await prisma.round.findMany({
-    where: {
-      leagueId,
-      isChampionship: false,
-      weekNumber: { lte: league.qualifyingWeeks },
-    },
-    select: { id: true },
-  });
-  const qualifyingRoundIds = qualifyingRounds.map((r) => r.id);
-
-  const results = await prisma.result.findMany({
-    where: { roundId: { in: qualifyingRoundIds } },
-    include: { player: true },
-  });
-
+function buildStandings(
+  results: ResultWithPlayer[],
+  bestScoresCount: number,
+  minWeeks: number
+): PlayerStanding[] {
   const playerMap = new Map<number, { name: string; division: Division; scores: number[]; excludeFromChampionship: boolean; championshipPoolOverride: string | null }>();
 
   for (const result of results) {
@@ -55,9 +44,9 @@ export const getStandings = cache(async function getStandings(leagueId: number):
 
   for (const [playerId, data] of playerMap.entries()) {
     const sorted = [...data.scores].sort((a, b) => a - b);
-    const bestScores = sorted.slice(0, league.bestScoresCount);
+    const bestScores = sorted.slice(0, bestScoresCount);
     const qualifyingTotal = bestScores.reduce((sum, s) => sum + s, 0);
-    const qualified = data.scores.length >= league.minWeeks;
+    const qualified = data.scores.length >= minWeeks;
 
     standings.push({
       playerId,
@@ -72,13 +61,58 @@ export const getStandings = cache(async function getStandings(leagueId: number):
       championshipPoolOverride: data.championshipPoolOverride,
       rank: 0,
       championshipPool: null,
+      rankChange: null,
     });
   }
 
   rankAndAssignPools(standings, Division.BLUE, "A", "B");
   rankAndAssignPools(standings, Division.RED, "C", "D");
 
-  return standings.sort((a, b) => {
+  return standings;
+}
+
+export const getStandings = cache(async function getStandings(leagueId: number): Promise<PlayerStanding[]> {
+  const league = await prisma.league.findUnique({ where: { id: leagueId } });
+  if (!league) return [];
+
+  const qualifyingRounds = await prisma.round.findMany({
+    where: {
+      leagueId,
+      isChampionship: false,
+      weekNumber: { lte: league.qualifyingWeeks },
+    },
+    select: { id: true, weekNumber: true },
+    orderBy: { weekNumber: "desc" },
+  });
+
+  if (qualifyingRounds.length === 0) return [];
+
+  const qualifyingRoundIds = qualifyingRounds.map((r) => r.id);
+
+  const results = await prisma.result.findMany({
+    where: { roundId: { in: qualifyingRoundIds } },
+    include: { player: true },
+  });
+
+  const current = buildStandings(results, league.bestScoresCount, league.minWeeks);
+
+  // Find the most recent round that actually has results, then compute previous standings
+  const roundsWithResults = new Set(results.map((r) => r.roundId));
+  const latestRound = qualifyingRounds.find((r) => roundsWithResults.has(r.id));
+
+  if (latestRound) {
+    const previousResults = results.filter((r) => r.roundId !== latestRound.id);
+    if (previousResults.length > 0) {
+      const previous = buildStandings(previousResults, league.bestScoresCount, league.minWeeks);
+      const previousRankMap = new Map(previous.map((s) => [s.playerId, s.rank]));
+      for (const s of current) {
+        const prevRank = previousRankMap.get(s.playerId);
+        s.rankChange = prevRank != null ? prevRank - s.rank : null;
+      }
+    }
+  }
+
+  return current.sort((a, b) => {
     if (a.division !== b.division) return a.division === Division.BLUE ? -1 : 1;
     return a.rank - b.rank;
   });

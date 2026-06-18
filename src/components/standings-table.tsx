@@ -19,6 +19,21 @@ const POOL_COLORS: Record<string, "blue" | "green" | "red" | "yellow"> = {
   D: "yellow",
 };
 
+function RankChangeIndicator({ change }: { change: number | null }) {
+  if (change === null) return <span className="text-xs text-slate-300 font-medium">new</span>;
+  if (change === 0) return <span className="text-xs text-slate-300">—</span>;
+  if (change > 0) return (
+    <span className="text-xs font-semibold text-emerald-500 flex items-center gap-0.5">
+      ↑{change}
+    </span>
+  );
+  return (
+    <span className="text-xs font-semibold text-red-400 flex items-center gap-0.5">
+      ↓{Math.abs(change)}
+    </span>
+  );
+}
+
 export function StandingsTable({ standings, division, bestScoresCount }: StandingsTableProps) {
   const filtered = useMemo(
     () => standings.filter((s) => s.division === division),
@@ -50,7 +65,12 @@ export function StandingsTable({ standings, division, bestScoresCount }: Standin
               key={s.playerId}
               className="border-b border-slate-100 hover:bg-slate-50 transition-colors"
             >
-              <td className="py-3 pr-4 text-slate-400 font-mono text-xs">{s.rank}</td>
+              <td className="py-3 pr-4">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-400 font-mono text-xs">{s.rank}</span>
+                  <RankChangeIndicator change={s.rankChange} />
+                </div>
+              </td>
               <td className="py-3 pr-4">
                 <span className="font-medium text-slate-900">{s.playerName}</span>
                 {!s.qualified && (
