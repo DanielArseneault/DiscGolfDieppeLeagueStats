@@ -12,8 +12,7 @@ export default async function PublicLayout({ children }: { children: React.React
       </main>
       <footer className="bg-green-800 border-t border-green-700 mt-auto">
         <div className="max-w-6xl mx-auto px-4 py-6 text-center text-sm text-green-200">
-          ADG Dieppe Disc Golf Mixed Summer League · Sponsored by{" "}
-          <span className="font-medium text-white">Atlantic Disc Golf</span>
+          Dieppe Disc Golf Mixed Summer League
         </div>
       </footer>
     </>

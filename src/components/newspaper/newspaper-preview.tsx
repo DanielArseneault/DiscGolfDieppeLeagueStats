@@ -70,7 +70,7 @@ export const NewspaperPreview = React.forwardRef<HTMLDivElement, NewspaperPrevie
             fontFamily: "Georgia, serif",
           }}
         >
-          ADG Dieppe Disc Golf Mixed Summer League
+          Dieppe Disc Golf Mixed Summer League
         </div>
 
         {/* Main headline */}
@@ -196,39 +196,6 @@ export const NewspaperPreview = React.forwardRef<HTMLDivElement, NewspaperPrevie
               </div>
             )}
 
-            {/* Atlantic Disc Golf sponsor block */}
-            <div
-              style={{
-                marginTop: "24px",
-                paddingTop: "12px",
-                borderTop: "2px solid #1a1a1a",
-                display: "flex",
-                alignItems: "center",
-                gap: "12px",
-              }}
-            >
-              <div
-                style={{
-                  width: "48px",
-                  height: "48px",
-                  backgroundColor: "#1a1a1a",
-                  borderRadius: "50%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#f5f0e8",
-                  fontSize: "20px",
-                }}
-              >
-                🥏
-              </div>
-              <div>
-                <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "14px", fontWeight: "bold" }}>
-                  Atlantic Disc Golf
-                </div>
-                <div style={{ fontSize: "11px", color: "#555" }}>Proud sponsor of the ADGDDGMSL</div>
-              </div>
-            </div>
           </div>
         </div>
       </div>

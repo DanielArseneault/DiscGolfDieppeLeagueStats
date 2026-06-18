@@ -77,7 +77,7 @@ interface PoolGroup {
 }
 
 const DEFAULT_CLOSING =
-  "A special thank you to Atlantic Disc Golf for their continued support of the ADGDDGMSL Championship Series. Same discin' time, same discin' place!";
+  "Thank you to every player and volunteer who made the DDGMSL Championship Series possible. Same discin' time, same discin' place!";
 
 function computePoolGroups(
   results: RoundResult[],
