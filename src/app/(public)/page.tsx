@@ -76,6 +76,10 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
   const { league, standings, recentRound, qualifyingRoundsPlayed, poolSummaries } = data;
 
+  const playerLookup = new Map(
+    (recentRound?.results ?? []).map((r) => [r.player.name.toLowerCase().trim(), r.player.id])
+  );
+
   const blueCount = standings.filter((s) => s.division === Division.BLUE).length;
   const redCount = standings.filter((s) => s.division === Division.RED).length;
   const qualifiedCount = standings.filter((s) => s.qualified).length;
@@ -129,8 +133,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
       {recentRound && (
         recentRound.isChampionship
-          ? <ChampionshipResults round={recentRound} poolSummaries={poolSummaries} leagueId={league.id} />
-          : <RecentRound round={recentRound} leagueId={league.id} />
+          ? <ChampionshipResults round={recentRound} poolSummaries={poolSummaries} leagueId={league.id} playerLookup={playerLookup} />
+          : <RecentRound round={recentRound} leagueId={league.id} playerLookup={playerLookup} />
       )}
 
       <div>
@@ -167,8 +171,15 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
 type GetDataResult = NonNullable<Awaited<ReturnType<typeof getData>>>;
 type RoundData = NonNullable<GetDataResult["recentRound"]>;
+type PlayerLookup = Map<string, number>;
 
-function RecentRound({ round, leagueId }: { round: RoundData; leagueId: number }) {
+function PlayerName({ name, lookup, className }: { name: string; lookup: PlayerLookup; className?: string }) {
+  const id = lookup.get(name.toLowerCase().trim());
+  if (!id) return <span className={className}>{name}</span>;
+  return <Link href={`/players/${id}`} className={`hover:underline ${className ?? ""}`}>{name}</Link>;
+}
+
+function RecentRound({ round, leagueId, playerLookup }: { round: RoundData; leagueId: number; playerLookup: PlayerLookup }) {
   return (
     <Card className="border-slate-200">
       <CardHeader>
@@ -198,7 +209,9 @@ function RecentRound({ round, leagueId }: { round: RoundData; leagueId: number }
                     {top3.map((r, i) => (
                       <li key={r.id} className="flex items-center gap-3 text-sm">
                         <span className="text-slate-400 w-4 text-right">{i + 1}.</span>
-                        <span className="font-medium text-slate-900">{r.player.name}</span>
+                        <Link href={`/players/${r.player.id}`} className="font-medium text-slate-900 hover:underline">
+                          {r.player.name}
+                        </Link>
                         <span className={`ml-auto font-mono text-xs ${
                           r.relativeScore < 0 ? "text-emerald-600" : r.relativeScore > 0 ? "text-orange-500" : "text-slate-500"
                         }`}>
@@ -218,7 +231,7 @@ function RecentRound({ round, leagueId }: { round: RoundData; leagueId: number }
             <div className="flex flex-wrap gap-2">
               {round.ctpWinners.map((c) => (
                 <Badge key={c.id} className="bg-orange-100 text-orange-800 border border-orange-200 hover:bg-orange-100">
-                  Hole {c.hole}: {c.playerName}
+                  Hole {c.hole}: <PlayerName name={c.playerName} lookup={playerLookup} className="font-semibold hover:underline" />
                 </Badge>
               ))}
             </div>
@@ -231,7 +244,7 @@ function RecentRound({ round, leagueId }: { round: RoundData; leagueId: number }
 
 // ── Championship round ────────────────────────────────────────────────────────
 
-function ChampionshipResults({ round, poolSummaries, leagueId }: { round: RoundData; poolSummaries: PoolSummary[]; leagueId: number }) {
+function ChampionshipResults({ round, poolSummaries, leagueId, playerLookup }: { round: RoundData; poolSummaries: PoolSummary[]; leagueId: number; playerLookup: PlayerLookup }) {
   const bluePools = poolSummaries.filter((w) => ["A", "B"].includes(w.pool));
   const redPools = poolSummaries.filter((w) => ["C", "D"].includes(w.pool));
 
@@ -253,8 +266,8 @@ function ChampionshipResults({ round, poolSummaries, leagueId }: { round: RoundD
       </CardHeader>
       <CardContent>
         <div className="grid md:grid-cols-2 gap-4 md:gap-6">
-          <PoolColumn label="🔵 Blue Division" pools={bluePools} />
-          <PoolColumn label="🔴 Red Division" pools={redPools} />
+          <PoolColumn label="🔵 Blue Division" pools={bluePools} playerLookup={playerLookup} />
+          <PoolColumn label="🔴 Red Division" pools={redPools} playerLookup={playerLookup} />
         </div>
         {round.ctpWinners.length > 0 && (
           <div className="mt-4 pt-4 border-t border-amber-100">
@@ -262,7 +275,7 @@ function ChampionshipResults({ round, poolSummaries, leagueId }: { round: RoundD
             <div className="flex flex-wrap gap-2">
               {round.ctpWinners.map((c) => (
                 <Badge key={c.id} className="bg-orange-100 text-orange-800 border border-orange-200 hover:bg-orange-100">
-                  Hole {c.hole}: {c.playerName}
+                  Hole {c.hole}: <PlayerName name={c.playerName} lookup={playerLookup} className="font-semibold hover:underline" />
                 </Badge>
               ))}
             </div>
@@ -273,7 +286,7 @@ function ChampionshipResults({ round, poolSummaries, leagueId }: { round: RoundD
   );
 }
 
-function PoolColumn({ label, pools }: { label: string; pools: PoolSummary[] }) {
+function PoolColumn({ label, pools, playerLookup }: { label: string; pools: PoolSummary[]; playerLookup: PlayerLookup }) {
   return (
     <div>
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">{label}</p>
@@ -287,7 +300,7 @@ function PoolColumn({ label, pools }: { label: string; pools: PoolSummary[] }) {
               {w.first && (
                 <div className="flex items-center gap-2">
                   <span className="text-base">🥇</span>
-                  <span className="font-semibold text-slate-900 text-sm">{w.first.playerName}</span>
+                  <PlayerName name={w.first.playerName} lookup={playerLookup} className="font-semibold text-slate-900 text-sm hover:underline" />
                   <span className={`ml-auto font-mono text-xs ${
                     w.first.relativeScore < 0 ? "text-emerald-600" : w.first.relativeScore > 0 ? "text-orange-500" : "text-slate-500"
                   }`}>
@@ -298,7 +311,7 @@ function PoolColumn({ label, pools }: { label: string; pools: PoolSummary[] }) {
               {w.second && (
                 <div className="flex items-center gap-2">
                   <span className="text-base">🥈</span>
-                  <span className="text-slate-700 text-sm">{w.second.playerName}</span>
+                  <PlayerName name={w.second.playerName} lookup={playerLookup} className="text-slate-700 text-sm hover:underline" />
                   <span className={`ml-auto font-mono text-xs ${
                     w.second.relativeScore < 0 ? "text-emerald-600" : w.second.relativeScore > 0 ? "text-orange-500" : "text-slate-500"
                   }`}>

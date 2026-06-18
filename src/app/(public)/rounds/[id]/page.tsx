@@ -58,6 +58,11 @@ export default async function RoundPage({
 
   if (!round) notFound();
 
+  // Build name→id lookup from this round's results
+  const playerLookup = new Map(
+    round.results.map((r) => [r.player.name.toLowerCase().trim(), r.player.id])
+  );
+
   const blueResults = round.results.filter((r) => r.division === Division.BLUE);
   const redResults = round.results.filter((r) => r.division === Division.RED);
 
@@ -189,8 +194,8 @@ export default async function RoundPage({
           </CardHeader>
           <CardContent>
             <div className="grid md:grid-cols-2 gap-6">
-              <PoolSummaryColumn label="🔵 Blue Division" pools={blueSummaries} />
-              <PoolSummaryColumn label="🔴 Red Division" pools={redSummaries} />
+              <PoolSummaryColumn label="🔵 Blue Division" pools={blueSummaries} playerLookup={playerLookup} />
+              <PoolSummaryColumn label="🔴 Red Division" pools={redSummaries} playerLookup={playerLookup} />
             </div>
           </CardContent>
         </Card>
@@ -205,7 +210,7 @@ export default async function RoundPage({
             <div className="flex flex-wrap gap-2">
               {round.ctpWinners.map((c) => (
                 <Badge key={c.id} className="bg-orange-100 text-orange-800 border border-orange-200 hover:bg-orange-100 text-sm">
-                  Hole {c.hole}: {c.playerName}
+                  Hole {c.hole}: <PlayerName name={c.playerName} lookup={playerLookup} className="font-semibold hover:underline" />
                 </Badge>
               ))}
             </div>
@@ -222,7 +227,7 @@ export default async function RoundPage({
             <div className="flex flex-wrap gap-2">
               {round.aceWinners.map((a) => (
                 <Badge key={a.id} className="bg-purple-100 text-purple-800 border border-purple-200 hover:bg-purple-100 text-sm">
-                  Hole {a.hole}: {a.playerName}{a.prizeAmount != null ? ` · $${a.prizeAmount.toFixed(2)}` : ""}
+                  Hole {a.hole}: <PlayerName name={a.playerName} lookup={playerLookup} className="font-semibold hover:underline" />{a.prizeAmount != null ? ` · $${a.prizeAmount.toFixed(2)}` : ""}
                 </Badge>
               ))}
             </div>
@@ -291,7 +296,13 @@ export default async function RoundPage({
   );
 }
 
-function PoolSummaryColumn({ label, pools }: { label: string; pools: PoolSummary[] }) {
+function PlayerName({ name, lookup, className }: { name: string; lookup: Map<string, number>; className?: string }) {
+  const id = lookup.get(name.toLowerCase().trim());
+  if (!id) return <span className={className}>{name}</span>;
+  return <Link href={`/players/${id}`} className={`hover:underline ${className ?? ""}`}>{name}</Link>;
+}
+
+function PoolSummaryColumn({ label, pools, playerLookup }: { label: string; pools: PoolSummary[]; playerLookup: Map<string, number> }) {
   return (
     <div>
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">{label}</p>
@@ -305,7 +316,7 @@ function PoolSummaryColumn({ label, pools }: { label: string; pools: PoolSummary
               {w.first && (
                 <div className="flex items-center gap-2">
                   <span className="text-base">🥇</span>
-                  <span className="font-semibold text-slate-900 text-sm">{w.first.playerName}</span>
+                  <PlayerName name={w.first.playerName} lookup={playerLookup} className="font-semibold text-slate-900 text-sm hover:underline" />
                   <span className={`ml-auto font-mono text-xs ${
                     w.first.relativeScore < 0 ? "text-emerald-600" : w.first.relativeScore > 0 ? "text-orange-500" : "text-slate-500"
                   }`}>
@@ -316,7 +327,7 @@ function PoolSummaryColumn({ label, pools }: { label: string; pools: PoolSummary
               {w.second && (
                 <div className="flex items-center gap-2">
                   <span className="text-base">🥈</span>
-                  <span className="text-slate-700 text-sm">{w.second.playerName}</span>
+                  <PlayerName name={w.second.playerName} lookup={playerLookup} className="text-slate-700 text-sm hover:underline" />
                   <span className={`ml-auto font-mono text-xs ${
                     w.second.relativeScore < 0 ? "text-emerald-600" : w.second.relativeScore > 0 ? "text-orange-500" : "text-slate-500"
                   }`}>
