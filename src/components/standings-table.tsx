@@ -5,6 +5,7 @@ import { PlayerStanding } from "@/lib/standings";
 import { Badge } from "@/components/ui/badge";
 import { formatScore } from "@/lib/utils";
 import { Division } from "@/generated/prisma/client";
+import Link from "next/link";
 
 interface StandingsTableProps {
   standings: PlayerStanding[];
@@ -72,7 +73,12 @@ export function StandingsTable({ standings, division, bestScoresCount }: Standin
                 </div>
               </td>
               <td className="py-3 pr-4">
-                <span className="font-medium text-slate-900">{s.playerName}</span>
+                <Link
+                  href={`/players/${s.playerId}`}
+                  className="font-medium text-slate-900 hover:text-blue-600 hover:underline transition-colors"
+                >
+                  {s.playerName}
+                </Link>
                 {!s.qualified && (
                   <span className="ml-2 text-xs text-slate-400 hidden sm:inline">(not yet qualified)</span>
                 )}

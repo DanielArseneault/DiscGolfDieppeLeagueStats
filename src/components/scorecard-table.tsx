@@ -1,4 +1,5 @@
 import { formatScore } from "@/lib/utils";
+import Link from "next/link";
 
 interface HolePar {
   holeNumber: number;
@@ -8,6 +9,7 @@ interface HolePar {
 interface ResultRow {
   position: number;
   playerName: string;
+  playerId?: number;
   score: number;
   relativeScore: number;
   holeScores: Record<string, number>;
@@ -75,7 +77,13 @@ export function ScorecardTable({ results, holePars, divisionLabel }: ScorecardTa
                     {r.position === 0 ? "—" : posCounts[r.position] > 1 ? `T${r.position}` : r.position}
                   </td>
                   <td className={`px-3 py-2.5 sticky left-10 z-10 ${idx % 2 === 1 ? "bg-slate-50" : "bg-white"}`}>
-                    <div className="w-[96px] truncate font-medium text-slate-800">{r.playerName}</div>
+                    {r.playerId ? (
+                      <Link href={`/players/${r.playerId}`} className="w-[96px] truncate font-medium text-blue-600 hover:underline block">
+                        {r.playerName}
+                      </Link>
+                    ) : (
+                      <div className="w-[96px] truncate font-medium text-slate-800">{r.playerName}</div>
+                    )}
                   </td>
                   <td
                     className={`px-2 py-2.5 text-center font-semibold tabular-nums sticky left-[160px] z-10 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.1)] ${

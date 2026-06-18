@@ -14,6 +14,7 @@ export const revalidate = 60;
 type ResultRow = {
   position: number;
   playerName: string;
+  playerId?: number;
   score: number;
   relativeScore: number;
   holeScores: Record<string, number>;
@@ -84,6 +85,7 @@ export default async function RoundPage({
       const row: ResultRow = {
         position: result.position,
         playerName: result.player.name,
+        playerId: result.playerId,
         score: result.score,
         relativeScore: result.relativeScore,
         holeScores: result.holeScores as Record<string, number>,
@@ -261,6 +263,7 @@ export default async function RoundPage({
               results={blueResults.map((r) => ({
                 position: r.position,
                 playerName: r.player.name,
+                playerId: r.playerId,
                 score: r.score,
                 relativeScore: r.relativeScore,
                 holeScores: r.holeScores as Record<string, number>,
@@ -274,6 +277,7 @@ export default async function RoundPage({
               results={redResults.map((r) => ({
                 position: r.position,
                 playerName: r.player.name,
+                playerId: r.playerId,
                 score: r.score,
                 relativeScore: r.relativeScore,
                 holeScores: r.holeScores as Record<string, number>,
