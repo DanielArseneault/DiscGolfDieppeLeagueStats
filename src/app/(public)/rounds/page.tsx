@@ -142,12 +142,14 @@ function RegularRoundCard({ round, leagueId, playerLookup }: { round: Round; lea
           >
             Scorecard →
           </Link>
-          {blueResults.length > 0 && (
-            <span className="text-sm text-white bg-white/15 px-2.5 py-0.5 rounded-full">🔵 {blueResults.length}</span>
-          )}
-          {redResults.length > 0 && (
-            <span className="text-sm text-white bg-white/15 px-2.5 py-0.5 rounded-full">🔴 {redResults.length}</span>
-          )}
+          <div className="flex items-center gap-2">
+            {blueResults.length > 0 && (
+              <span className="text-sm text-white bg-white/15 px-2.5 py-0.5 rounded-full">🔵 {blueResults.length}</span>
+            )}
+            {redResults.length > 0 && (
+              <span className="text-sm text-white bg-white/15 px-2.5 py-0.5 rounded-full">🔴 {redResults.length}</span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -266,12 +268,14 @@ function ChampionshipCard({ round, standings, leagueId, playerLookup }: { round:
           >
             Scorecard →
           </Link>
-          {round.results.filter((r) => r.division === Division.BLUE).length > 0 && (
-            <span className="text-sm text-white bg-white/15 px-2.5 py-0.5 rounded-full">🔵 {round.results.filter((r) => r.division === Division.BLUE).length}</span>
-          )}
-          {round.results.filter((r) => r.division === Division.RED).length > 0 && (
-            <span className="text-sm text-white bg-white/15 px-2.5 py-0.5 rounded-full">🔴 {round.results.filter((r) => r.division === Division.RED).length}</span>
-          )}
+          <div className="flex items-center gap-2">
+            {round.results.filter((r) => r.division === Division.BLUE).length > 0 && (
+              <span className="text-sm text-white bg-white/15 px-2.5 py-0.5 rounded-full">🔵 {round.results.filter((r) => r.division === Division.BLUE).length}</span>
+            )}
+            {round.results.filter((r) => r.division === Division.RED).length > 0 && (
+              <span className="text-sm text-white bg-white/15 px-2.5 py-0.5 rounded-full">🔴 {round.results.filter((r) => r.division === Division.RED).length}</span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -291,7 +295,7 @@ function ChampionshipCard({ round, standings, leagueId, playerLookup }: { round:
                         <span className="text-xs font-semibold text-amber-700 w-14 shrink-0">Pool {s.pool}</span>
                         <PlayerName name={s.first.playerName} lookup={playerLookup} className="font-medium text-slate-800 text-sm hover:underline" />
                         {s.first.prize && (
-                          <Badge className="bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100 text-xs">🏅 {s.first.prize}</Badge>
+                          <Badge className="hidden sm:inline-flex bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100 text-xs">🏅 {s.first.prize}</Badge>
                         )}
                       </div>
                     ))}
@@ -308,7 +312,7 @@ function ChampionshipCard({ round, standings, leagueId, playerLookup }: { round:
                         <span className="text-xs font-semibold text-amber-700 w-14 shrink-0">Pool {s.pool}</span>
                         <PlayerName name={s.first.playerName} lookup={playerLookup} className="font-medium text-slate-800 text-sm hover:underline" />
                         {s.first.prize && (
-                          <Badge className="bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100 text-xs">🏅 {s.first.prize}</Badge>
+                          <Badge className="hidden sm:inline-flex bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100 text-xs">🏅 {s.first.prize}</Badge>
                         )}
                       </div>
                     ))}

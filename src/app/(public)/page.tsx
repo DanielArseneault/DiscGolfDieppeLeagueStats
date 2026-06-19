@@ -288,16 +288,18 @@ function ChampionshipResults({ round, poolSummaries, leagueId, playerLookup }: {
             <Link href={`/rounds/${round.id}?league=${leagueId}`} className="text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 hover:border-blue-300 px-3 py-1 rounded-full transition-colors">
               Full scorecard →
             </Link>
-            {round.results.filter((r) => r.division === Division.BLUE).length > 0 && (
-              <span className="text-sm text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-full">
-                🔵 {round.results.filter((r) => r.division === Division.BLUE).length}
-              </span>
-            )}
-            {round.results.filter((r) => r.division === Division.RED).length > 0 && (
-              <span className="text-sm text-red-700 bg-red-50 border border-red-200 px-2.5 py-0.5 rounded-full">
-                🔴 {round.results.filter((r) => r.division === Division.RED).length}
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              {round.results.filter((r) => r.division === Division.BLUE).length > 0 && (
+                <span className="text-sm text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-full">
+                  🔵 {round.results.filter((r) => r.division === Division.BLUE).length}
+                </span>
+              )}
+              {round.results.filter((r) => r.division === Division.RED).length > 0 && (
+                <span className="text-sm text-red-700 bg-red-50 border border-red-200 px-2.5 py-0.5 rounded-full">
+                  🔴 {round.results.filter((r) => r.division === Division.RED).length}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </CardHeader>
