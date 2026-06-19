@@ -125,15 +125,17 @@ model RoundWinner {
   division   Division
   place      Int
   playerName String
+  prize      String?
 
   round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
 }
 
 model CtpWinner {
-  id         Int    @id @default(autoincrement())
+  id         Int     @id @default(autoincrement())
   roundId    Int
   hole       Int
   playerName String
+  prize      String?
 
   round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
 }
@@ -149,11 +151,12 @@ model AceWinner {
 }
 
 model ChampionshipPoolWinner {
-  id         Int    @id @default(autoincrement())
+  id         Int     @id @default(autoincrement())
   roundId    Int
   pool       String
-  place      Int    @default(1)
+  place      Int     @default(1)
   playerName String
+  prize      String?
 
   round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
 

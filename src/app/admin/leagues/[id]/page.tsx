@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
 import { getStandings } from "@/lib/standings";
 import { PoolExclusions } from "@/components/admin/pool-exclusions";
+import { CollapsibleCard } from "@/components/admin/collapsible-card";
 
 export default async function LeagueDashboard({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -100,27 +101,25 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
       )}
 
       {standings.some((s) => s.qualified) && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Championship Pool Assignment</CardTitle>
-            <p className="text-xs text-slate-500">Qualified players and their assigned pools. Exclude players who won&apos;t participate in the championship.</p>
-          </CardHeader>
-          <CardContent>
-            <PoolExclusions
-              players={standings
-                .filter((s) => s.qualified)
-                .map((s) => ({
-                  playerId: s.playerId,
-                  playerName: s.playerName,
-                  division: s.division,
-                  qualifyingTotal: s.qualifyingTotal,
-                  championshipPool: s.championshipPool,
-                  excludeFromChampionship: s.excludeFromChampionship,
-                  championshipPoolOverride: s.championshipPoolOverride,
-                }))}
-            />
-          </CardContent>
-        </Card>
+        <CollapsibleCard
+          title="Championship Pool Assignment"
+          description="Qualified players and their assigned pools. Exclude players who won't participate in the championship."
+          defaultOpen={false}
+        >
+          <PoolExclusions
+            players={standings
+              .filter((s) => s.qualified)
+              .map((s) => ({
+                playerId: s.playerId,
+                playerName: s.playerName,
+                division: s.division,
+                qualifyingTotal: s.qualifyingTotal,
+                championshipPool: s.championshipPool,
+                excludeFromChampionship: s.excludeFromChampionship,
+                championshipPoolOverride: s.championshipPoolOverride,
+              }))}
+          />
+        </CollapsibleCard>
       )}
     </div>
   );

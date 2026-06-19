@@ -114,6 +114,8 @@ function RegularRoundCard({ round, leagueId, playerLookup }: { round: Round; lea
   const redLeaderName = redOverride1?.playerName ?? redResults.find((r) => r.position === 1)?.player.name;
   const blueLeaderScore = blueResults.find((r) => r.position === 1)?.relativeScore;
   const redLeaderScore = redResults.find((r) => r.position === 1)?.relativeScore;
+  const blueLeaderPrize = blueOverride1?.prize ?? null;
+  const redLeaderPrize = redOverride1?.prize ?? null;
 
   return (
     <div className="rounded-xl overflow-hidden border border-slate-200 hover:shadow-md transition-all">
@@ -156,9 +158,9 @@ function RegularRoundCard({ round, leagueId, playerLookup }: { round: Round; lea
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Leaders</p>
             <div className="grid sm:grid-cols-2 gap-x-6 gap-y-2">
               {blueLeaderName && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="text-blue-500 shrink-0">🔵</span>
-                  <PlayerName name={blueLeaderName} lookup={playerLookup} className="font-semibold text-slate-800 text-sm truncate" />
+                  <PlayerName name={blueLeaderName} lookup={playerLookup} className="font-semibold text-slate-800 text-sm" />
                   {blueLeaderScore !== undefined && (
                     <span className={`font-mono text-sm font-bold shrink-0 ${
                       blueLeaderScore < 0 ? "text-emerald-600" : blueLeaderScore > 0 ? "text-orange-500" : "text-slate-500"
@@ -166,18 +168,28 @@ function RegularRoundCard({ round, leagueId, playerLookup }: { round: Round; lea
                       {formatScore(blueLeaderScore)}
                     </span>
                   )}
+                  {blueLeaderPrize && (
+                    <Badge className="bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100">
+                      🏅 {blueLeaderPrize}
+                    </Badge>
+                  )}
                 </div>
               )}
               {redLeaderName && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="text-red-500 shrink-0">🔴</span>
-                  <PlayerName name={redLeaderName} lookup={playerLookup} className="font-semibold text-slate-800 text-sm truncate" />
+                  <PlayerName name={redLeaderName} lookup={playerLookup} className="font-semibold text-slate-800 text-sm" />
                   {redLeaderScore !== undefined && (
                     <span className={`font-mono text-sm font-bold shrink-0 ${
                       redLeaderScore < 0 ? "text-emerald-600" : redLeaderScore > 0 ? "text-orange-500" : "text-slate-500"
                     }`}>
                       {formatScore(redLeaderScore)}
                     </span>
+                  )}
+                  {redLeaderPrize && (
+                    <Badge className="bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100">
+                      🏅 {redLeaderPrize}
+                    </Badge>
                   )}
                 </div>
               )}
@@ -188,11 +200,18 @@ function RegularRoundCard({ round, leagueId, playerLookup }: { round: Round; lea
         {round.ctpWinners.length > 0 && (
           <div className="space-y-1.5">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Closest to Pin</p>
-            <div className="flex flex-wrap gap-2">
+            <div className="space-y-1.5">
               {round.ctpWinners.map((c) => (
-                <Badge key={c.id} className="bg-orange-100 text-orange-800 border border-orange-200 hover:bg-orange-100">
-                  🎯 Hole {c.hole}: <PlayerName name={c.playerName} lookup={playerLookup} className="font-semibold hover:underline" />
-                </Badge>
+                <div key={c.id} className="flex items-center gap-1.5 flex-wrap">
+                  <Badge className="bg-orange-100 text-orange-800 border border-orange-200 hover:bg-orange-100">
+                    🎯 Hole {c.hole}: <PlayerName name={c.playerName} lookup={playerLookup} className="font-semibold hover:underline" />
+                  </Badge>
+                  {c.prize && (
+                    <Badge className="bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100">
+                      🏅 {c.prize}
+                    </Badge>
+                  )}
+                </div>
               ))}
             </div>
           </div>
@@ -267,10 +286,13 @@ function ChampionshipCard({ round, standings, leagueId, playerLookup }: { round:
                   <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-2">🔵 Blue</p>
                   <div className="space-y-1.5">
                     {bluePools.map((s) => s.first && (
-                      <div key={s.pool} className="flex items-center gap-2">
+                      <div key={s.pool} className="flex items-center gap-2 flex-wrap">
                         <span className="text-base shrink-0">🥇</span>
                         <span className="text-xs font-semibold text-amber-700 w-14 shrink-0">Pool {s.pool}</span>
-                        <PlayerName name={s.first.playerName} lookup={playerLookup} className="font-medium text-slate-800 text-sm truncate hover:underline" />
+                        <PlayerName name={s.first.playerName} lookup={playerLookup} className="font-medium text-slate-800 text-sm hover:underline" />
+                        {s.first.prize && (
+                          <Badge className="bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100 text-xs">🏅 {s.first.prize}</Badge>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -281,10 +303,13 @@ function ChampionshipCard({ round, standings, leagueId, playerLookup }: { round:
                   <p className="text-xs font-semibold text-red-500 uppercase tracking-wide mb-2">🔴 Red</p>
                   <div className="space-y-1.5">
                     {redPools.map((s) => s.first && (
-                      <div key={s.pool} className="flex items-center gap-2">
+                      <div key={s.pool} className="flex items-center gap-2 flex-wrap">
                         <span className="text-base shrink-0">🥇</span>
                         <span className="text-xs font-semibold text-amber-700 w-14 shrink-0">Pool {s.pool}</span>
-                        <PlayerName name={s.first.playerName} lookup={playerLookup} className="font-medium text-slate-800 text-sm truncate hover:underline" />
+                        <PlayerName name={s.first.playerName} lookup={playerLookup} className="font-medium text-slate-800 text-sm hover:underline" />
+                        {s.first.prize && (
+                          <Badge className="bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100 text-xs">🏅 {s.first.prize}</Badge>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -297,11 +322,18 @@ function ChampionshipCard({ round, standings, leagueId, playerLookup }: { round:
         {round.ctpWinners.length > 0 && (
           <div className="space-y-1.5">
             <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide">Closest to Pin</p>
-            <div className="flex flex-wrap gap-2">
+            <div className="space-y-1.5">
               {round.ctpWinners.map((c) => (
-                <Badge key={c.id} className="bg-orange-100 text-orange-800 border border-orange-200 hover:bg-orange-100">
-                  🎯 Hole {c.hole}: <PlayerName name={c.playerName} lookup={playerLookup} className="font-semibold hover:underline" />
-                </Badge>
+                <div key={c.id} className="flex items-center gap-1.5 flex-wrap">
+                  <Badge className="bg-orange-100 text-orange-800 border border-orange-200 hover:bg-orange-100">
+                    🎯 Hole {c.hole}: <PlayerName name={c.playerName} lookup={playerLookup} className="font-semibold hover:underline" />
+                  </Badge>
+                  {c.prize && (
+                    <Badge className="bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100">
+                      🏅 {c.prize}
+                    </Badge>
+                  )}
+                </div>
               ))}
             </div>
           </div>

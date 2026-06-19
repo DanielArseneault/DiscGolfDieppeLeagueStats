@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 interface CtpWinner {
   hole: number;
   playerName: string;
+  prize: string | null;
 }
 
 interface AceWinner {
@@ -30,12 +31,14 @@ interface SavedPoolWinner {
   pool: string;
   place: number;
   playerName: string;
+  prize?: string | null;
 }
 
 interface RoundWinnerEntry {
   division: "BLUE" | "RED";
   place: number;
   playerName: string;
+  prize?: string;
 }
 
 interface RoundResult {
@@ -142,12 +145,13 @@ export default function RoundManagePage({
   const [standings, setStandings] = useState<PlayerStanding[]>([]);
   // keyed by "${pool}-${place}", e.g. "A-1", "A-2"
   const [poolWinnerOverrides, setPoolWinnerOverrides] = useState<Record<string, string>>({});
+  const [poolWinnerPrizes, setPoolWinnerPrizes] = useState<Record<string, string>>({});
   const [poolWinnerSaving, setPoolWinnerSaving] = useState(false);
 
   // CTP state
   const [ctpEntries, setCtpEntries] = useState([
-    { player: "", hole: 18 },
-    { player: "", hole: 18 },
+    { player: "", hole: 18, prize: "" },
+    { player: "", hole: 18, prize: "" },
   ]);
   const [ctpSaving, setCtpSaving] = useState(false);
 
@@ -158,6 +162,7 @@ export default function RoundManagePage({
   // Round winner overrides (non-championship)
   // 1st place: one per division; 2nd place: multiple allowed (ties)
   const [roundWinner1st, setRoundWinner1st] = useState<Record<string, string>>({ BLUE: "", RED: "" });
+  const [roundWinner1stPrize, setRoundWinner1stPrize] = useState<Record<string, string>>({ BLUE: "", RED: "" });
   const [roundWinner2nds, setRoundWinner2nds] = useState<{ division: "BLUE" | "RED"; playerName: string }[]>([]);
   const [roundWinnerSaving, setRoundWinnerSaving] = useState(false);
 
@@ -207,8 +212,8 @@ export default function RoundManagePage({
     const data: Round = await fetch(`/api/rounds/${roundId}`).then((r) => r.json());
     setRound(data);
 
-    const loaded = data.ctpWinners.map((w) => ({ player: w.playerName, hole: w.hole }));
-    while (loaded.length < 2) loaded.push({ player: "", hole: 18 });
+    const loaded = data.ctpWinners.map((w) => ({ player: w.playerName, hole: w.hole, prize: w.prize ?? "" }));
+    while (loaded.length < 2) loaded.push({ player: "", hole: 18, prize: "" });
     setCtpEntries(loaded);
 
     setAceEntries(data.aceWinners.map((w) => ({
@@ -221,15 +226,17 @@ export default function RoundManagePage({
     setFacebookLabel(data.facebookLabel ?? "");
 
     const w1st: Record<string, string> = { BLUE: "", RED: "" };
+    const w1stPrize: Record<string, string> = { BLUE: "", RED: "" };
     const w2nds: { division: "BLUE" | "RED"; playerName: string }[] = [];
     for (const w of data.roundWinners ?? []) {
-      if (w.place === 1) w1st[w.division] = w.playerName;
+      if (w.place === 1) { w1st[w.division] = w.playerName; w1stPrize[w.division] = w.prize ?? ""; }
       else if (w.place === 2) w2nds.push({ division: w.division as "BLUE" | "RED", playerName: w.playerName });
     }
     // Pre-populate 1st place from scorecard if no override is saved
     if (!w1st.BLUE) w1st.BLUE = data.results.filter((r: RoundResult) => r.division === "BLUE").find((r: RoundResult) => r.position === 1)?.player.name ?? "";
     if (!w1st.RED) w1st.RED = data.results.filter((r: RoundResult) => r.division === "RED").find((r: RoundResult) => r.position === 1)?.player.name ?? "";
     setRoundWinner1st(w1st);
+    setRoundWinner1stPrize(w1stPrize);
     setRoundWinner2nds(w2nds);
 
     if (data.isChampionship) {
@@ -237,8 +244,13 @@ export default function RoundManagePage({
       setStandings(sData);
 
       const overrides: Record<string, string> = {};
-      for (const w of data.poolWinners) overrides[`${w.pool}-${w.place}`] = w.playerName;
+      const prizes: Record<string, string> = {};
+      for (const w of data.poolWinners) {
+        overrides[`${w.pool}-${w.place}`] = w.playerName;
+        if (w.prize) prizes[`${w.pool}-${w.place}`] = w.prize;
+      }
       setPoolWinnerOverrides(overrides);
+      setPoolWinnerPrizes(prizes);
 
       setPostContent(data.post?.content ?? buildChampionshipPost(data, sData, overrides));
     } else {
@@ -293,7 +305,7 @@ export default function RoundManagePage({
     const winners: RoundWinnerEntry[] = [
       ...Object.entries(roundWinner1st)
         .filter(([, name]) => name.trim())
-        .map(([div, name]) => ({ division: div as "BLUE" | "RED", place: 1, playerName: name.trim() })),
+        .map(([div, name]) => ({ division: div as "BLUE" | "RED", place: 1, playerName: name.trim(), prize: roundWinner1stPrize[div]?.trim() || undefined })),
       ...roundWinner2nds
         .filter((w) => w.playerName.trim())
         .map((w) => ({ division: w.division, place: 2, playerName: w.playerName.trim() })),
@@ -331,7 +343,7 @@ export default function RoundManagePage({
     setCtpSaving(true);
     const winners = ctpEntries
       .filter((e) => e.player)
-      .map((e) => ({ hole: e.hole, playerName: e.player }));
+      .map((e) => ({ hole: e.hole, playerName: e.player, prize: e.prize.trim() || undefined }));
     await fetch(`/api/rounds/${roundId}/ctp`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -344,12 +356,19 @@ export default function RoundManagePage({
   // Pool winners
   async function handleSavePoolWinners() {
     setPoolWinnerSaving(true);
-    const winners = Object.entries(poolWinnerOverrides)
-      .filter(([, name]) => name)
-      .map(([key, playerName]) => {
-        const [pool, placeStr] = key.split("-");
-        return { pool, place: Number(placeStr), playerName };
-      });
+    const winners: { pool: string; place: number; playerName: string; prize?: string }[] = [];
+    if (poolData) {
+      for (const g of poolData.groups) {
+        const computedFirst = g.results[0]?.player.name ?? "";
+        const computedSecond = g.results.find((r) => r.player.name !== computedFirst)?.player.name ?? "";
+        for (const [place, computedName] of [[1, computedFirst], [2, computedSecond]] as const) {
+          const key = `${g.pool}-${place}`;
+          const playerName = poolWinnerOverrides[key] || computedName;
+          const prize = poolWinnerPrizes[key]?.trim() || undefined;
+          if (playerName) winners.push({ pool: g.pool, place, playerName, prize });
+        }
+      }
+    }
     await fetch(`/api/rounds/${roundId}/pool-winners`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -666,48 +685,34 @@ export default function RoundManagePage({
                     return (
                       <div key={g.pool} className="space-y-3">
                         <p className="text-xs font-semibold text-slate-700">{g.label}</p>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs flex items-center gap-1.5">
-                            🥇 1st Place
-                            {firstOverridden && <span className="text-amber-500 font-normal">(overridden)</span>}
-                          </Label>
-                          <Select
-                            value={currentFirst}
-                            onValueChange={(v) => setPoolWinnerOverrides((prev) => ({ ...prev, [`${g.pool}-1`]: v }))}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {g.results.map((r) => (
-                                <SelectItem key={`${r.id}-1`} value={r.player.name}>
-                                  {r.player.name} ({r.score})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs flex items-center gap-1.5">
-                            🥈 2nd Place
-                            {secondOverridden && <span className="text-amber-500 font-normal">(overridden)</span>}
-                          </Label>
-                          <Select
-                            value={currentSecond}
-                            onValueChange={(v) => setPoolWinnerOverrides((prev) => ({ ...prev, [`${g.pool}-2`]: v }))}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {g.results.map((r) => (
-                                <SelectItem key={`${r.id}-2`} value={r.player.name}>
-                                  {r.player.name} ({r.score})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
+                        {([{ place: 1, label: "🥇 1st Place", current: currentFirst, overridden: firstOverridden }, { place: 2, label: "🥈 2nd Place", current: currentSecond, overridden: secondOverridden }] as const).map(({ place, label, current, overridden }) => (
+                          <div key={place} className="space-y-1.5">
+                            <Label className="text-xs flex items-center gap-1.5">
+                              {label}
+                              {overridden && <span className="text-amber-500 font-normal">(overridden)</span>}
+                            </Label>
+                            <Select
+                              value={current}
+                              onValueChange={(v) => setPoolWinnerOverrides((prev) => ({ ...prev, [`${g.pool}-${place}`]: v }))}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {g.results.map((r) => (
+                                  <SelectItem key={`${r.id}-${place}`} value={r.player.name}>
+                                    {r.player.name} ({r.score})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              placeholder="Prize (e.g. $50 or disc)"
+                              value={poolWinnerPrizes[`${g.pool}-${place}`] ?? ""}
+                              onChange={(e) => setPoolWinnerPrizes((prev) => ({ ...prev, [`${g.pool}-${place}`]: e.target.value }))}
+                            />
+                          </div>
+                        ))}
                       </div>
                     );
                   })}
@@ -729,7 +734,7 @@ export default function RoundManagePage({
             <CardContent>
               <div className="space-y-3">
                 {ctpEntries.map((entry, i) => (
-                  <div key={i} className="grid grid-cols-[1fr_90px_auto] gap-3 items-end">
+                  <div key={i} className="grid grid-cols-[1fr_80px_1fr_auto] gap-3 items-end">
                     <div className="space-y-1.5">
                       <Label className="text-xs">CTP {i + 1}</Label>
                       <Select
@@ -762,6 +767,16 @@ export default function RoundManagePage({
                         }
                       />
                     </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Prize</Label>
+                      <Input
+                        placeholder="e.g. $20 or disc"
+                        value={entry.prize}
+                        onChange={(e) =>
+                          setCtpEntries((prev) => prev.map((en, j) => j === i ? { ...en, prize: e.target.value } : en))
+                        }
+                      />
+                    </div>
                     {ctpEntries.length > 2 && (
                       <Button
                         variant="ghost"
@@ -781,7 +796,7 @@ export default function RoundManagePage({
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => setCtpEntries((prev) => [...prev, { player: "", hole: 18 }])}
+                    onClick={() => setCtpEntries((prev) => [...prev, { player: "", hole: 18, prize: "" }])}
                   >
                     + Add CTP
                   </Button>
@@ -895,12 +910,19 @@ export default function RoundManagePage({
                       {/* 1st place */}
                       <div className="space-y-1">
                         <Label className="text-xs">🥇 1st Place</Label>
-                        <Input
-                          value={roundWinner1st[div] ?? ""}
-                          onChange={(e) => setRoundWinner1st((prev) => ({ ...prev, [div]: e.target.value }))}
-                          placeholder={computed1st || "1st place player"}
-                          list={`players-${div}-1`}
-                        />
+                        <div className="grid grid-cols-[1fr_1fr] gap-2">
+                          <Input
+                            value={roundWinner1st[div] ?? ""}
+                            onChange={(e) => setRoundWinner1st((prev) => ({ ...prev, [div]: e.target.value }))}
+                            placeholder={computed1st || "1st place player"}
+                            list={`players-${div}-1`}
+                          />
+                          <Input
+                            value={roundWinner1stPrize[div] ?? ""}
+                            onChange={(e) => setRoundWinner1stPrize((prev) => ({ ...prev, [div]: e.target.value }))}
+                            placeholder="Prize (e.g. $20 or disc)"
+                          />
+                        </div>
                         <datalist id={`players-${div}-1`}>
                           {divResults.map((r) => <option key={r.id} value={r.player.name} />)}
                         </datalist>

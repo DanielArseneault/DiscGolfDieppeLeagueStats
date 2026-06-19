@@ -10,11 +10,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   if (body.roundWinners?.length) {
     await prisma.roundWinner.createMany({
-      data: body.roundWinners.map((w: { division: string; place: number; playerName: string }) => ({
+      data: body.roundWinners.map((w: { division: string; place: number; playerName: string; prize?: string }) => ({
         roundId: Number(id),
         division: w.division as Division,
         place: w.place,
         playerName: w.playerName,
+        prize: w.prize || null,
       })),
     });
   }

@@ -8,10 +8,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   await prisma.ctpWinner.deleteMany({ where: { roundId: Number(id) } });
 
   const winners = await prisma.ctpWinner.createMany({
-    data: body.ctpWinners.map((w: { hole: number; playerName: string }) => ({
+    data: body.ctpWinners.map((w: { hole: number; playerName: string; prize?: string }) => ({
       roundId: Number(id),
       hole: w.hole,
       playerName: w.playerName,
+      prize: w.prize || null,
     })),
   });
   return NextResponse.json(winners);

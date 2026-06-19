@@ -208,12 +208,13 @@ export default async function RoundPage({
             const divResults = round.results.filter((r) => r.division === div);
             const savedFirst = round.roundWinners.find((w) => w.division === div && w.place === 1);
             const firstName = savedFirst?.playerName ?? divResults.find((r) => r.position === 1)?.player.name;
+            const firstPrize = savedFirst?.prize ?? null;
             const savedSeconds = round.roundWinners.filter((w) => w.division === div && w.place === 2);
             // Fall back to scorecard position-2 players if no overrides saved
             const seconds: { id: number; playerName: string }[] = savedSeconds.length > 0
               ? savedSeconds
               : divResults.filter((r) => r.position === 2).map((r) => ({ id: r.id, playerName: r.player.name }));
-            return { div, firstName, seconds };
+            return { div, firstName, firstPrize, seconds };
           });
           const hasAny = sections.some((s) => s.firstName || s.seconds.length > 0);
           if (!hasAny) return null;
@@ -224,7 +225,7 @@ export default async function RoundPage({
               </CardHeader>
               <CardContent>
                 <div className="grid sm:grid-cols-2 gap-x-6 gap-y-3">
-                  {sections.map(({ div, firstName, seconds }) => {
+                  {sections.map(({ div, firstName, firstPrize, seconds }) => {
                     if (!firstName && seconds.length === 0) return null;
                     return (
                       <div key={div}>
@@ -233,9 +234,14 @@ export default async function RoundPage({
                         </p>
                         <div className="space-y-1.5">
                           {firstName && (
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="text-base shrink-0">🥇</span>
                               <PlayerName name={firstName} lookup={playerLookup} className="font-semibold text-slate-800 text-sm hover:underline" />
+                              {firstPrize && (
+                                <Badge className="bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100 text-xs">
+                                  🏅 {firstPrize}
+                                </Badge>
+                              )}
                             </div>
                           )}
                           {seconds.map((w) => (
@@ -263,9 +269,16 @@ export default async function RoundPage({
           <CardContent>
             <div className="flex flex-wrap gap-2">
               {round.ctpWinners.map((c) => (
-                <Badge key={c.id} className="bg-orange-100 text-orange-800 border border-orange-200 hover:bg-orange-100 text-sm">
-                  Hole {c.hole}: <PlayerName name={c.playerName} lookup={playerLookup} className="font-semibold hover:underline" />
-                </Badge>
+                <div key={c.id} className="flex items-center gap-1.5 flex-wrap">
+                  <Badge className="bg-orange-100 text-orange-800 border border-orange-200 hover:bg-orange-100 text-sm">
+                    🎯 Hole {c.hole}: <PlayerName name={c.playerName} lookup={playerLookup} className="font-semibold hover:underline" />
+                  </Badge>
+                  {c.prize && (
+                    <Badge className="bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100 text-sm">
+                      🏅 {c.prize}
+                    </Badge>
+                  )}
+                </div>
               ))}
             </div>
           </CardContent>
@@ -368,25 +381,39 @@ function PoolSummaryColumn({ label, pools, playerLookup }: { label: string; pool
             <div key={w.pool} className="bg-white rounded-lg border border-amber-200 px-4 py-3 space-y-2">
               <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide">Pool {w.pool}</p>
               {w.first && (
-                <div className="flex items-center gap-2">
-                  <span className="text-base">🥇</span>
-                  <PlayerName name={w.first.playerName} lookup={playerLookup} className="font-semibold text-slate-900 text-sm hover:underline" />
-                  <span className={`ml-auto font-mono text-xs ${
-                    w.first.relativeScore < 0 ? "text-emerald-600" : w.first.relativeScore > 0 ? "text-orange-500" : "text-slate-500"
-                  }`}>
-                    {w.first.score} ({formatScore(w.first.relativeScore)})
-                  </span>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🥇</span>
+                    <PlayerName name={w.first.playerName} lookup={playerLookup} className="font-semibold text-slate-900 text-sm hover:underline" />
+                    <span className={`ml-auto font-mono text-xs ${
+                      w.first.relativeScore < 0 ? "text-emerald-600" : w.first.relativeScore > 0 ? "text-orange-500" : "text-slate-500"
+                    }`}>
+                      {w.first.score} ({formatScore(w.first.relativeScore)})
+                    </span>
+                  </div>
+                  {w.first.prize && (
+                    <div className="pl-7">
+                      <Badge className="bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100 text-xs">🏅 {w.first.prize}</Badge>
+                    </div>
+                  )}
                 </div>
               )}
               {w.second && (
-                <div className="flex items-center gap-2">
-                  <span className="text-base">🥈</span>
-                  <PlayerName name={w.second.playerName} lookup={playerLookup} className="text-slate-700 text-sm hover:underline" />
-                  <span className={`ml-auto font-mono text-xs ${
-                    w.second.relativeScore < 0 ? "text-emerald-600" : w.second.relativeScore > 0 ? "text-orange-500" : "text-slate-500"
-                  }`}>
-                    {w.second.score} ({formatScore(w.second.relativeScore)})
-                  </span>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🥈</span>
+                    <PlayerName name={w.second.playerName} lookup={playerLookup} className="text-slate-700 text-sm hover:underline" />
+                    <span className={`ml-auto font-mono text-xs ${
+                      w.second.relativeScore < 0 ? "text-emerald-600" : w.second.relativeScore > 0 ? "text-orange-500" : "text-slate-500"
+                    }`}>
+                      {w.second.score} ({formatScore(w.second.relativeScore)})
+                    </span>
+                  </div>
+                  {w.second.prize && (
+                    <div className="pl-7">
+                      <Badge className="bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100 text-xs">🏅 {w.second.prize}</Badge>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
