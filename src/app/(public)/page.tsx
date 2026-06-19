@@ -162,7 +162,12 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             </div>
             {/* Sponsor logo */}
             <div className="flex-shrink-0 self-start md:self-end">
-              <div className="bg-white rounded-2xl shadow-xl px-4 pt-3 pb-4 flex flex-col items-center gap-2">
+              <a
+                href="https://fundyflightdiscs.ca/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-white rounded-2xl shadow-xl px-4 pt-3 pb-4 flex flex-col items-center gap-2 hover:shadow-2xl transition-shadow"
+              >
                 <p className="text-[#1a3355] text-xs font-semibold uppercase tracking-widest">Presented by</p>
                 <div className="bg-[#1a3355] rounded-full p-1">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -172,7 +177,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
                     className="w-14 md:w-24 h-auto rounded-full"
                   />
                 </div>
-              </div>
+              </a>
             </div>
           </div>
         </div>
