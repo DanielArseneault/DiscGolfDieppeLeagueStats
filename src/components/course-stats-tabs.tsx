@@ -54,6 +54,10 @@ export function CourseStatsTable({ stats }: { stats: HoleStat[] }) {
         ) : <span className="text-slate-300">—</span>,
     },
     {
+      label: "Eagles",
+      render: (s) => <span className={s.eagles > 0 ? "font-bold text-emerald-600" : "text-slate-300"}>{s.eagles}</span>,
+    },
+    {
       label: "Aces",
       render: (s) => <span className={s.aces > 0 ? "font-bold text-purple-600" : "text-slate-300"}>{s.aces}</span>,
     },

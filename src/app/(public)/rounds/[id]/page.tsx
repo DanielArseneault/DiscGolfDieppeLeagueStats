@@ -198,8 +198,8 @@ export default async function RoundPage({
           </CardHeader>
           <CardContent>
             <div className="grid md:grid-cols-2 gap-6">
-              <PoolSummaryColumn label="🔵 Blue Division" pools={blueSummaries} playerLookup={playerLookup} />
-              <PoolSummaryColumn label="🔴 Red Division" pools={redSummaries} playerLookup={playerLookup} />
+              <PoolSummaryColumn label="🔵 Blue Division" pools={blueSummaries} playerLookup={playerLookup} leagueId={round.leagueId} />
+              <PoolSummaryColumn label="🔴 Red Division" pools={redSummaries} playerLookup={playerLookup} leagueId={round.leagueId} />
             </div>
           </CardContent>
         </Card>
@@ -239,7 +239,7 @@ export default async function RoundPage({
                           {firstName && (
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="text-base shrink-0">🥇</span>
-                              <PlayerName name={firstName} lookup={playerLookup} className="font-semibold text-slate-800 text-sm hover:underline" />
+                              <PlayerName name={firstName} lookup={playerLookup} leagueId={round.leagueId} className="font-semibold text-slate-800 text-sm hover:underline" />
                               {firstPrize && (
                                 <Badge className="bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100 text-xs">
                                   🏅 {firstPrize}
@@ -250,7 +250,7 @@ export default async function RoundPage({
                           {seconds.map((w) => (
                             <div key={w.id} className="flex items-center gap-2">
                               <span className="text-base shrink-0">🥈</span>
-                              <PlayerName name={w.playerName} lookup={playerLookup} className="font-semibold text-slate-800 text-sm hover:underline" />
+                              <PlayerName name={w.playerName} lookup={playerLookup} leagueId={round.leagueId} className="font-semibold text-slate-800 text-sm hover:underline" />
                             </div>
                           ))}
                         </div>
@@ -274,7 +274,7 @@ export default async function RoundPage({
               {round.ctpWinners.map((c) => (
                 <div key={c.id} className="flex items-center gap-1.5 flex-wrap">
                   <Badge className="bg-orange-100 text-orange-800 border border-orange-200 hover:bg-orange-100 text-sm">
-                    🎯 Hole {c.hole}: <PlayerName name={c.playerName} lookup={playerLookup} className="font-semibold hover:underline" />
+                    🎯 Hole {c.hole}: <PlayerName name={c.playerName} lookup={playerLookup} leagueId={round.leagueId} className="font-semibold hover:underline" />
                   </Badge>
                   {c.prize && (
                     <Badge className="bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100 text-sm">
@@ -297,7 +297,7 @@ export default async function RoundPage({
             <div className="flex flex-wrap gap-2">
               {round.aceWinners.map((a) => (
                 <Badge key={a.id} className="bg-purple-100 text-purple-800 border border-purple-200 hover:bg-purple-100 text-sm">
-                  Hole {a.hole}: <PlayerName name={a.playerName} lookup={playerLookup} className="font-semibold hover:underline" />{a.prizeAmount != null ? ` · $${a.prizeAmount.toFixed(2)}` : ""}
+                  Hole {a.hole}: <PlayerName name={a.playerName} lookup={playerLookup} leagueId={round.leagueId} className="font-semibold hover:underline" />{a.prizeAmount != null ? ` · $${a.prizeAmount.toFixed(2)}` : ""}
                 </Badge>
               ))}
             </div>
@@ -317,6 +317,7 @@ export default async function RoundPage({
                     divisionLabel={g.label}
                     results={g.rows}
                     holePars={round.blueLayout?.holePars ?? []}
+                    leagueId={round.leagueId}
                   />
                 ))
               : (
@@ -331,6 +332,7 @@ export default async function RoundPage({
                     holeScores: r.holeScores as Record<string, number>,
                   }))}
                   holePars={round.blueLayout?.holePars ?? []}
+                  leagueId={round.leagueId}
                 />
               )
             }
@@ -339,6 +341,7 @@ export default async function RoundPage({
                 divisionLabel="🔵 Blue — Did Not Qualify"
                 results={blueUnqualified}
                 holePars={round.blueLayout?.holePars ?? []}
+                leagueId={round.leagueId}
               />
             )}
             {round.blueLayout && (
@@ -360,6 +363,7 @@ export default async function RoundPage({
                     divisionLabel={g.label}
                     results={g.rows}
                     holePars={round.redLayout?.holePars ?? []}
+                    leagueId={round.leagueId}
                   />
                 ))
               : (
@@ -374,6 +378,7 @@ export default async function RoundPage({
                     holeScores: r.holeScores as Record<string, number>,
                   }))}
                   holePars={round.redLayout?.holePars ?? []}
+                  leagueId={round.leagueId}
                 />
               )
             }
@@ -382,6 +387,7 @@ export default async function RoundPage({
                 divisionLabel="🔴 Red — Did Not Qualify"
                 results={redUnqualified}
                 holePars={round.redLayout?.holePars ?? []}
+                leagueId={round.leagueId}
               />
             )}
             {round.redLayout && (
@@ -401,13 +407,13 @@ export default async function RoundPage({
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function PlayerName({ name, lookup, className }: { name: string; lookup: Map<string, number>; className?: string }) {
+function PlayerName({ name, lookup, leagueId, className }: { name: string; lookup: Map<string, number>; leagueId: number; className?: string }) {
   const id = lookup.get(name.toLowerCase().trim());
   if (!id) return <span className={className}>{name}</span>;
-  return <Link href={`/players/${id}`} className={`hover:underline ${className ?? ""}`}>{name}</Link>;
+  return <Link href={`/players/${id}?league=${leagueId}`} className={`hover:underline ${className ?? ""}`}>{name}</Link>;
 }
 
-function PoolSummaryColumn({ label, pools, playerLookup }: { label: string; pools: PoolSummary[]; playerLookup: Map<string, number> }) {
+function PoolSummaryColumn({ label, pools, playerLookup, leagueId }: { label: string; pools: PoolSummary[]; playerLookup: Map<string, number>; leagueId: number }) {
   return (
     <div>
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">{label}</p>
@@ -422,7 +428,7 @@ function PoolSummaryColumn({ label, pools, playerLookup }: { label: string; pool
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <span className="text-base">🥇</span>
-                    <PlayerName name={w.first.playerName} lookup={playerLookup} className="font-semibold text-slate-900 text-sm hover:underline" />
+                    <PlayerName name={w.first.playerName} lookup={playerLookup} leagueId={leagueId} className="font-semibold text-slate-900 text-sm hover:underline" />
                     <span className={`ml-auto font-mono text-xs ${
                       w.first.relativeScore < 0 ? "text-emerald-600" : w.first.relativeScore > 0 ? "text-orange-500" : "text-slate-500"
                     }`}>
@@ -440,7 +446,7 @@ function PoolSummaryColumn({ label, pools, playerLookup }: { label: string; pool
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <span className="text-base">🥈</span>
-                    <PlayerName name={w.second.playerName} lookup={playerLookup} className="text-slate-700 text-sm hover:underline" />
+                    <PlayerName name={w.second.playerName} lookup={playerLookup} leagueId={leagueId} className="text-slate-700 text-sm hover:underline" />
                     <span className={`ml-auto font-mono text-xs ${
                       w.second.relativeScore < 0 ? "text-emerald-600" : w.second.relativeScore > 0 ? "text-orange-500" : "text-slate-500"
                     }`}>

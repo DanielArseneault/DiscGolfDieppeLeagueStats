@@ -19,9 +19,10 @@ interface ScorecardTableProps {
   results: ResultRow[];
   holePars: HolePar[];
   divisionLabel: string;
+  leagueId: number;
 }
 
-export function ScorecardTable({ results, holePars, divisionLabel }: ScorecardTableProps) {
+export function ScorecardTable({ results, holePars, divisionLabel, leagueId }: ScorecardTableProps) {
   const holes =
     holePars.length > 0
       ? holePars
@@ -78,7 +79,7 @@ export function ScorecardTable({ results, holePars, divisionLabel }: ScorecardTa
                   </td>
                   <td className={`px-3 py-2.5 sticky left-10 z-10 ${idx % 2 === 1 ? "bg-slate-50" : "bg-white"}`}>
                     {r.playerId ? (
-                      <Link href={`/players/${r.playerId}`} className="w-[96px] truncate font-medium text-blue-600 hover:underline block">
+                      <Link href={`/players/${r.playerId}?league=${leagueId}`} className="w-[96px] truncate font-medium text-blue-600 hover:underline block">
                         {r.playerName}
                       </Link>
                     ) : (

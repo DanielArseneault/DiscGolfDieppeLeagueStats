@@ -29,11 +29,11 @@ async function getRounds(leagueId: number) {
 }
 
 // Renders a player name as a link if found in the lookup, plain text otherwise.
-function PlayerName({ name, lookup, className }: { name: string; lookup: PlayerLookup; className?: string }) {
+function PlayerName({ name, lookup, leagueId, className }: { name: string; lookup: PlayerLookup; leagueId: number; className?: string }) {
   const id = lookup.get(name.toLowerCase().trim());
   if (!id) return <span className={className}>{name}</span>;
   return (
-    <Link href={`/players/${id}`} className={`hover:underline ${className ?? ""}`}>
+    <Link href={`/players/${id}?league=${leagueId}`} className={`hover:underline ${className ?? ""}`}>
       {name}
     </Link>
   );
@@ -162,7 +162,7 @@ function RegularRoundCard({ round, leagueId, playerLookup }: { round: Round; lea
               {blueLeaderName && (
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="text-blue-500 shrink-0">🔵</span>
-                  <PlayerName name={blueLeaderName} lookup={playerLookup} className="font-semibold text-slate-800 text-sm" />
+                  <PlayerName name={blueLeaderName} lookup={playerLookup} leagueId={leagueId} className="font-semibold text-slate-800 text-sm" />
                   {blueLeaderScore !== undefined && (
                     <span className={`font-mono text-sm font-bold shrink-0 ${
                       blueLeaderScore < 0 ? "text-emerald-600" : blueLeaderScore > 0 ? "text-orange-500" : "text-slate-500"
@@ -180,7 +180,7 @@ function RegularRoundCard({ round, leagueId, playerLookup }: { round: Round; lea
               {redLeaderName && (
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="text-red-500 shrink-0">🔴</span>
-                  <PlayerName name={redLeaderName} lookup={playerLookup} className="font-semibold text-slate-800 text-sm" />
+                  <PlayerName name={redLeaderName} lookup={playerLookup} leagueId={leagueId} className="font-semibold text-slate-800 text-sm" />
                   {redLeaderScore !== undefined && (
                     <span className={`font-mono text-sm font-bold shrink-0 ${
                       redLeaderScore < 0 ? "text-emerald-600" : redLeaderScore > 0 ? "text-orange-500" : "text-slate-500"
@@ -206,7 +206,7 @@ function RegularRoundCard({ round, leagueId, playerLookup }: { round: Round; lea
               {round.ctpWinners.map((c) => (
                 <div key={c.id} className="flex items-center gap-1.5 flex-wrap">
                   <Badge className="bg-orange-100 text-orange-800 border border-orange-200 hover:bg-orange-100">
-                    🎯 Hole {c.hole}: <PlayerName name={c.playerName} lookup={playerLookup} className="font-semibold hover:underline" />
+                    🎯 Hole {c.hole}: <PlayerName name={c.playerName} lookup={playerLookup} leagueId={leagueId} className="font-semibold hover:underline" />
                   </Badge>
                   {c.prize && (
                     <Badge className="bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100">
@@ -225,7 +225,7 @@ function RegularRoundCard({ round, leagueId, playerLookup }: { round: Round; lea
             <div className="flex flex-wrap gap-2">
               {round.aceWinners.map((a) => (
                 <Badge key={a.id} className="bg-purple-100 text-purple-800 border border-purple-200 hover:bg-purple-100">
-                  🦅 Hole {a.hole}: <PlayerName name={a.playerName} lookup={playerLookup} className="font-semibold hover:underline" />{a.prizeAmount != null ? ` · $${a.prizeAmount.toFixed(2)}` : ""}
+                  🦅 Hole {a.hole}: <PlayerName name={a.playerName} lookup={playerLookup} leagueId={leagueId} className="font-semibold hover:underline" />{a.prizeAmount != null ? ` · $${a.prizeAmount.toFixed(2)}` : ""}
                 </Badge>
               ))}
             </div>
@@ -293,7 +293,7 @@ function ChampionshipCard({ round, standings, leagueId, playerLookup }: { round:
                       <div key={s.pool} className="flex items-center gap-2 flex-wrap">
                         <span className="text-base shrink-0">🥇</span>
                         <span className="text-xs font-semibold text-amber-700 w-14 shrink-0">Pool {s.pool}</span>
-                        <PlayerName name={s.first.playerName} lookup={playerLookup} className="font-medium text-slate-800 text-sm hover:underline" />
+                        <PlayerName name={s.first.playerName} lookup={playerLookup} leagueId={leagueId} className="font-medium text-slate-800 text-sm hover:underline" />
                         {s.first.prize && (
                           <Badge className="hidden sm:inline-flex bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100 text-xs">🏅 {s.first.prize}</Badge>
                         )}
@@ -310,7 +310,7 @@ function ChampionshipCard({ round, standings, leagueId, playerLookup }: { round:
                       <div key={s.pool} className="flex items-center gap-2 flex-wrap">
                         <span className="text-base shrink-0">🥇</span>
                         <span className="text-xs font-semibold text-amber-700 w-14 shrink-0">Pool {s.pool}</span>
-                        <PlayerName name={s.first.playerName} lookup={playerLookup} className="font-medium text-slate-800 text-sm hover:underline" />
+                        <PlayerName name={s.first.playerName} lookup={playerLookup} leagueId={leagueId} className="font-medium text-slate-800 text-sm hover:underline" />
                         {s.first.prize && (
                           <Badge className="hidden sm:inline-flex bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100 text-xs">🏅 {s.first.prize}</Badge>
                         )}
@@ -330,7 +330,7 @@ function ChampionshipCard({ round, standings, leagueId, playerLookup }: { round:
               {round.ctpWinners.map((c) => (
                 <div key={c.id} className="flex items-center gap-1.5 flex-wrap">
                   <Badge className="bg-orange-100 text-orange-800 border border-orange-200 hover:bg-orange-100">
-                    🎯 Hole {c.hole}: <PlayerName name={c.playerName} lookup={playerLookup} className="font-semibold hover:underline" />
+                    🎯 Hole {c.hole}: <PlayerName name={c.playerName} lookup={playerLookup} leagueId={leagueId} className="font-semibold hover:underline" />
                   </Badge>
                   {c.prize && (
                     <Badge className="bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100">
@@ -349,7 +349,7 @@ function ChampionshipCard({ round, standings, leagueId, playerLookup }: { round:
             <div className="flex flex-wrap gap-2">
               {round.aceWinners.map((a) => (
                 <Badge key={a.id} className="bg-purple-100 text-purple-800 border border-purple-200 hover:bg-purple-100">
-                  🦅 Hole {a.hole}: <PlayerName name={a.playerName} lookup={playerLookup} className="font-semibold hover:underline" />{a.prizeAmount != null ? ` · $${a.prizeAmount.toFixed(2)}` : ""}
+                  🦅 Hole {a.hole}: <PlayerName name={a.playerName} lookup={playerLookup} leagueId={leagueId} className="font-semibold hover:underline" />{a.prizeAmount != null ? ` · $${a.prizeAmount.toFixed(2)}` : ""}
                 </Badge>
               ))}
             </div>

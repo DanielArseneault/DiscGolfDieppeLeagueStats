@@ -11,6 +11,7 @@ interface StandingsTableProps {
   standings: PlayerStanding[];
   division: Division;
   bestScoresCount: number;
+  leagueId: number;
 }
 
 const POOL_COLORS: Record<string, "blue" | "green" | "red" | "yellow"> = {
@@ -35,7 +36,7 @@ function RankChangeIndicator({ change }: { change: number | null }) {
   );
 }
 
-export function StandingsTable({ standings, division, bestScoresCount }: StandingsTableProps) {
+export function StandingsTable({ standings, division, bestScoresCount, leagueId }: StandingsTableProps) {
   const filtered = useMemo(
     () => standings.filter((s) => s.division === division),
     [standings, division]
@@ -74,7 +75,7 @@ export function StandingsTable({ standings, division, bestScoresCount }: Standin
               </td>
               <td className="py-3 pr-4">
                 <Link
-                  href={`/players/${s.playerId}`}
+                  href={`/players/${s.playerId}?league=${leagueId}`}
                   className="font-medium text-slate-900 hover:text-blue-600 hover:underline transition-colors"
                 >
                   {s.playerName}

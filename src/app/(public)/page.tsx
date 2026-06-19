@@ -176,10 +176,10 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
                 <TabsTrigger value="red">🔴 Red Division</TabsTrigger>
               </TabsList>
               <TabsContent value="blue">
-                <StandingsTable standings={standings} division={Division.BLUE} bestScoresCount={league.bestScoresCount} />
+                <StandingsTable standings={standings} division={Division.BLUE} bestScoresCount={league.bestScoresCount} leagueId={league.id} />
               </TabsContent>
               <TabsContent value="red">
-                <StandingsTable standings={standings} division={Division.RED} bestScoresCount={league.bestScoresCount} />
+                <StandingsTable standings={standings} division={Division.RED} bestScoresCount={league.bestScoresCount} leagueId={league.id} />
               </TabsContent>
             </Tabs>
           </CardContent>
@@ -221,10 +221,10 @@ type GetDataResult = NonNullable<Awaited<ReturnType<typeof getData>>>;
 type RoundData = NonNullable<GetDataResult["recentRound"]>;
 type PlayerLookup = Map<string, number>;
 
-function PlayerName({ name, lookup, className }: { name: string; lookup: PlayerLookup; className?: string }) {
+function PlayerName({ name, lookup, leagueId, className }: { name: string; lookup: PlayerLookup; leagueId: number; className?: string }) {
   const id = lookup.get(name.toLowerCase().trim());
   if (!id) return <span className={className}>{name}</span>;
-  return <Link href={`/players/${id}`} className={`hover:underline ${className ?? ""}`}>{name}</Link>;
+  return <Link href={`/players/${id}?league=${leagueId}`} className={`hover:underline ${className ?? ""}`}>{name}</Link>;
 }
 
 function RecentRound({ round, leagueId, playerLookup }: { round: RoundData; leagueId: number; playerLookup: PlayerLookup }) {
@@ -263,7 +263,7 @@ function RecentRound({ round, leagueId, playerLookup }: { round: RoundData; leag
                       return (
                         <li key={r.id} className="flex items-center gap-3 text-sm">
                           <span className="text-slate-400 w-4 text-right">{i + 1}.</span>
-                          <Link href={`/players/${playerId}`} className="font-medium text-slate-900 hover:underline">
+                          <Link href={`/players/${playerId}?league=${leagueId}`} className="font-medium text-slate-900 hover:underline">
                             {displayName}
                           </Link>
                           <span className={`ml-auto font-mono text-xs ${
@@ -287,7 +287,7 @@ function RecentRound({ round, leagueId, playerLookup }: { round: RoundData; leag
               {round.ctpWinners.map((c) => (
                 <div key={c.id} className="flex items-center gap-1.5 flex-wrap">
                   <Badge className="bg-orange-100 text-orange-800 border border-orange-200 hover:bg-orange-100">
-                    🎯 Hole {c.hole}: <PlayerName name={c.playerName} lookup={playerLookup} className="font-semibold hover:underline" />
+                    🎯 Hole {c.hole}: <PlayerName name={c.playerName} lookup={playerLookup} leagueId={leagueId} className="font-semibold hover:underline" />
                   </Badge>
                   {c.prize && (
                     <Badge className="bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100">
@@ -352,8 +352,8 @@ function ChampionshipResults({ round, poolSummaries, leagueId, playerLookup }: {
       </CardHeader>
       <CardContent>
         <div className="grid md:grid-cols-2 gap-4 md:gap-6">
-          <PoolColumn label="🔵 Blue Division" pools={bluePools} playerLookup={playerLookup} />
-          <PoolColumn label="🔴 Red Division" pools={redPools} playerLookup={playerLookup} />
+          <PoolColumn label="🔵 Blue Division" pools={bluePools} playerLookup={playerLookup} leagueId={leagueId} />
+          <PoolColumn label="🔴 Red Division" pools={redPools} playerLookup={playerLookup} leagueId={leagueId} />
         </div>
         {round.ctpWinners.length > 0 && (
           <div className="mt-4 pt-4 border-t border-amber-100">
@@ -362,7 +362,7 @@ function ChampionshipResults({ round, poolSummaries, leagueId, playerLookup }: {
               {round.ctpWinners.map((c) => (
                 <div key={c.id} className="flex items-center gap-1.5 flex-wrap">
                   <Badge className="bg-orange-100 text-orange-800 border border-orange-200 hover:bg-orange-100">
-                    🎯 Hole {c.hole}: <PlayerName name={c.playerName} lookup={playerLookup} className="font-semibold hover:underline" />
+                    🎯 Hole {c.hole}: <PlayerName name={c.playerName} lookup={playerLookup} leagueId={leagueId} className="font-semibold hover:underline" />
                   </Badge>
                   {c.prize && (
                     <Badge className="bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100">
@@ -379,7 +379,7 @@ function ChampionshipResults({ round, poolSummaries, leagueId, playerLookup }: {
   );
 }
 
-function PoolColumn({ label, pools, playerLookup }: { label: string; pools: PoolSummary[]; playerLookup: PlayerLookup }) {
+function PoolColumn({ label, pools, playerLookup, leagueId }: { label: string; pools: PoolSummary[]; playerLookup: PlayerLookup; leagueId: number }) {
   return (
     <div>
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">{label}</p>
@@ -393,7 +393,7 @@ function PoolColumn({ label, pools, playerLookup }: { label: string; pools: Pool
               {w.first && (
                 <div className="flex items-center gap-2">
                   <span className="text-base shrink-0">🥇</span>
-                  <PlayerName name={w.first.playerName} lookup={playerLookup} className="font-semibold text-slate-900 text-sm hover:underline min-w-0 truncate" />
+                  <PlayerName name={w.first.playerName} lookup={playerLookup} leagueId={leagueId} className="font-semibold text-slate-900 text-sm hover:underline min-w-0 truncate" />
                   {w.first.prize && (
                     <Badge className="hidden sm:inline-flex bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100 text-xs shrink-0">🏅 {w.first.prize}</Badge>
                   )}
@@ -407,7 +407,7 @@ function PoolColumn({ label, pools, playerLookup }: { label: string; pools: Pool
               {w.second && (
                 <div className="flex items-center gap-2">
                   <span className="text-base shrink-0">🥈</span>
-                  <PlayerName name={w.second.playerName} lookup={playerLookup} className="text-slate-700 text-sm hover:underline min-w-0 truncate" />
+                  <PlayerName name={w.second.playerName} lookup={playerLookup} leagueId={leagueId} className="text-slate-700 text-sm hover:underline min-w-0 truncate" />
                   {w.second.prize && (
                     <Badge className="hidden sm:inline-flex bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100 text-xs shrink-0">🏅 {w.second.prize}</Badge>
                   )}
