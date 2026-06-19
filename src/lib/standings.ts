@@ -65,8 +65,8 @@ function buildStandings(
     });
   }
 
-  rankAndAssignPools(standings, Division.BLUE, "A", "B");
-  rankAndAssignPools(standings, Division.RED, "C", "D");
+  rankAndAssignPools(standings, Division.BLUE, "A", "B", bestScoresCount);
+  rankAndAssignPools(standings, Division.RED, "C", "D", bestScoresCount);
 
   return standings;
 }
@@ -122,12 +122,16 @@ function rankAndAssignPools(
   standings: PlayerStanding[],
   division: Division,
   topPool: string,
-  bottomPool: string
+  bottomPool: string,
+  bestScoresCount: number
 ) {
   const divisionStandings = standings
     .filter((s) => s.division === division)
     .sort((a, b) => {
       if (a.qualified !== b.qualified) return a.qualified ? -1 : 1;
+      const aBucket = Math.min(a.roundsPlayed, bestScoresCount);
+      const bBucket = Math.min(b.roundsPlayed, bestScoresCount);
+      if (aBucket !== bBucket) return bBucket - aBucket;
       if (a.qualifyingTotal !== b.qualifyingTotal) return a.qualifyingTotal - b.qualifyingTotal;
       return a.playerName.localeCompare(b.playerName);
     });

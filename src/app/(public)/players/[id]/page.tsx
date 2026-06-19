@@ -30,12 +30,6 @@ function computeProgressiveStandings(
   let prevRank: number | null = null;
 
   for (const week of weeks) {
-    // Only track weeks where this player actually played
-    const playedThisWeek = allResults.some(
-      (r) => r.playerId === targetPlayerId && r.round.weekNumber === week
-    );
-    if (!playedThisWeek) continue;
-
     const subset = allResults.filter((r) => r.round.weekNumber <= week);
 
     // Group scores by player (same division only needed for ranking)
@@ -51,11 +45,14 @@ function computeProgressiveStandings(
       const best = [...scores].sort((a, b) => a - b).slice(0, bestScoresCount);
       const total = best.reduce((s, x) => s + x, 0);
       const qualified = scores.length >= minWeeks;
-      return { playerId: pid, qualifyingTotal: total, qualified };
+      return { playerId: pid, qualifyingTotal: total, qualified, roundsPlayed: scores.length };
     });
 
     entries.sort((a, b) => {
       if (a.qualified !== b.qualified) return a.qualified ? -1 : 1;
+      const aBucket = Math.min(a.roundsPlayed, bestScoresCount);
+      const bBucket = Math.min(b.roundsPlayed, bestScoresCount);
+      if (aBucket !== bBucket) return bBucket - aBucket;
       return a.qualifyingTotal - b.qualifyingTotal;
     });
 
@@ -97,7 +94,7 @@ export default async function PlayerPage({
   const { league } = player;
 
   // All qualifying results for the league (all players) — for progressive standings
-  const [standings, allLeagueResults, ctpWins, aceWins, layoutRound] = await Promise.all([
+  const [standings, allLeagueResults, ctpWins, aceWins, layoutRound, allRounds] = await Promise.all([
     getStandings(player.leagueId),
     prisma.result.findMany({
       where: {
@@ -137,9 +134,15 @@ export default async function PlayerPage({
         redLayout: { include: { holePars: { orderBy: { holeNumber: "asc" } } } },
       },
     }),
+    prisma.round.findMany({
+      where: { leagueId: player.leagueId },
+      orderBy: { weekNumber: "desc" },
+      select: { id: true, weekNumber: true, date: true, isChampionship: true },
+    }),
   ]);
 
   const standing = standings.find((s) => s.playerId === player.id);
+  const resultByRoundId = new Map(player.results.map((r) => [r.round.id, r]));
 
   const rankByWeek = computeProgressiveStandings(
     allLeagueResults,
@@ -303,13 +306,13 @@ export default async function PlayerPage({
           <Card className="border-slate-200">
             <CardContent className="pt-5 divide-y divide-slate-100">
               {/* Headline stats */}
-              <div className="pb-5 grid grid-cols-3 gap-3">
+              <div className="pb-5 grid grid-cols-3 gap-3 text-center">
                 <div>
                   <div className="text-2xl sm:text-3xl font-bold text-slate-900">#{standing.rank}</div>
                   <div className="text-xs text-slate-500 mt-0.5">Division Rank</div>
                 </div>
                 <div>
-                  <div className={`text-xl sm:text-3xl font-bold ${standing.qualified ? "text-emerald-600" : "text-orange-500"}`}>
+                  <div className={`text-2xl sm:text-3xl font-bold ${standing.qualified ? "text-emerald-600" : "text-orange-500"}`}>
                     {standing.qualified ? "Qualified" : "Not Qualified"}
                   </div>
                   <div className="text-xs text-slate-500 mt-0.5">Status</div>
@@ -318,35 +321,37 @@ export default async function PlayerPage({
                   <div className="text-2xl sm:text-3xl font-bold text-slate-900">
                     {standing.qualified ? standing.qualifyingTotal : "–"}
                   </div>
-                  <div className="text-xs text-slate-500 mt-0.5">Best {league.bestScoresCount} Total</div>
+                  <div className="text-xs text-slate-500 mt-0.5">Best {league.bestScoresCount} Rounds</div>
                 </div>
               </div>
 
-              {/* Scoring */}
-              <div className="py-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">Scoring</p>
-                <div className="grid grid-cols-3 gap-4">
-                  <CompactStat label="Rounds Played" value={standing.roundsPlayed} />
-                  <CompactStat
-                    label="Scoring Average"
-                    value={avgScore != null ? formatScore(Math.round(avgScore * 10) / 10) : "–"}
-                    valueClass={avgScore != null && avgScore < 0 ? "text-emerald-600" : avgScore != null && avgScore > 0 ? "text-orange-500" : undefined}
-                  />
-                  <CompactStat
-                    label="Best Round"
-                    value={bestRound != null ? formatScore(bestRound) : "–"}
-                    valueClass={bestRound != null && bestRound < 0 ? "text-emerald-600" : bestRound != null && bestRound > 0 ? "text-orange-500" : undefined}
-                  />
+              {/* Scoring + Achievements */}
+              <div className="pt-4 flex flex-col sm:flex-row divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
+                <div className="flex-1 pb-4 sm:pb-0 sm:pr-6">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 text-center">Scoring</p>
+                  <div className="flex justify-center gap-8">
+                    <CompactStat label="Rounds Played" value={standing.roundsPlayed} center />
+                    <CompactStat
+                      label="Scoring Average"
+                      value={avgScore != null ? formatScore(Math.round(avgScore * 10) / 10) : "–"}
+                      valueClass={avgScore != null && avgScore < 0 ? "text-emerald-600" : avgScore != null && avgScore > 0 ? "text-orange-500" : undefined}
+                      center
+                    />
+                    <CompactStat
+                      label="Best Round"
+                      value={bestRound != null ? formatScore(bestRound) : "–"}
+                      valueClass={bestRound != null && bestRound < 0 ? "text-emerald-600" : bestRound != null && bestRound > 0 ? "text-orange-500" : undefined}
+                      center
+                    />
+                  </div>
                 </div>
-              </div>
-
-              {/* Achievements */}
-              <div className="pt-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">Achievements</p>
-                <div className="grid grid-cols-3 gap-4">
-                  <CompactStat label="Wins" value={wins} valueClass={wins > 0 ? "text-amber-500" : undefined} />
-                  <CompactStat label="Top 3 Finishes" value={top3} valueClass={top3 > 0 ? "text-amber-500" : undefined} />
-                  {avgRank != null && <CompactStat label="Avg. Weekly Rank" value={`#${avgRank}`} />}
+                <div className="flex-1 pt-4 sm:pt-0 sm:pl-6">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 text-center">Achievements</p>
+                  <div className="flex justify-center gap-8">
+                    <CompactStat label="Wins" value={wins} valueClass={wins > 0 ? "text-amber-500" : undefined} center />
+                    <CompactStat label="Top 3 Finishes" value={top3} valueClass={top3 > 0 ? "text-amber-500" : undefined} center />
+                    {avgRank != null && <CompactStat label="Avg. Weekly Rank" value={`#${avgRank}`} center />}
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -443,7 +448,7 @@ export default async function PlayerPage({
       )}
 
       {/* Round history */}
-      {player.results.length > 0 && (
+      {allRounds.length > 0 && (
         <div>
           <h2 className="text-lg font-semibold text-slate-900 mb-3">Round History</h2>
           <div className="rounded-xl overflow-hidden border border-slate-200">
@@ -459,41 +464,44 @@ export default async function PlayerPage({
                 </tr>
               </thead>
               <tbody>
-                {player.results.map((result, idx) => {
-                  const weekStanding = result.round.isChampionship
+                {allRounds.map((round, idx) => {
+                  const result = resultByRoundId.get(round.id);
+                  const weekStanding = round.isChampionship
                     ? null
-                    : rankByWeek.get(result.round.weekNumber) ?? null;
+                    : rankByWeek.get(round.weekNumber) ?? null;
 
                   return (
                     <tr
-                      key={result.id}
+                      key={round.id}
                       className={`border-t border-slate-100 hover:bg-slate-50 transition-colors ${idx % 2 === 1 ? "bg-slate-50/50" : ""}`}
                     >
                       <td className="px-4 py-3">
                         <Link
-                          href={`/rounds/${result.round.id}?league=${player.leagueId}`}
+                          href={`/rounds/${round.id}?league=${player.leagueId}`}
                           className="font-medium text-blue-600 hover:underline"
                         >
-                          {result.round.isChampionship ? "🏆 Championship" : `Week ${result.round.weekNumber}`}
+                          {round.isChampionship ? "🏆 Championship" : `Week ${round.weekNumber}`}
                         </Link>
                       </td>
                       <td className="px-4 py-3 text-slate-500 hidden sm:table-cell">
-                        {formatDate(result.round.date)}
+                        {formatDate(round.date)}
                       </td>
                       <td className="px-4 py-3 text-center font-mono tabular-nums text-slate-800">
-                        {result.score}
+                        {result ? result.score : <span className="text-slate-300 text-xs">DNS</span>}
                       </td>
                       <td className={`px-4 py-3 text-center font-mono font-semibold tabular-nums ${
-                        result.relativeScore < 0
-                          ? "text-emerald-600"
-                          : result.relativeScore > 0
-                          ? "text-orange-500"
-                          : "text-slate-500"
+                        result
+                          ? result.relativeScore < 0
+                            ? "text-emerald-600"
+                            : result.relativeScore > 0
+                            ? "text-orange-500"
+                            : "text-slate-500"
+                          : ""
                       }`}>
-                        {formatScore(result.relativeScore)}
+                        {result ? formatScore(result.relativeScore) : <span className="text-slate-300 text-xs">—</span>}
                       </td>
                       <td className="px-4 py-3 text-center text-slate-600 hidden sm:table-cell">
-                        {formatPosition(result.position)}
+                        {result ? formatPosition(result.position) : <span className="text-slate-300 text-xs">—</span>}
                       </td>
                       <td className="px-4 py-3 text-center">
                         {weekStanding ? (
@@ -589,13 +597,15 @@ function CompactStat({
   label,
   value,
   valueClass,
+  center,
 }: {
   label: string;
   value: string | number;
   valueClass?: string;
+  center?: boolean;
 }) {
   return (
-    <div>
+    <div className={center ? "text-center" : undefined}>
       <div className={`text-xl font-bold tabular-nums ${valueClass ?? "text-slate-900"}`}>{value}</div>
       <div className="text-xs text-slate-500 mt-0.5">{label}</div>
     </div>
