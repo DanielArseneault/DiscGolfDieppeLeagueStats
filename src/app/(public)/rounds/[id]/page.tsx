@@ -1,8 +1,11 @@
 import { prisma } from "@/lib/db";
 import { getStandings } from "@/lib/standings";
 import { computePoolSummaries, PoolSummary } from "@/lib/pool-utils";
+import { computeHoleStats } from "@/lib/course-stats";
 import { notFound } from "next/navigation";
 import { ScorecardTable } from "@/components/scorecard-table";
+import { ScorecardTabs } from "@/components/scorecard-tabs";
+import { CourseStatsSection } from "@/components/course-stats-tabs";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Division } from "@/generated/prisma/client";
@@ -302,66 +305,101 @@ export default async function RoundPage({
         </Card>
       )}
 
-      {round.isChampionship ? (
-        <>
-          {poolGroups.map((g) => (
-            <ScorecardTable
-              key={g.pool}
-              divisionLabel={g.label}
-              results={g.rows}
-              holePars={["A", "B"].includes(g.pool) ? (round.blueLayout?.holePars ?? []) : (round.redLayout?.holePars ?? [])}
-            />
-          ))}
-          {blueUnqualified.length > 0 && (
-            <ScorecardTable
-              divisionLabel="🔵 Blue — Did Not Qualify"
-              results={blueUnqualified}
-              holePars={round.blueLayout?.holePars ?? []}
-            />
-          )}
-          {redUnqualified.length > 0 && (
-            <ScorecardTable
-              divisionLabel="🔴 Red — Did Not Qualify"
-              results={redUnqualified}
-              holePars={round.redLayout?.holePars ?? []}
-            />
-          )}
-        </>
-      ) : (
-        <>
-          {blueResults.length > 0 && (
-            <ScorecardTable
-              divisionLabel="🔵 Blue Division"
-              results={blueResults.map((r) => ({
-                position: r.position,
-                playerName: r.player.name,
-                playerId: r.playerId,
-                score: r.score,
-                relativeScore: r.relativeScore,
-                holeScores: r.holeScores as Record<string, number>,
-              }))}
-              holePars={round.blueLayout?.holePars ?? []}
-            />
-          )}
-          {redResults.length > 0 && (
-            <ScorecardTable
-              divisionLabel="🔴 Red Division"
-              results={redResults.map((r) => ({
-                position: r.position,
-                playerName: r.player.name,
-                playerId: r.playerId,
-                score: r.score,
-                relativeScore: r.relativeScore,
-                holeScores: r.holeScores as Record<string, number>,
-              }))}
-              holePars={round.redLayout?.holePars ?? []}
-            />
-          )}
-        </>
-      )}
+      <ScorecardTabs
+        blueLabel="🔵 Blue Division"
+        redLabel="🔴 Red Division"
+        blueContent={blueResults.length > 0 ? (
+          <>
+            {round.isChampionship
+              ? poolGroups.filter((g) => ["A", "B"].includes(g.pool)).map((g) => (
+                  <ScorecardTable
+                    key={g.pool}
+                    divisionLabel={g.label}
+                    results={g.rows}
+                    holePars={round.blueLayout?.holePars ?? []}
+                  />
+                ))
+              : (
+                <ScorecardTable
+                  divisionLabel="🔵 Blue Division"
+                  results={blueResults.map((r) => ({
+                    position: r.position,
+                    playerName: r.player.name,
+                    playerId: r.playerId,
+                    score: r.score,
+                    relativeScore: r.relativeScore,
+                    holeScores: r.holeScores as Record<string, number>,
+                  }))}
+                  holePars={round.blueLayout?.holePars ?? []}
+                />
+              )
+            }
+            {blueUnqualified.length > 0 && (
+              <ScorecardTable
+                divisionLabel="🔵 Blue — Did Not Qualify"
+                results={blueUnqualified}
+                holePars={round.blueLayout?.holePars ?? []}
+              />
+            )}
+            {round.blueLayout && (
+              <CourseStatsSection
+                stats={computeHoleStats(
+                  blueResults.map((r) => r.holeScores as Record<string, number>),
+                  round.blueLayout.holePars
+                )}
+              />
+            )}
+          </>
+        ) : undefined}
+        redContent={redResults.length > 0 ? (
+          <>
+            {round.isChampionship
+              ? poolGroups.filter((g) => ["C", "D"].includes(g.pool)).map((g) => (
+                  <ScorecardTable
+                    key={g.pool}
+                    divisionLabel={g.label}
+                    results={g.rows}
+                    holePars={round.redLayout?.holePars ?? []}
+                  />
+                ))
+              : (
+                <ScorecardTable
+                  divisionLabel="🔴 Red Division"
+                  results={redResults.map((r) => ({
+                    position: r.position,
+                    playerName: r.player.name,
+                    playerId: r.playerId,
+                    score: r.score,
+                    relativeScore: r.relativeScore,
+                    holeScores: r.holeScores as Record<string, number>,
+                  }))}
+                  holePars={round.redLayout?.holePars ?? []}
+                />
+              )
+            }
+            {redUnqualified.length > 0 && (
+              <ScorecardTable
+                divisionLabel="🔴 Red — Did Not Qualify"
+                results={redUnqualified}
+                holePars={round.redLayout?.holePars ?? []}
+              />
+            )}
+            {round.redLayout && (
+              <CourseStatsSection
+                stats={computeHoleStats(
+                  redResults.map((r) => r.holeScores as Record<string, number>),
+                  round.redLayout.holePars
+                )}
+              />
+            )}
+          </>
+        ) : undefined}
+      />
     </div>
   );
 }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function PlayerName({ name, lookup, className }: { name: string; lookup: Map<string, number>; className?: string }) {
   const id = lookup.get(name.toLowerCase().trim());
