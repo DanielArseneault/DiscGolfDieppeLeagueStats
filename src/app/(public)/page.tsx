@@ -118,58 +118,60 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           <div className="absolute inset-0 bg-gradient-to-br from-black/65 via-black/40 to-black/30 pointer-events-none" />
           {/* Extra scrim at top for nav legibility */}
           <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/40 to-transparent pointer-events-none" />
-          <div className="relative">
-            <p className="text-white/60 text-xs font-semibold uppercase tracking-widest mb-1">Standings</p>
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight drop-shadow-sm">{league.name}</h1>
-            {league.shortName && (
-              <p className="text-white/70 text-base mt-1 font-medium">{league.shortName}</p>
-            )}
-            <p className="text-white/80 mt-2 text-sm">
-              {formatDate(league.startDate)} – {formatDate(league.endDate)} · {league.location}
-            </p>
-            {allLeagues.length > 1 && (
-              <div className="flex items-center gap-2 mt-3">
-                <span className="text-white/40 text-xs">Season:</span>
-                {allLeagues.map((l) => (
-                  <a
-                    key={l.id}
-                    href={`/?league=${l.id}`}
-                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                      l.id === league.id
-                        ? "bg-white/20 border-white/40 text-white font-medium"
-                        : "border-white/20 text-white/40 hover:text-white/80 hover:border-white/30"
-                    }`}
-                  >
-                    {l.year}
-                  </a>
-                ))}
-              </div>
-            )}
-            {league.facebookUrl && (
-              <a
-                href={league.facebookUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-full bg-white/15 hover:bg-white/25 border border-white/30 text-white text-sm font-medium transition-colors backdrop-blur-sm"
-              >
-                <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                </svg>
-                {league.facebookLabel ?? "More Info"}
-              </a>
-            )}
-          </div>
-          {/* Sponsor logo — lower right */}
-          <div className="absolute bottom-10 right-4 md:bottom-16 md:right-8">
-            <div className="bg-white rounded-2xl shadow-xl px-4 pt-3 pb-4 flex flex-col items-center gap-2">
-              <p className="text-[#1a3355] text-xs font-semibold uppercase tracking-widest">Presented by</p>
-              <div className="bg-[#1a3355] rounded-full p-1">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/FFD_Logo.avif"
-                  alt="Fundy Flight Discs"
-                  className="w-16 md:w-24 h-auto rounded-full"
-                />
+          <div className="relative flex flex-col md:flex-row md:items-end gap-5 md:gap-8">
+            <div className="flex-1">
+              <p className="text-white/60 text-xs font-semibold uppercase tracking-widest mb-1">Standings</p>
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight drop-shadow-sm">{league.name}</h1>
+              {league.shortName && (
+                <p className="text-white/70 text-base mt-1 font-medium">{league.shortName}</p>
+              )}
+              <p className="text-white/80 mt-2 text-sm">
+                {formatDate(league.startDate)} – {formatDate(league.endDate)} · {league.location}
+              </p>
+              {allLeagues.length > 1 && (
+                <div className="flex items-center gap-2 mt-3">
+                  <span className="text-white/40 text-xs">Season:</span>
+                  {allLeagues.map((l) => (
+                    <a
+                      key={l.id}
+                      href={`/?league=${l.id}`}
+                      className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                        l.id === league.id
+                          ? "bg-white/20 border-white/40 text-white font-medium"
+                          : "border-white/20 text-white/40 hover:text-white/80 hover:border-white/30"
+                      }`}
+                    >
+                      {l.year}
+                    </a>
+                  ))}
+                </div>
+              )}
+              {league.facebookUrl && (
+                <a
+                  href={league.facebookUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-full bg-white/15 hover:bg-white/25 border border-white/30 text-white text-sm font-medium transition-colors backdrop-blur-sm"
+                >
+                  <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                  </svg>
+                  {league.facebookLabel ?? "More Info"}
+                </a>
+              )}
+            </div>
+            {/* Sponsor logo */}
+            <div className="flex-shrink-0 self-start md:self-end">
+              <div className="bg-white rounded-2xl shadow-xl px-4 pt-3 pb-4 flex flex-col items-center gap-2">
+                <p className="text-[#1a3355] text-xs font-semibold uppercase tracking-widest">Presented by</p>
+                <div className="bg-[#1a3355] rounded-full p-1">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/FFD_Logo.avif"
+                    alt="Fundy Flight Discs"
+                    className="w-14 md:w-24 h-auto rounded-full"
+                  />
+                </div>
               </div>
             </div>
           </div>
