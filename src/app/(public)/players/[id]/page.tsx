@@ -274,7 +274,14 @@ export default async function PlayerPage({
               {player.pdgaNumber && (
                 <>
                   <span className="text-white/30">·</span>
-                  <span className="text-white/70 text-sm">PDGA #{player.pdgaNumber}</span>
+                  <a
+                    href={`https://www.pdga.com/player/${player.pdgaNumber}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-white/70 text-sm hover:text-white transition-colors underline underline-offset-2"
+                  >
+                    PDGA #{player.pdgaNumber}
+                  </a>
                 </>
               )}
             </div>
