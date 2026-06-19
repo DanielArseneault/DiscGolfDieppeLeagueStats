@@ -159,6 +159,20 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
               </a>
             )}
           </div>
+          {/* Sponsor logo — lower right */}
+          <div className="absolute bottom-10 right-4 md:bottom-16 md:right-8">
+            <div className="bg-white rounded-2xl shadow-xl px-4 pt-3 pb-4 flex flex-col items-center gap-2">
+              <p className="text-[#1a3355] text-xs font-semibold uppercase tracking-widest">Presented by</p>
+              <div className="bg-[#1a3355] rounded-full p-1">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/FFD_Logo.avif"
+                  alt="Fundy Flight Discs"
+                  className="w-16 md:w-24 h-auto rounded-full"
+                />
+              </div>
+            </div>
+          </div>
         </div>
         <div className="absolute bottom-0 left-0 right-0">
           <svg viewBox="0 0 1200 56" preserveAspectRatio="none" className="w-full h-8 md:h-14 fill-[#f8fafc]">
