@@ -1,9 +1,12 @@
 import { prisma } from "@/lib/db";
 import { getStandings } from "@/lib/standings";
+import { computeHoleStats } from "@/lib/course-stats";
+import { CourseStatsSection } from "@/components/course-stats-tabs";
 import { notFound } from "next/navigation";
 import { Division, MemberStatus } from "@/generated/prisma/client";
 import { formatDate, formatScore } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import Link from "next/link";
 
 export const revalidate = 60;
@@ -94,7 +97,7 @@ export default async function PlayerPage({
   const { league } = player;
 
   // All qualifying results for the league (all players) — for progressive standings
-  const [standings, allLeagueResults, ctpWins, aceWins] = await Promise.all([
+  const [standings, allLeagueResults, ctpWins, aceWins, layoutRound] = await Promise.all([
     getStandings(player.leagueId),
     prisma.result.findMany({
       where: {
@@ -121,6 +124,19 @@ export default async function PlayerPage({
       include: { round: { select: { id: true, weekNumber: true } } },
       orderBy: { round: { weekNumber: "asc" } },
     }),
+    prisma.round.findFirst({
+      where: {
+        leagueId: player.leagueId,
+        ...(player.division === Division.BLUE
+          ? { blueLayoutId: { not: null } }
+          : { redLayoutId: { not: null } }),
+      },
+      orderBy: { weekNumber: "desc" },
+      include: {
+        blueLayout: { include: { holePars: { orderBy: { holeNumber: "asc" } } } },
+        redLayout: { include: { holePars: { orderBy: { holeNumber: "asc" } } } },
+      },
+    }),
   ]);
 
   const standing = standings.find((s) => s.playerId === player.id);
@@ -141,6 +157,92 @@ export default async function PlayerPage({
   const bestRound = qualifyingResults.length > 0
     ? Math.min(...qualifyingResults.map((r) => r.relativeScore))
     : null;
+  const wins = qualifyingResults.filter((r) => r.position === 1).length;
+  const top3 = qualifyingResults.filter((r) => r.position <= 3).length;
+  const rankValues = [...rankByWeek.values()].map((v) => v.rank);
+  const avgRank = rankValues.length > 0
+    ? Math.round(rankValues.reduce((s, r) => s + r, 0) / rankValues.length)
+    : null;
+
+  // Per-hole stats
+  const holePars = player.division === Division.BLUE
+    ? (layoutRound?.blueLayout?.holePars ?? [])
+    : (layoutRound?.redLayout?.holePars ?? []);
+  const playerHoleStats = holePars.length > 0
+    ? computeHoleStats(
+        qualifyingResults.map((r) => r.holeScores as Record<string, number>),
+        holePars
+      )
+    : null;
+
+  // Round breakdown stats
+  let roundBreakdown: {
+    birdieOrBetterRate: number;
+    parRate: number;
+    bogeyOrWorseRate: number;
+    eagles: number;
+    aces: number;
+    bestF9: number | null;
+    f9Avg: number | null;
+    bestB9: number | null;
+    b9Avg: number | null;
+  } | null = null;
+
+  if (holePars.length > 0 && qualifyingResults.length > 0) {
+    const parByHole = new Map(holePars.map((h) => [h.holeNumber, h.par]));
+    const f9Pars = holePars.filter((h) => h.holeNumber <= 9);
+    const b9Pars = holePars.filter((h) => h.holeNumber >= 10);
+    const totalF9Par = f9Pars.reduce((s, h) => s + h.par, 0);
+    const totalB9Par = b9Pars.reduce((s, h) => s + h.par, 0);
+
+    let birdieOrBetter = 0, pars = 0, bogeyOrWorse = 0, eagles = 0, aces = 0, totalHoles = 0;
+    const f9RelScores: number[] = [];
+    const b9RelScores: number[] = [];
+
+    for (const result of qualifyingResults) {
+      const hs = result.holeScores as Record<string, number> | null;
+      if (!hs) continue;
+
+      let f9Score = 0, b9Score = 0;
+
+      for (const [holeStr, score] of Object.entries(hs)) {
+        const holeNum = parseInt(holeStr, 10);
+        const par = parByHole.get(holeNum);
+        if (par == null || isNaN(score)) continue;
+        totalHoles++;
+        const diff = score - par;
+        if (diff <= -1) birdieOrBetter++;
+        else if (diff === 0) pars++;
+        else bogeyOrWorse++;
+        if (diff <= -2) eagles++;
+        if (score === 1) aces++;
+        if (holeNum <= 9) f9Score += score;
+        else b9Score += score;
+      }
+
+      if (totalF9Par > 0 && f9Pars.every((h) => hs[String(h.holeNumber)] != null))
+        f9RelScores.push(f9Score - totalF9Par);
+      if (totalB9Par > 0 && b9Pars.length > 0 && b9Pars.every((h) => hs[String(h.holeNumber)] != null))
+        b9RelScores.push(b9Score - totalB9Par);
+    }
+
+    const pct = (n: number) => totalHoles > 0 ? Math.round((n / totalHoles) * 1000) / 10 : 0;
+    const avg = (arr: number[]) => arr.length > 0
+      ? Math.round((arr.reduce((s, x) => s + x, 0) / arr.length) * 10) / 10
+      : null;
+
+    roundBreakdown = {
+      birdieOrBetterRate: pct(birdieOrBetter),
+      parRate: pct(pars),
+      bogeyOrWorseRate: pct(bogeyOrWorse),
+      eagles,
+      aces,
+      bestF9: f9RelScores.length > 0 ? Math.min(...f9RelScores) : null,
+      f9Avg: avg(f9RelScores),
+      bestB9: b9RelScores.length > 0 ? Math.min(...b9RelScores) : null,
+      b9Avg: avg(b9RelScores),
+    };
+  }
 
   const leagueUrl = `/?league=${player.leagueId}`;
 
@@ -188,32 +290,148 @@ export default async function PlayerPage({
       {/* Season stats */}
       {standing && (
         <div className="space-y-3">
-        <h2 className="text-lg font-semibold text-slate-900">
-          {league.name} <span className="text-slate-400 font-normal">· {league.year}</span>
-        </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <StatCard label="Division Rank" value={`#${standing.rank}`} />
-          <StatCard label="Rounds Played" value={standing.roundsPlayed} />
-          <StatCard
-            label={`Best ${league.bestScoresCount} Total`}
-            value={standing.qualified ? standing.qualifyingTotal : "–"}
-          />
-          <StatCard
-            label="Scoring Average"
-            value={avgScore != null ? formatScore(Math.round(avgScore * 10) / 10) : "–"}
-            valueClass={avgScore != null && avgScore < 0 ? "text-emerald-600" : avgScore != null && avgScore > 0 ? "text-orange-500" : "text-slate-900"}
-          />
-          <StatCard
-            label="Best Round"
-            value={bestRound != null ? formatScore(bestRound) : "–"}
-            valueClass={bestRound != null && bestRound < 0 ? "text-emerald-600" : bestRound != null && bestRound > 0 ? "text-orange-500" : "text-slate-900"}
-          />
-          <StatCard
-            label="Status"
-            value={standing.qualified ? "Qualified" : "Not Qualified"}
-            valueClass={standing.qualified ? "text-emerald-600" : "text-orange-500"}
-          />
+          <h2 className="text-lg font-semibold text-slate-900">
+            {league.name} <span className="text-slate-400 font-normal">· {league.year}</span>
+          </h2>
+          <Card className="border-slate-200">
+            <CardContent className="pt-5 divide-y divide-slate-100">
+              {/* Headline stats */}
+              <div className="pb-5 grid grid-cols-3 gap-6">
+                <div>
+                  <div className="text-3xl font-bold text-slate-900">#{standing.rank}</div>
+                  <div className="text-xs text-slate-500 mt-0.5">Division Rank</div>
+                </div>
+                <div>
+                  <div className={`text-3xl font-bold ${standing.qualified ? "text-emerald-600" : "text-orange-500"}`}>
+                    {standing.qualified ? "Qualified" : "Not Qualified"}
+                  </div>
+                  <div className="text-xs text-slate-500 mt-0.5">Status</div>
+                </div>
+                <div>
+                  <div className="text-3xl font-bold text-slate-900">
+                    {standing.qualified ? standing.qualifyingTotal : "–"}
+                  </div>
+                  <div className="text-xs text-slate-500 mt-0.5">Best {league.bestScoresCount} Total</div>
+                </div>
+              </div>
+
+              {/* Scoring */}
+              <div className="py-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">Scoring</p>
+                <div className="grid grid-cols-3 gap-4">
+                  <CompactStat label="Rounds Played" value={standing.roundsPlayed} />
+                  <CompactStat
+                    label="Scoring Average"
+                    value={avgScore != null ? formatScore(Math.round(avgScore * 10) / 10) : "–"}
+                    valueClass={avgScore != null && avgScore < 0 ? "text-emerald-600" : avgScore != null && avgScore > 0 ? "text-orange-500" : undefined}
+                  />
+                  <CompactStat
+                    label="Best Round"
+                    value={bestRound != null ? formatScore(bestRound) : "–"}
+                    valueClass={bestRound != null && bestRound < 0 ? "text-emerald-600" : bestRound != null && bestRound > 0 ? "text-orange-500" : undefined}
+                  />
+                </div>
+              </div>
+
+              {/* Achievements */}
+              <div className="pt-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">Achievements</p>
+                <div className="grid grid-cols-3 gap-4">
+                  <CompactStat label="Wins" value={wins} valueClass={wins > 0 ? "text-amber-500" : undefined} />
+                  <CompactStat label="Top 3 Finishes" value={top3} valueClass={top3 > 0 ? "text-amber-500" : undefined} />
+                  {avgRank != null && <CompactStat label="Avg. Weekly Rank" value={`#${avgRank}`} />}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
+      )}
+
+      {/* Round breakdown */}
+      {roundBreakdown && (
+        <Card className="border-slate-200">
+          <CardContent className="pt-5 divide-y divide-slate-100">
+            {/* Shot distribution */}
+            <div className="pb-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 text-center">Shot Distribution</p>
+              <div className="flex items-center justify-around gap-2">
+                <div className="flex flex-col items-center gap-1">
+                  <RingChart pct={roundBreakdown.birdieOrBetterRate} color="#34d399" />
+                  <span className="text-xs text-slate-500 text-center">Birdie or Better</span>
+                </div>
+                <div className="flex flex-col items-center gap-1">
+                  <RingChart pct={roundBreakdown.parRate} color="#94a3b8" />
+                  <span className="text-xs text-slate-500 text-center">Par Rate</span>
+                </div>
+                <div className="flex flex-col items-center gap-1">
+                  <RingChart pct={roundBreakdown.bogeyOrWorseRate} color="#fb923c" />
+                  <span className="text-xs text-slate-500 text-center">Bogey or Worse</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Nine splits + Notable scores */}
+            <div className="pt-4 flex flex-col sm:flex-row divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
+              {(roundBreakdown.bestF9 != null || roundBreakdown.bestB9 != null) && (
+                <div className="flex-1 pb-4 sm:pb-0 sm:pr-6">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 text-center">Nine Splits</p>
+                  <div className="flex justify-center gap-8">
+                    {roundBreakdown.bestF9 != null && (
+                      <CompactStat
+                        label="Best F9"
+                        value={formatScore(roundBreakdown.bestF9)}
+                        valueClass={roundBreakdown.bestF9 < 0 ? "text-emerald-600" : roundBreakdown.bestF9 > 0 ? "text-orange-500" : undefined}
+                      />
+                    )}
+                    {roundBreakdown.f9Avg != null && (
+                      <CompactStat
+                        label="F9 Avg"
+                        value={formatScore(roundBreakdown.f9Avg)}
+                        valueClass={roundBreakdown.f9Avg < 0 ? "text-emerald-600" : roundBreakdown.f9Avg > 0 ? "text-orange-500" : undefined}
+                      />
+                    )}
+                    {roundBreakdown.bestB9 != null && (
+                      <CompactStat
+                        label="Best B9"
+                        value={formatScore(roundBreakdown.bestB9)}
+                        valueClass={roundBreakdown.bestB9 < 0 ? "text-emerald-600" : roundBreakdown.bestB9 > 0 ? "text-orange-500" : undefined}
+                      />
+                    )}
+                    {roundBreakdown.b9Avg != null && (
+                      <CompactStat
+                        label="B9 Avg"
+                        value={formatScore(roundBreakdown.b9Avg)}
+                        valueClass={roundBreakdown.b9Avg < 0 ? "text-emerald-600" : roundBreakdown.b9Avg > 0 ? "text-orange-500" : undefined}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+              <div className="flex-1 pt-4 sm:pt-0 sm:pl-6">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 text-center">Notable Scores</p>
+                <div className="flex justify-center gap-10">
+                  <CompactStat
+                    label="Eagles"
+                    value={roundBreakdown.eagles}
+                    valueClass={roundBreakdown.eagles > 0 ? "text-emerald-600" : undefined}
+                  />
+                  <CompactStat
+                    label="Aces"
+                    value={roundBreakdown.aces}
+                    valueClass={roundBreakdown.aces > 0 ? "text-purple-600" : undefined}
+                  />
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Per-hole performance */}
+      {playerHoleStats && qualifyingResults.length > 0 && (
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900 mb-3">Hole Performance</h2>
+          <CourseStatsSection stats={playerHoleStats} />
         </div>
       )}
 
@@ -344,7 +562,23 @@ function formatPosition(pos: number): string {
   return `${pos}${suffix}`;
 }
 
-function StatCard({
+function RingChart({ pct, color, track = "#f1f5f9" }: { pct: number; color: string; track?: string }) {
+  const r = 36;
+  const circ = 2 * Math.PI * r;
+  const filled = (pct / 100) * circ;
+  return (
+    <svg viewBox="0 0 100 100" className="w-32 h-32">
+      <circle cx="50" cy="50" r={r} fill="none" stroke={track} strokeWidth="11" />
+      <circle cx="50" cy="50" r={r} fill="none" stroke={color} strokeWidth="11"
+        strokeLinecap="round"
+        strokeDasharray={`${filled} ${circ - filled}`}
+        transform="rotate(-90 50 50)" />
+      <text x="50" y="55" textAnchor="middle" fill="#0f172a" fontSize="15" fontWeight="700">{pct}%</text>
+    </svg>
+  );
+}
+
+function CompactStat({
   label,
   value,
   valueClass,
@@ -354,10 +588,8 @@ function StatCard({
   valueClass?: string;
 }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-xl px-5 py-4">
-      <div className={`text-2xl font-bold tabular-nums ${valueClass ?? "text-slate-900"}`}>
-        {value}
-      </div>
+    <div>
+      <div className={`text-xl font-bold tabular-nums ${valueClass ?? "text-slate-900"}`}>{value}</div>
       <div className="text-xs text-slate-500 mt-0.5">{label}</div>
     </div>
   );
