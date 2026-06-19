@@ -121,6 +121,9 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           <div className="relative">
             <p className="text-white/60 text-xs font-semibold uppercase tracking-widest mb-1">Standings</p>
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight drop-shadow-sm">{league.name}</h1>
+            {league.shortName && (
+              <p className="text-white/70 text-base mt-1 font-medium">{league.shortName}</p>
+            )}
             <p className="text-white/80 mt-2 text-sm">
               {formatDate(league.startDate)} – {formatDate(league.endDate)} · {league.location}
             </p>

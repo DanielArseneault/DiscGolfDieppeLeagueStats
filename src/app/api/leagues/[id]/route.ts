@@ -15,6 +15,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     where: { id: Number(id) },
     data: {
       name: body.name,
+      shortName: body.shortName || null,
       year: body.year,
       location: body.location,
       startDate: new Date(body.startDate),

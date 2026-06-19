@@ -13,6 +13,7 @@ import Link from "next/link";
 interface League {
   id: number;
   name: string;
+  shortName: string | null;
   year: number;
   location: string;
   startDate: string;
@@ -38,6 +39,7 @@ function LeagueForm({
   onClose: () => void;
 }) {
   const [name, setName] = useState(initial?.name ?? "");
+  const [shortName, setShortName] = useState(initial?.shortName ?? "");
   const [year, setYear] = useState(initial?.year ?? new Date().getFullYear());
   const [location, setLocation] = useState(initial?.location ?? "");
   const [startDate, setStartDate] = useState(initial ? toDateInput(initial.startDate) : "");
@@ -60,7 +62,7 @@ function LeagueForm({
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, year, location, startDate, endDate, qualifyingWeeks, bestScoresCount, minWeeks, facebookUrl, facebookLabel }),
+        body: JSON.stringify({ name, shortName, year, location, startDate, endDate, qualifyingWeeks, bestScoresCount, minWeeks, facebookUrl, facebookLabel }),
       });
       if (!res.ok) throw new Error("Save failed");
       onSave();
@@ -85,6 +87,12 @@ function LeagueForm({
           <Label>Year</Label>
           <Input type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} />
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Short Name <span className="text-slate-400 font-normal">(optional)</span></Label>
+        <Input value={shortName} onChange={(e) => setShortName(e.target.value)} placeholder="e.g. ADG Summer League" />
+        <p className="text-xs text-slate-400">Displayed below the full name in the public hero banner.</p>
       </div>
 
       <div className="space-y-2">

@@ -20,6 +20,7 @@ enum MemberStatus {
 model League {
   id              Int      @id @default(autoincrement())
   name            String
+  shortName       String?
   year            Int
   location        String
   startDate       DateTime

@@ -15,6 +15,7 @@ export async function POST(req: Request) {
   const league = await prisma.league.create({
     data: {
       name: body.name,
+      shortName: body.shortName || null,
       year: body.year,
       location: body.location,
       startDate: new Date(body.startDate),
