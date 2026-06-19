@@ -296,19 +296,19 @@ export default async function PlayerPage({
           <Card className="border-slate-200">
             <CardContent className="pt-5 divide-y divide-slate-100">
               {/* Headline stats */}
-              <div className="pb-5 grid grid-cols-3 gap-6">
+              <div className="pb-5 grid grid-cols-3 gap-3">
                 <div>
-                  <div className="text-3xl font-bold text-slate-900">#{standing.rank}</div>
+                  <div className="text-2xl sm:text-3xl font-bold text-slate-900">#{standing.rank}</div>
                   <div className="text-xs text-slate-500 mt-0.5">Division Rank</div>
                 </div>
                 <div>
-                  <div className={`text-3xl font-bold ${standing.qualified ? "text-emerald-600" : "text-orange-500"}`}>
+                  <div className={`text-xl sm:text-3xl font-bold ${standing.qualified ? "text-emerald-600" : "text-orange-500"}`}>
                     {standing.qualified ? "Qualified" : "Not Qualified"}
                   </div>
                   <div className="text-xs text-slate-500 mt-0.5">Status</div>
                 </div>
                 <div>
-                  <div className="text-3xl font-bold text-slate-900">
+                  <div className="text-2xl sm:text-3xl font-bold text-slate-900">
                     {standing.qualified ? standing.qualifyingTotal : "–"}
                   </div>
                   <div className="text-xs text-slate-500 mt-0.5">Best {league.bestScoresCount} Total</div>
@@ -354,7 +354,7 @@ export default async function PlayerPage({
             {/* Shot distribution */}
             <div className="pb-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 text-center">Shot Distribution</p>
-              <div className="flex items-center justify-around gap-2">
+              <div className="flex items-center justify-around gap-1">
                 <div className="flex flex-col items-center gap-1">
                   <RingChart pct={roundBreakdown.birdieOrBetterRate} color="#34d399" />
                   <span className="text-xs text-slate-500 text-center">Birdie or Better</span>
@@ -567,7 +567,7 @@ function RingChart({ pct, color, track = "#f1f5f9" }: { pct: number; color: stri
   const circ = 2 * Math.PI * r;
   const filled = (pct / 100) * circ;
   return (
-    <svg viewBox="0 0 100 100" className="w-32 h-32">
+    <svg viewBox="0 0 100 100" className="w-24 h-24 sm:w-32 sm:h-32">
       <circle cx="50" cy="50" r={r} fill="none" stroke={track} strokeWidth="11" />
       <circle cx="50" cy="50" r={r} fill="none" stroke={color} strokeWidth="11"
         strokeLinecap="round"
