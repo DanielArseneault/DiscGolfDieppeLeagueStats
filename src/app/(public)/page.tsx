@@ -170,6 +170,9 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         </div>
         <Card className="border-slate-200">
           <CardContent className="pt-6">
+            <p className="text-xs text-slate-500 mb-4">
+              Best {league.bestScoresCount} of {league.qualifyingWeeks} qualifying rounds counted · Minimum {league.minWeeks} rounds to qualify
+            </p>
             <Tabs defaultValue="blue">
               <TabsList className="mb-4">
                 <TabsTrigger value="blue">🔵 Blue Division</TabsTrigger>

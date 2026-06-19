@@ -253,7 +253,7 @@ export default async function PlayerPage({
     <div className="space-y-6">
       {/* Hero */}
       <div className="-mx-4 -mt-14 relative overflow-hidden mb-2">
-        <div className="px-8 pt-24 pb-32 text-white relative bg-gradient-to-br from-green-900 via-green-800 to-slate-800">
+        <div className={`px-8 pt-24 pb-32 text-white relative bg-gradient-to-br ${player.division === Division.BLUE ? "from-blue-900 via-blue-800 to-slate-800" : "from-red-900 via-red-800 to-slate-800"}`}>
           <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/30 to-transparent pointer-events-none" />
           <div className="relative">
             <div className="flex items-center gap-2 text-white/60 text-xs font-semibold uppercase tracking-widest mb-2">
@@ -287,6 +287,14 @@ export default async function PlayerPage({
                   </a>
                 </>
               )}
+            </div>
+            <div className="mt-4">
+              <Link
+                href={`/compare?a=${player.id}&league=${player.leagueId}`}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-white/90 bg-white/20 hover:bg-white/30 border border-white/30 hover:border-white/50 px-3 py-1.5 rounded-full transition-colors"
+              >
+                ⚔️ Compare
+              </Link>
             </div>
           </div>
         </div>
