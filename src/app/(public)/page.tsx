@@ -147,10 +147,10 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-4">
-        <StatCard label="Blue Division Players" value={blueCount} />
-        <StatCard label="Red Division Players" value={redCount} />
-        <StatCard label="Players Qualified" value={qualifiedCount} />
-        <StatCard label="Rounds Played" value={qualifyingRoundsPlayed} />
+        <StatCard label="Blue Division" value={blueCount} variant="blue" />
+        <StatCard label="Red Division" value={redCount} variant="red" />
+        <StatCard label="Qualified" value={qualifiedCount} total={blueCount + redCount} />
+        <StatCard label="Rounds Played" value={qualifyingRoundsPlayed} total={league.qualifyingWeeks} />
       </div>
 
       {recentRound && (
@@ -429,11 +429,17 @@ function PoolColumn({ label, pools, playerLookup, leagueId }: { label: string; p
   );
 }
 
-function StatCard({ label, value }: { label: string; value: number }) {
+function StatCard({ label, value, total, variant }: { label: string; value: number; total?: number; variant?: "blue" | "red" }) {
+  const accent = variant === "blue" ? "border-l-4 border-l-blue-400" : variant === "red" ? "border-l-4 border-l-red-400" : "";
   return (
-    <Card className="border-slate-200 bg-white">
+    <Card className={`border-slate-200 bg-white ${accent}`}>
       <CardContent className="pt-4 pb-4">
-        <div className="text-2xl font-bold text-slate-900 tabular-nums">{value}</div>
+        <div className="text-2xl font-bold text-slate-900 tabular-nums">
+          {value}
+          {total !== undefined && (
+            <span className="text-base font-normal text-slate-400"> / {total}</span>
+          )}
+        </div>
         <div className="text-xs text-slate-500 mt-0.5">{label}</div>
       </CardContent>
     </Card>
