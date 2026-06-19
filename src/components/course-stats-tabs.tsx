@@ -23,7 +23,7 @@ function ChevronIcon({ open }: { open: boolean }) {
   );
 }
 
-function CourseStatsTable({ stats }: { stats: HoleStat[] }) {
+export function CourseStatsTable({ stats }: { stats: HoleStat[] }) {
   const rows: { label: string; render: (s: HoleStat) => React.ReactNode }[] = [
     { label: "Par", render: (s) => <span className="text-slate-500">{s.par}</span> },
     {

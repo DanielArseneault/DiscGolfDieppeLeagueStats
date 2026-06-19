@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/db";
 import { getStandings } from "@/lib/standings";
 import { computePoolSummaries, PoolSummary } from "@/lib/pool-utils";
+import { computeHoleStats } from "@/lib/course-stats";
 import { StandingsTable } from "@/components/standings-table";
+import { CourseStatsTable } from "@/components/course-stats-tabs";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,7 +16,7 @@ export const revalidate = 60;
 type League = Awaited<ReturnType<typeof prisma.league.findMany>>[number];
 
 async function getData(league: League) {
-  const [standings, recentRound, qualifyingRoundsPlayed] = await Promise.all([
+  const [standings, recentRound, qualifyingRoundsPlayed, allResults] = await Promise.all([
     getStandings(league.id),
     prisma.round.findFirst({
       where: { leagueId: league.id },
@@ -27,17 +29,36 @@ async function getData(league: League) {
         roundWinners: { orderBy: [{ division: "asc" }, { place: "asc" }] },
         ctpWinners: { orderBy: { hole: "asc" } },
         poolWinners: { orderBy: [{ pool: "asc" }, { place: "asc" }] },
+        blueLayout: { include: { holePars: { orderBy: { holeNumber: "asc" } } } },
+        redLayout: { include: { holePars: { orderBy: { holeNumber: "asc" } } } },
         _count: { select: { results: true } },
       },
     }),
     prisma.round.count({ where: { leagueId: league.id, isChampionship: false } }),
+    prisma.result.findMany({
+      where: { round: { leagueId: league.id } },
+      select: { division: true, holeScores: true },
+    }),
   ]);
 
   const poolSummaries: PoolSummary[] = recentRound?.isChampionship
     ? computePoolSummaries(recentRound.results, standings, recentRound.poolWinners)
     : [];
 
-  return { league, standings, recentRound, qualifyingRoundsPlayed, poolSummaries };
+  const blueLeagueStats = recentRound?.blueLayout
+    ? computeHoleStats(
+        allResults.filter((r) => r.division === Division.BLUE).map((r) => r.holeScores as Record<string, number>),
+        recentRound.blueLayout.holePars
+      )
+    : null;
+  const redLeagueStats = recentRound?.redLayout
+    ? computeHoleStats(
+        allResults.filter((r) => r.division === Division.RED).map((r) => r.holeScores as Record<string, number>),
+        recentRound.redLayout.holePars
+      )
+    : null;
+
+  return { league, standings, recentRound, qualifyingRoundsPlayed, poolSummaries, blueLeagueStats, redLeagueStats };
 }
 
 const emptyState = (
@@ -75,7 +96,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     data = await getData(allLeagues[0]);
   }
 
-  const { league, standings, recentRound, qualifyingRoundsPlayed, poolSummaries } = data;
+  const { league, standings, recentRound, qualifyingRoundsPlayed, poolSummaries, blueLeagueStats, redLeagueStats } = data;
 
   const playerLookup = new Map(
     (recentRound?.results ?? []).map((r) => [r.player.name.toLowerCase().trim(), r.player.id])
@@ -164,6 +185,32 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           </CardContent>
         </Card>
       </div>
+
+      {(blueLeagueStats || redLeagueStats) && (
+        <div>
+          <h2 className="text-xl font-semibold text-slate-900 mb-4">Course Stats</h2>
+          <Card className="border-slate-200">
+            <CardContent className="pt-6">
+              <Tabs defaultValue={blueLeagueStats ? "blue" : "red"}>
+                <TabsList className="mb-4">
+                  {blueLeagueStats && <TabsTrigger value="blue">🔵 Blue Division</TabsTrigger>}
+                  {redLeagueStats && <TabsTrigger value="red">🔴 Red Division</TabsTrigger>}
+                </TabsList>
+                {blueLeagueStats && (
+                  <TabsContent value="blue">
+                    <CourseStatsTable stats={blueLeagueStats} />
+                  </TabsContent>
+                )}
+                {redLeagueStats && (
+                  <TabsContent value="red">
+                    <CourseStatsTable stats={redLeagueStats} />
+                  </TabsContent>
+                )}
+              </Tabs>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
