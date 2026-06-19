@@ -1,8 +1,7 @@
 "use client";
 
-import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { useSearchParams, usePathname } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface League {
   id: number;
@@ -12,7 +11,6 @@ interface League {
 
 function NavLinks({ leagues, onClose }: { leagues: League[]; onClose?: () => void }) {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const pathname = usePathname();
   const leagueParam = searchParams.get("league");
   const selected = leagues.find((l) => l.id === Number(leagueParam)) ?? leagues[0];
@@ -35,26 +33,6 @@ function NavLinks({ leagues, onClose }: { leagues: League[]; onClose?: () => voi
     <>
       {navLink("/", "Standings")}
       {navLink("/rounds", "Rounds")}
-      {leagues.length > 1 && selected && (
-        <Select
-          value={String(selected.id)}
-          onValueChange={(value) => {
-            onClose?.();
-            router.push(`/?league=${value}`);
-          }}
-        >
-          <SelectTrigger className="h-7 w-auto min-w-28 md:min-w-36 text-xs bg-white text-slate-800 border-transparent hover:bg-slate-100">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {leagues.map((league) => (
-              <SelectItem key={league.id} value={String(league.id)}>
-                {league.year} — {league.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
       <a href="/admin" onClick={onClose} className="hover:text-white transition-colors font-medium text-green-200">
         Admin
       </a>

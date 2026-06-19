@@ -124,6 +124,24 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             <p className="text-white/80 mt-2 text-sm">
               {formatDate(league.startDate)} – {formatDate(league.endDate)} · {league.location}
             </p>
+            {allLeagues.length > 1 && (
+              <div className="flex items-center gap-2 mt-3">
+                <span className="text-white/40 text-xs">Season:</span>
+                {allLeagues.map((l) => (
+                  <a
+                    key={l.id}
+                    href={`/?league=${l.id}`}
+                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                      l.id === league.id
+                        ? "bg-white/20 border-white/40 text-white font-medium"
+                        : "border-white/20 text-white/40 hover:text-white/80 hover:border-white/30"
+                    }`}
+                  >
+                    {l.year}
+                  </a>
+                ))}
+              </div>
+            )}
             {league.facebookUrl && (
               <a
                 href={league.facebookUrl}
