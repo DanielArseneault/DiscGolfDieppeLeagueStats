@@ -92,6 +92,7 @@ model Round {
   blueLayout    CourseLayout?  @relation("BlueLayout", fields: [blueLayoutId], references: [id])
   redLayout     CourseLayout?  @relation("RedLayout", fields: [redLayoutId], references: [id])
   results       Result[]
+  roundWinners  RoundWinner[]
   ctpWinners    CtpWinner[]
   aceWinners    AceWinner[]
   poolWinners   ChampionshipPoolWinner[]
@@ -116,6 +117,16 @@ model Result {
   player Player @relation(fields: [playerId], references: [id])
 
   @@unique([roundId, playerId])
+}
+
+model RoundWinner {
+  id         Int      @id @default(autoincrement())
+  roundId    Int
+  division   Division
+  place      Int
+  playerName String
+
+  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
 }
 
 model CtpWinner {

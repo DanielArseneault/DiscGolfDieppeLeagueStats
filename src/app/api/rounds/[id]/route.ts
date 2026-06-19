@@ -10,6 +10,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         include: { player: true },
         orderBy: [{ division: "asc" }, { position: "asc" }],
       },
+      roundWinners: { orderBy: [{ division: "asc" }, { place: "asc" }] },
       ctpWinners: { orderBy: { hole: "asc" } },
       aceWinners: { orderBy: { hole: "asc" } },
       poolWinners: { orderBy: [{ pool: "asc" }, { place: "asc" }] },

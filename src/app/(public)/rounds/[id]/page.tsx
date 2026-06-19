@@ -47,6 +47,7 @@ export default async function RoundPage({
         include: { player: true },
         orderBy: [{ division: "asc" }, { position: "asc" }],
       },
+      roundWinners: { orderBy: [{ division: "asc" }, { place: "asc" }] },
       ctpWinners: { orderBy: { hole: "asc" } },
       aceWinners: { orderBy: { hole: "asc" } },
       poolWinners: { orderBy: [{ pool: "asc" }, { place: "asc" }] },
@@ -199,6 +200,59 @@ export default async function RoundPage({
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {!round.isChampionship && (
+        (() => {
+          const sections = ([Division.BLUE, Division.RED] as Division[]).map((div) => {
+            const divResults = round.results.filter((r) => r.division === div);
+            const savedFirst = round.roundWinners.find((w) => w.division === div && w.place === 1);
+            const firstName = savedFirst?.playerName ?? divResults.find((r) => r.position === 1)?.player.name;
+            const savedSeconds = round.roundWinners.filter((w) => w.division === div && w.place === 2);
+            // Fall back to scorecard position-2 players if no overrides saved
+            const seconds: { id: number; playerName: string }[] = savedSeconds.length > 0
+              ? savedSeconds
+              : divResults.filter((r) => r.position === 2).map((r) => ({ id: r.id, playerName: r.player.name }));
+            return { div, firstName, seconds };
+          });
+          const hasAny = sections.some((s) => s.firstName || s.seconds.length > 0);
+          if (!hasAny) return null;
+          return (
+            <Card className="border-emerald-300 bg-gradient-to-br from-emerald-50 to-white">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base text-slate-900">🥇 Round Winners</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid sm:grid-cols-2 gap-x-6 gap-y-3">
+                  {sections.map(({ div, firstName, seconds }) => {
+                    if (!firstName && seconds.length === 0) return null;
+                    return (
+                      <div key={div}>
+                        <p className="text-xs font-semibold uppercase tracking-wide mb-2 text-slate-400">
+                          {div === Division.BLUE ? "🔵 Blue Division" : "🔴 Red Division"}
+                        </p>
+                        <div className="space-y-1.5">
+                          {firstName && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-base shrink-0">🥇</span>
+                              <PlayerName name={firstName} lookup={playerLookup} className="font-semibold text-slate-800 text-sm hover:underline" />
+                            </div>
+                          )}
+                          {seconds.map((w) => (
+                            <div key={w.id} className="flex items-center gap-2">
+                              <span className="text-base shrink-0">🥈</span>
+                              <PlayerName name={w.playerName} lookup={playerLookup} className="font-semibold text-slate-800 text-sm hover:underline" />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })()
       )}
 
       {round.ctpWinners.length > 0 && (

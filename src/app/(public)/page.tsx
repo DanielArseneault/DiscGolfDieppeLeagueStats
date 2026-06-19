@@ -24,6 +24,7 @@ async function getData(league: League) {
           include: { player: true },
           orderBy: [{ division: "asc" }, { position: "asc" }],
         },
+        roundWinners: { orderBy: [{ division: "asc" }, { place: "asc" }] },
         ctpWinners: { orderBy: { hole: "asc" } },
         poolWinners: { orderBy: [{ pool: "asc" }, { place: "asc" }] },
         _count: { select: { results: true } },
@@ -197,6 +198,7 @@ function RecentRound({ round, leagueId, playerLookup }: { round: RoundData; leag
         <div className="grid md:grid-cols-2 gap-4 md:gap-6">
           {([Division.BLUE, Division.RED] as Division[]).map((div) => {
             const top3 = round.results.filter((r) => r.division === div).slice(0, 3);
+            const overrideWinner = round.roundWinners.find((w) => w.division === div && w.place === 1);
             return (
               <div key={div}>
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
@@ -206,19 +208,25 @@ function RecentRound({ round, leagueId, playerLookup }: { round: RoundData; leag
                   <p className="text-slate-400 text-sm">No results</p>
                 ) : (
                   <ol className="space-y-1">
-                    {top3.map((r, i) => (
-                      <li key={r.id} className="flex items-center gap-3 text-sm">
-                        <span className="text-slate-400 w-4 text-right">{i + 1}.</span>
-                        <Link href={`/players/${r.player.id}`} className="font-medium text-slate-900 hover:underline">
-                          {r.player.name}
-                        </Link>
-                        <span className={`ml-auto font-mono text-xs ${
-                          r.relativeScore < 0 ? "text-emerald-600" : r.relativeScore > 0 ? "text-orange-500" : "text-slate-500"
-                        }`}>
-                          {r.score} ({formatScore(r.relativeScore)})
-                        </span>
-                      </li>
-                    ))}
+                    {top3.map((r, i) => {
+                      const displayName = i === 0 && overrideWinner ? overrideWinner.playerName : r.player.name;
+                      const playerId = i === 0 && overrideWinner
+                        ? playerLookup.get(overrideWinner.playerName.toLowerCase().trim()) ?? r.player.id
+                        : r.player.id;
+                      return (
+                        <li key={r.id} className="flex items-center gap-3 text-sm">
+                          <span className="text-slate-400 w-4 text-right">{i + 1}.</span>
+                          <Link href={`/players/${playerId}`} className="font-medium text-slate-900 hover:underline">
+                            {displayName}
+                          </Link>
+                          <span className={`ml-auto font-mono text-xs ${
+                            r.relativeScore < 0 ? "text-emerald-600" : r.relativeScore > 0 ? "text-orange-500" : "text-slate-500"
+                          }`}>
+                            {r.score} ({formatScore(r.relativeScore)})
+                          </span>
+                        </li>
+                      );
+                    })}
                   </ol>
                 )}
               </div>

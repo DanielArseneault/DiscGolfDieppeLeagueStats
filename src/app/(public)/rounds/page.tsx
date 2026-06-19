@@ -16,6 +16,7 @@ async function getRounds(leagueId: number) {
     where: { leagueId },
     orderBy: { weekNumber: "desc" },
     include: {
+      roundWinners: { orderBy: [{ division: "asc" }, { place: "asc" }] },
       ctpWinners: { orderBy: { hole: "asc" } },
       aceWinners: { orderBy: { hole: "asc" } },
       poolWinners: { orderBy: [{ pool: "asc" }, { place: "asc" }] },
@@ -104,8 +105,15 @@ export default async function RoundsPage({ searchParams }: { searchParams: Promi
 function RegularRoundCard({ round, leagueId, playerLookup }: { round: Round; leagueId: number; playerLookup: PlayerLookup }) {
   const blueResults = round.results.filter((r) => r.division === Division.BLUE);
   const redResults = round.results.filter((r) => r.division === Division.RED);
-  const blueLeader = blueResults.find((r) => r.position === 1);
-  const redLeader = redResults.find((r) => r.position === 1);
+
+  // Use winner overrides if set, otherwise fall back to computed position
+  const blueOverride1 = round.roundWinners.find((w) => w.division === Division.BLUE && w.place === 1);
+  const redOverride1 = round.roundWinners.find((w) => w.division === Division.RED && w.place === 1);
+
+  const blueLeaderName = blueOverride1?.playerName ?? blueResults.find((r) => r.position === 1)?.player.name;
+  const redLeaderName = redOverride1?.playerName ?? redResults.find((r) => r.position === 1)?.player.name;
+  const blueLeaderScore = blueResults.find((r) => r.position === 1)?.relativeScore;
+  const redLeaderScore = redResults.find((r) => r.position === 1)?.relativeScore;
 
   return (
     <div className="rounded-xl overflow-hidden border border-slate-200 hover:shadow-md transition-all">
@@ -143,34 +151,34 @@ function RegularRoundCard({ round, leagueId, playerLookup }: { round: Round; lea
 
       {/* Body */}
       <div className="bg-slate-50 px-5 py-4 space-y-3">
-        {(blueLeader || redLeader) && (
+        {(blueLeaderName || redLeaderName) && (
           <div className="space-y-1.5">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Leaders</p>
             <div className="grid sm:grid-cols-2 gap-x-6 gap-y-2">
-              {blueLeader && (
+              {blueLeaderName && (
                 <div className="flex items-center gap-2">
                   <span className="text-blue-500 shrink-0">🔵</span>
-                  <Link href={`/players/${blueLeader.player.id}`} className="font-semibold text-slate-800 text-sm truncate hover:underline">
-                    {blueLeader.player.name}
-                  </Link>
-                  <span className={`font-mono text-sm font-bold shrink-0 ${
-                    blueLeader.relativeScore < 0 ? "text-emerald-600" : blueLeader.relativeScore > 0 ? "text-orange-500" : "text-slate-500"
-                  }`}>
-                    {formatScore(blueLeader.relativeScore)}
-                  </span>
+                  <PlayerName name={blueLeaderName} lookup={playerLookup} className="font-semibold text-slate-800 text-sm truncate" />
+                  {blueLeaderScore !== undefined && (
+                    <span className={`font-mono text-sm font-bold shrink-0 ${
+                      blueLeaderScore < 0 ? "text-emerald-600" : blueLeaderScore > 0 ? "text-orange-500" : "text-slate-500"
+                    }`}>
+                      {formatScore(blueLeaderScore)}
+                    </span>
+                  )}
                 </div>
               )}
-              {redLeader && (
+              {redLeaderName && (
                 <div className="flex items-center gap-2">
                   <span className="text-red-500 shrink-0">🔴</span>
-                  <Link href={`/players/${redLeader.player.id}`} className="font-semibold text-slate-800 text-sm truncate hover:underline">
-                    {redLeader.player.name}
-                  </Link>
-                  <span className={`font-mono text-sm font-bold shrink-0 ${
-                    redLeader.relativeScore < 0 ? "text-emerald-600" : redLeader.relativeScore > 0 ? "text-orange-500" : "text-slate-500"
-                  }`}>
-                    {formatScore(redLeader.relativeScore)}
-                  </span>
+                  <PlayerName name={redLeaderName} lookup={playerLookup} className="font-semibold text-slate-800 text-sm truncate" />
+                  {redLeaderScore !== undefined && (
+                    <span className={`font-mono text-sm font-bold shrink-0 ${
+                      redLeaderScore < 0 ? "text-emerald-600" : redLeaderScore > 0 ? "text-orange-500" : "text-slate-500"
+                    }`}>
+                      {formatScore(redLeaderScore)}
+                    </span>
+                  )}
                 </div>
               )}
             </div>

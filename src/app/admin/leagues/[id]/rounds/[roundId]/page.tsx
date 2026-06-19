@@ -32,6 +32,12 @@ interface SavedPoolWinner {
   playerName: string;
 }
 
+interface RoundWinnerEntry {
+  division: "BLUE" | "RED";
+  place: number;
+  playerName: string;
+}
+
 interface RoundResult {
   id: number;
   playerId: number;
@@ -54,6 +60,7 @@ interface Round {
   ctpWinners: CtpWinner[];
   aceWinners: AceWinner[];
   poolWinners: SavedPoolWinner[];
+  roundWinners: RoundWinnerEntry[];
   post: { content: string } | null;
   newspaperImage: {
     headline: string;
@@ -148,6 +155,12 @@ export default function RoundManagePage({
   const [aceEntries, setAceEntries] = useState<{ player: string; hole: number; prizeAmount: string }[]>([]);
   const [aceSaving, setAceSaving] = useState(false);
 
+  // Round winner overrides (non-championship)
+  // 1st place: one per division; 2nd place: multiple allowed (ties)
+  const [roundWinner1st, setRoundWinner1st] = useState<Record<string, string>>({ BLUE: "", RED: "" });
+  const [roundWinner2nds, setRoundWinner2nds] = useState<{ division: "BLUE" | "RED"; playerName: string }[]>([]);
+  const [roundWinnerSaving, setRoundWinnerSaving] = useState(false);
+
   // Facebook link state
   const [facebookUrl, setFacebookUrl] = useState("");
   const [facebookLabel, setFacebookLabel] = useState("");
@@ -207,6 +220,18 @@ export default function RoundManagePage({
     setFacebookUrl(data.facebookUrl ?? "");
     setFacebookLabel(data.facebookLabel ?? "");
 
+    const w1st: Record<string, string> = { BLUE: "", RED: "" };
+    const w2nds: { division: "BLUE" | "RED"; playerName: string }[] = [];
+    for (const w of data.roundWinners ?? []) {
+      if (w.place === 1) w1st[w.division] = w.playerName;
+      else if (w.place === 2) w2nds.push({ division: w.division as "BLUE" | "RED", playerName: w.playerName });
+    }
+    // Pre-populate 1st place from scorecard if no override is saved
+    if (!w1st.BLUE) w1st.BLUE = data.results.filter((r: RoundResult) => r.division === "BLUE").find((r: RoundResult) => r.position === 1)?.player.name ?? "";
+    if (!w1st.RED) w1st.RED = data.results.filter((r: RoundResult) => r.division === "RED").find((r: RoundResult) => r.position === 1)?.player.name ?? "";
+    setRoundWinner1st(w1st);
+    setRoundWinner2nds(w2nds);
+
     if (data.isChampionship) {
       const sData: PlayerStanding[] = await fetch(`/api/standings?leagueId=${leagueId}`).then((r) => r.json());
       setStandings(sData);
@@ -260,6 +285,26 @@ export default function RoundManagePage({
     });
     await load();
     setFacebookSaving(false);
+  }
+
+  // Round winner overrides
+  async function handleSaveRoundWinners() {
+    setRoundWinnerSaving(true);
+    const winners: RoundWinnerEntry[] = [
+      ...Object.entries(roundWinner1st)
+        .filter(([, name]) => name.trim())
+        .map(([div, name]) => ({ division: div as "BLUE" | "RED", place: 1, playerName: name.trim() })),
+      ...roundWinner2nds
+        .filter((w) => w.playerName.trim())
+        .map((w) => ({ division: w.division, place: 2, playerName: w.playerName.trim() })),
+    ];
+    await fetch(`/api/rounds/${roundId}/winners`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ roundWinners: winners }),
+    });
+    await load();
+    setRoundWinnerSaving(false);
   }
 
   // Ace
@@ -827,6 +872,110 @@ export default function RoundManagePage({
               </div>
             </CardContent>
           </Card>
+
+          {/* Round winner overrides (non-championship only) */}
+          {!round.isChampionship && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">🥇 Round Winners</CardTitle>
+                <p className="text-xs text-slate-500">
+                  Override the displayed 1st and 2nd place winners per division. 2nd place supports multiple players for ties.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                {(["BLUE", "RED"] as const).map((div) => {
+                  const divResults = round.results.filter((r) => r.division === div);
+                  const computed1st = divResults.find((r) => r.position === 1)?.player.name ?? "";
+                  const divSeconds = roundWinner2nds.filter((w) => w.division === div);
+                  return (
+                    <div key={div} className="space-y-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 border-b pb-1">
+                        {div === "BLUE" ? "🔵 Blue Division" : "🔴 Red Division"}
+                      </p>
+                      {/* 1st place */}
+                      <div className="space-y-1">
+                        <Label className="text-xs">🥇 1st Place</Label>
+                        <Input
+                          value={roundWinner1st[div] ?? ""}
+                          onChange={(e) => setRoundWinner1st((prev) => ({ ...prev, [div]: e.target.value }))}
+                          placeholder={computed1st || "1st place player"}
+                          list={`players-${div}-1`}
+                        />
+                        <datalist id={`players-${div}-1`}>
+                          {divResults.map((r) => <option key={r.id} value={r.player.name} />)}
+                        </datalist>
+                      </div>
+                      {/* 2nd place (dynamic list) */}
+                      <div className="space-y-2">
+                        <Label className="text-xs">🥈 2nd Place</Label>
+                        {divSeconds.map((entry, i) => (
+                          <div key={i} className="flex gap-2">
+                            <Input
+                              value={entry.playerName}
+                              onChange={(e) => {
+                                const name = e.target.value;
+                                setRoundWinner2nds((prev) => {
+                                  let idx = -1;
+                                  let count = 0;
+                                  for (let j = 0; j < prev.length; j++) {
+                                    if (prev[j].division === div) {
+                                      if (count === i) { idx = j; break; }
+                                      count++;
+                                    }
+                                  }
+                                  if (idx === -1) return prev;
+                                  const next = [...prev];
+                                  next[idx] = { ...next[idx], playerName: name };
+                                  return next;
+                                });
+                              }}
+                              placeholder="Player name"
+                              list={`players-${div}-2`}
+                            />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-slate-400 hover:text-red-500 shrink-0"
+                              onClick={() =>
+                                setRoundWinner2nds((prev) => {
+                                  let count = 0;
+                                  return prev.filter((w) => {
+                                    if (w.division === div) {
+                                      if (count === i) { count++; return false; }
+                                      count++;
+                                    }
+                                    return true;
+                                  });
+                                })
+                              }
+                            >
+                              ✕
+                            </Button>
+                          </div>
+                        ))}
+                        <datalist id={`players-${div}-2`}>
+                          {divResults.map((r) => <option key={r.id} value={r.player.name} />)}
+                        </datalist>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs"
+                          onClick={() => setRoundWinner2nds((prev) => [...prev, { division: div, playerName: "" }])}
+                        >
+                          + Add 2nd Place
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="flex justify-end pt-1">
+                  <Button size="sm" onClick={handleSaveRoundWinners} disabled={roundWinnerSaving}>
+                    {roundWinnerSaving ? "Saving…" : "Save Winners"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Facebook link */}
           <Card>
