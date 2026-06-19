@@ -247,7 +247,12 @@ function ChampionshipCard({ round, standings, leagueId, playerLookup }: { round:
           >
             Scorecard →
           </Link>
-          <span className="text-sm text-white bg-white/15 px-2.5 py-0.5 rounded-full">{round.results.length} players</span>
+          {round.results.filter((r) => r.division === Division.BLUE).length > 0 && (
+            <span className="text-sm text-white bg-white/15 px-2.5 py-0.5 rounded-full">🔵 {round.results.filter((r) => r.division === Division.BLUE).length}</span>
+          )}
+          {round.results.filter((r) => r.division === Division.RED).length > 0 && (
+            <span className="text-sm text-white bg-white/15 px-2.5 py-0.5 rounded-full">🔴 {round.results.filter((r) => r.division === Division.RED).length}</span>
+          )}
         </div>
       </div>
 
