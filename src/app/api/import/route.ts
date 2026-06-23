@@ -60,6 +60,11 @@ export async function POST(req: Request) {
             league: { connect: { id: leagueId } },
           },
         });
+      } else if (player.division !== result.division) {
+        await prisma.player.update({
+          where: { id: player.id },
+          data: { division: result.division },
+        });
       }
 
       await prisma.result.upsert({

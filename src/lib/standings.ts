@@ -31,7 +31,7 @@ function buildStandings(
     if (!playerMap.has(result.playerId)) {
       playerMap.set(result.playerId, {
         name: result.player.name,
-        division: result.player.division,
+        division: result.division,
         excludeFromChampionship: result.player.excludeFromChampionship,
         championshipPoolOverride: result.player.championshipPoolOverride,
         scores: [],

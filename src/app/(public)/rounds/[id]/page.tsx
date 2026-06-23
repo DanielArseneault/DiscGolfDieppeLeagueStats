@@ -323,14 +323,14 @@ export default async function RoundPage({
               : (
                 <ScorecardTable
                   divisionLabel="🔵 Blue Division"
-                  results={blueResults.map((r) => ({
+                  results={assignPositions(blueResults.map((r) => ({
                     position: r.position,
                     playerName: r.player.name,
                     playerId: r.playerId,
                     score: r.score,
                     relativeScore: r.relativeScore,
                     holeScores: r.holeScores as Record<string, number>,
-                  }))}
+                  })))}
                   holePars={round.blueLayout?.holePars ?? []}
                   leagueId={round.leagueId}
                 />
@@ -369,14 +369,14 @@ export default async function RoundPage({
               : (
                 <ScorecardTable
                   divisionLabel="🔴 Red Division"
-                  results={redResults.map((r) => ({
+                  results={assignPositions(redResults.map((r) => ({
                     position: r.position,
                     playerName: r.player.name,
                     playerId: r.playerId,
                     score: r.score,
                     relativeScore: r.relativeScore,
                     holeScores: r.holeScores as Record<string, number>,
-                  }))}
+                  })))}
                   holePars={round.redLayout?.holePars ?? []}
                   leagueId={round.leagueId}
                 />

@@ -63,6 +63,7 @@ export function parseUDiscFile(buffer: ArrayBuffer): ParsedImport {
 
       if (!result.name) continue;
       if (isDnf) continue;
+      if (Object.keys(holeScores).length === 0) continue;
 
       if (division === Division.BLUE) {
         blueResults.push(result);
