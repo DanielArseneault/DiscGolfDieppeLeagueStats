@@ -6,8 +6,9 @@ import { notFound } from "next/navigation";
 import { ScorecardTable } from "@/components/scorecard-table";
 import { ScorecardTabs } from "@/components/scorecard-tabs";
 import { CourseStatsSection } from "@/components/course-stats-tabs";
+import { ReactionBar, type ReactionCounts } from "@/components/reaction-bar";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Division } from "@/generated/prisma/client";
 import { formatDate, formatScore } from "@/lib/utils";
 import Link from "next/link";
@@ -57,6 +58,7 @@ export default async function RoundPage({
       blueLayout: { include: { holePars: { orderBy: { holeNumber: "asc" } } } },
       redLayout: { include: { holePars: { orderBy: { holeNumber: "asc" } } } },
       bobTag: true,
+      reactions: true,
       league: true,
     },
   });
@@ -123,6 +125,11 @@ export default async function RoundPage({
 
   const blueSummaries = poolSummaries.filter((w) => ["A", "B"].includes(w.pool));
   const redSummaries = poolSummaries.filter((w) => ["C", "D"].includes(w.pool));
+
+  const countsFor = (target: string): ReactionCounts =>
+    Object.fromEntries(
+      round.reactions.filter((r) => r.target === target).map((r) => [r.emoji, r.count])
+    ) as ReactionCounts;
 
   return (
     <div className="space-y-6">
@@ -203,6 +210,10 @@ export default async function RoundPage({
               <PoolSummaryColumn label="🔴 Red Division" pools={redSummaries} playerLookup={playerLookup} leagueId={round.leagueId} />
             </div>
           </CardContent>
+          <CardFooter className="border-t border-amber-100 bg-amber-50/40 px-6 py-3 grid md:grid-cols-2 gap-x-6 gap-y-2">
+            {blueSummaries.length > 0 && <ReactionBar roundId={round.id} target="pool_blue" initialCounts={countsFor("pool_blue")} />}
+            {redSummaries.length > 0 && <ReactionBar roundId={round.id} target="pool_red" initialCounts={countsFor("pool_red")} />}
+          </CardFooter>
         </Card>
       )}
 
@@ -260,6 +271,13 @@ export default async function RoundPage({
                   })}
                 </div>
               </CardContent>
+              <CardFooter className="border-t border-slate-100 bg-slate-50/60 px-6 py-3 grid sm:grid-cols-2 gap-x-6 gap-y-2">
+                {sections.map(({ div, firstName, seconds }) => {
+                  if (!firstName && seconds.length === 0) return null;
+                  const target = div === Division.BLUE ? "winners_blue" : "winners_red";
+                  return <ReactionBar key={div} roundId={round.id} target={target} initialCounts={countsFor(target)} />;
+                })}
+              </CardFooter>
             </Card>
           );
         })()
@@ -286,6 +304,9 @@ export default async function RoundPage({
               ))}
             </div>
           </CardContent>
+          <CardFooter className="border-t border-slate-100 bg-slate-50/60 px-6 py-3">
+            <ReactionBar roundId={round.id} target="ctp" initialCounts={countsFor("ctp")} />
+          </CardFooter>
         </Card>
       )}
 
@@ -303,6 +324,9 @@ export default async function RoundPage({
               ))}
             </div>
           </CardContent>
+          <CardFooter className="border-t border-slate-100 bg-slate-50/60 px-6 py-3">
+            <ReactionBar roundId={round.id} target="ace" initialCounts={countsFor("ace")} />
+          </CardFooter>
         </Card>
       )}
 
@@ -320,6 +344,9 @@ export default async function RoundPage({
             />
             <span className="text-slate-400 text-sm ml-2">got the BOB Tag this round</span>
           </CardContent>
+          <CardFooter className="border-t border-slate-100 bg-slate-50/60 px-6 py-3">
+            <ReactionBar roundId={round.id} target="bob" initialCounts={countsFor("bob")} />
+          </CardFooter>
         </Card>
       )}
 

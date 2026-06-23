@@ -102,6 +102,7 @@ model Round {
   post          Post?
   newspaperImage NewspaperImage?
   bobTag        BobTag?
+  reactions     RoundReaction[]
 
   @@unique([leagueId, weekNumber])
 }
@@ -183,6 +184,18 @@ model BobTag {
   playerName String
 
   round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+}
+
+model RoundReaction {
+  id      Int    @id @default(autoincrement())
+  roundId Int
+  emoji   String
+  target  String @default("round") // "round" | "winners_blue" | "winners_red" | "ctp" | "ace" | "bob" | "pool_A" etc.
+  count   Int    @default(0)
+
+  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@unique([roundId, emoji, target])
 }
 
 model NewspaperImage {
