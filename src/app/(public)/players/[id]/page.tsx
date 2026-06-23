@@ -7,6 +7,7 @@ import { Division, MemberStatus } from "@/generated/prisma/client";
 import { formatDate, formatScore } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { SponsorLogo } from "@/components/sponsor-logo";
 import Link from "next/link";
 
 export const revalidate = 60;
@@ -255,47 +256,50 @@ export default async function PlayerPage({
       <div className="-mx-4 -mt-14 relative overflow-hidden mb-2">
         <div className={`px-8 pt-24 pb-32 text-white relative bg-gradient-to-br ${player.division === Division.BLUE ? "from-blue-900 via-blue-800 to-slate-800" : "from-red-900 via-red-800 to-slate-800"}`}>
           <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/30 to-transparent pointer-events-none" />
-          <div className="relative">
-            <div className="flex items-center gap-2 text-white/60 text-xs font-semibold uppercase tracking-widest mb-2">
-              <Link href={leagueUrl} className="hover:text-white/90 transition-colors">Standings</Link>
-              <span>/</span>
-              <span>{player.name}</span>
+          <div className="relative flex flex-col md:flex-row md:items-end gap-5 md:gap-8">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 text-white/60 text-xs font-semibold uppercase tracking-widest mb-2">
+                <Link href={leagueUrl} className="hover:text-white/90 transition-colors">Standings</Link>
+                <span>/</span>
+                <span>{player.name}</span>
+              </div>
+              <h1 className="text-4xl font-black tracking-tight drop-shadow-sm">{player.name}</h1>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
+                <span className="text-white/70 text-sm">{league.name}</span>
+                <span className="text-white/30">·</span>
+                <span className={`text-sm font-semibold ${player.division === Division.BLUE ? "text-blue-300" : "text-red-300"}`}>
+                  {player.division === Division.BLUE ? "🔵 Blue Division" : "🔴 Red Division"}
+                </span>
+                {player.memberStatus === MemberStatus.MEMBER && (
+                  <>
+                    <span className="text-white/30">·</span>
+                    <span className="text-xs bg-white/20 text-white px-2 py-0.5 rounded-full font-medium">Member</span>
+                  </>
+                )}
+                {player.pdgaNumber && (
+                  <>
+                    <span className="text-white/30">·</span>
+                    <a
+                      href={`https://www.pdga.com/player/${player.pdgaNumber}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-white/70 text-sm hover:text-white transition-colors underline underline-offset-2"
+                    >
+                      PDGA #{player.pdgaNumber}
+                    </a>
+                  </>
+                )}
+              </div>
+              <div className="mt-4">
+                <Link
+                  href={`/compare?a=${player.id}&league=${player.leagueId}`}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-white/90 bg-white/20 hover:bg-white/30 border border-white/30 hover:border-white/50 px-3 py-1.5 rounded-full transition-colors"
+                >
+                  ⚔️ Compare
+                </Link>
+              </div>
             </div>
-            <h1 className="text-4xl font-black tracking-tight drop-shadow-sm">{player.name}</h1>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
-              <span className="text-white/70 text-sm">{league.name}</span>
-              <span className="text-white/30">·</span>
-              <span className={`text-sm font-semibold ${player.division === Division.BLUE ? "text-blue-300" : "text-red-300"}`}>
-                {player.division === Division.BLUE ? "🔵 Blue Division" : "🔴 Red Division"}
-              </span>
-              {player.memberStatus === MemberStatus.MEMBER && (
-                <>
-                  <span className="text-white/30">·</span>
-                  <span className="text-xs bg-white/20 text-white px-2 py-0.5 rounded-full font-medium">Member</span>
-                </>
-              )}
-              {player.pdgaNumber && (
-                <>
-                  <span className="text-white/30">·</span>
-                  <a
-                    href={`https://www.pdga.com/player/${player.pdgaNumber}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-white/70 text-sm hover:text-white transition-colors underline underline-offset-2"
-                  >
-                    PDGA #{player.pdgaNumber}
-                  </a>
-                </>
-              )}
-            </div>
-            <div className="mt-4">
-              <Link
-                href={`/compare?a=${player.id}&league=${player.leagueId}`}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-white/90 bg-white/20 hover:bg-white/30 border border-white/30 hover:border-white/50 px-3 py-1.5 rounded-full transition-colors"
-              >
-                ⚔️ Compare
-              </Link>
-            </div>
+            <SponsorLogo />
           </div>
         </div>
         <div className="absolute bottom-0 left-0 right-0">

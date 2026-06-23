@@ -7,6 +7,7 @@ import { CourseStatsTable } from "@/components/course-stats-tabs";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { ReactionBar, type ReactionCounts } from "@/components/reaction-bar";
+import { SponsorLogo } from "@/components/sponsor-logo";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Division } from "@/generated/prisma/client";
 import { formatDate, formatScore } from "@/lib/utils";
@@ -163,25 +164,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
                 </a>
               )}
             </div>
-            {/* Sponsor logo */}
-            <div className="flex-shrink-0 self-start md:self-end">
-              <a
-                href="https://fundyflightdiscs.ca/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="bg-white rounded-2xl shadow-xl px-4 pt-3 pb-4 flex flex-col items-center gap-2 hover:shadow-2xl transition-shadow"
-              >
-                <p className="text-[#1a3355] text-xs font-semibold uppercase tracking-widest">Presented by</p>
-                <div className="bg-[#1a3355] rounded-full p-1">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src="/FFD_Logo.avif"
-                    alt="Fundy Flight Discs"
-                    className="w-14 md:w-24 h-auto rounded-full"
-                  />
-                </div>
-              </a>
-            </div>
+            <SponsorLogo />
           </div>
         </div>
         <div className="absolute bottom-0 left-0 right-0">

@@ -7,6 +7,7 @@ import { ScorecardTable } from "@/components/scorecard-table";
 import { ScorecardTabs } from "@/components/scorecard-tabs";
 import { CourseStatsSection } from "@/components/course-stats-tabs";
 import { ReactionBar, type ReactionCounts } from "@/components/reaction-bar";
+import { SponsorLogo } from "@/components/sponsor-logo";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Division } from "@/generated/prisma/client";
@@ -141,31 +142,34 @@ export default async function RoundPage({
         >
           <div className="absolute inset-0 bg-gradient-to-br from-black/65 via-black/40 to-black/30 pointer-events-none" />
           <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/40 to-transparent pointer-events-none" />
-          <div className="relative">
-            <div className="flex items-center gap-2 text-white/60 text-xs font-semibold uppercase tracking-widest mb-1">
-              <Link href={backUrl} className="hover:text-white/90 transition-colors">Rounds</Link>
-              <span>/</span>
-              <span>{round.isChampionship ? "Championship" : `Week ${round.weekNumber}`}</span>
+          <div className="relative flex flex-col md:flex-row md:items-end gap-5 md:gap-8">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 text-white/60 text-xs font-semibold uppercase tracking-widest mb-1">
+                <Link href={backUrl} className="hover:text-white/90 transition-colors">Rounds</Link>
+                <span>/</span>
+                <span>{round.isChampionship ? "Championship" : `Week ${round.weekNumber}`}</span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight drop-shadow-sm">
+                {round.isChampionship ? "🏆 Championship" : `Week ${round.weekNumber}`}
+              </h1>
+              <p className="text-white/80 mt-2 text-sm">
+                {formatDate(round.date)} · {round.league.name}
+              </p>
+              {round.facebookUrl && (
+                <a
+                  href={round.facebookUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-full bg-white/15 hover:bg-white/25 border border-white/30 text-white text-sm font-medium transition-colors backdrop-blur-sm"
+                >
+                  <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                  </svg>
+                  {round.facebookLabel ?? "More Info"}
+                </a>
+              )}
             </div>
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight drop-shadow-sm">
-              {round.isChampionship ? "🏆 Championship" : `Week ${round.weekNumber}`}
-            </h1>
-            <p className="text-white/80 mt-2 text-sm">
-              {formatDate(round.date)} · {round.league.name}
-            </p>
-            {round.facebookUrl && (
-              <a
-                href={round.facebookUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-full bg-white/15 hover:bg-white/25 border border-white/30 text-white text-sm font-medium transition-colors backdrop-blur-sm"
-              >
-                <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                </svg>
-                {round.facebookLabel ?? "More Info"}
-              </a>
-            )}
+            <SponsorLogo />
           </div>
         </div>
         <div className="absolute bottom-0 left-0 right-0">

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { getStandings } from "@/lib/standings";
 import { computePoolSummaries, PoolSummary } from "@/lib/pool-utils";
 import { Badge } from "@/components/ui/badge";
+import { SponsorLogo } from "@/components/sponsor-logo";
 import { formatDate, formatScore } from "@/lib/utils";
 import Link from "next/link";
 import { Division } from "@/generated/prisma/client";
@@ -70,12 +71,15 @@ export default async function RoundsPage({ searchParams }: { searchParams: Promi
         >
           <div className="absolute inset-0 bg-gradient-to-br from-black/65 via-black/40 to-black/30 pointer-events-none" />
           <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/40 to-transparent pointer-events-none" />
-          <div className="relative">
-            <p className="text-white/60 text-xs font-semibold uppercase tracking-widest mb-1">Rounds</p>
-            <h1 className="text-4xl font-black tracking-tight drop-shadow-sm">{selectedLeague.name}</h1>
-            <p className="text-white/80 mt-2 text-sm">
-              {formatDate(selectedLeague.startDate)} – {formatDate(selectedLeague.endDate)} · {selectedLeague.location}
-            </p>
+          <div className="relative flex flex-col md:flex-row md:items-end gap-5 md:gap-8">
+            <div className="flex-1">
+              <p className="text-white/60 text-xs font-semibold uppercase tracking-widest mb-1">Rounds</p>
+              <h1 className="text-4xl font-black tracking-tight drop-shadow-sm">{selectedLeague.name}</h1>
+              <p className="text-white/80 mt-2 text-sm">
+                {formatDate(selectedLeague.startDate)} – {formatDate(selectedLeague.endDate)} · {selectedLeague.location}
+              </p>
+            </div>
+            <SponsorLogo />
           </div>
         </div>
         <div className="absolute bottom-0 left-0 right-0">
