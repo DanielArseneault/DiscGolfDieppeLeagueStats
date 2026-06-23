@@ -18,6 +18,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       redLayout: { include: { holePars: { orderBy: { holeNumber: "asc" } } } },
       post: true,
       newspaperImage: true,
+      bobTag: true,
     },
   });
   if (!round) return NextResponse.json({ error: "Not found" }, { status: 404 });

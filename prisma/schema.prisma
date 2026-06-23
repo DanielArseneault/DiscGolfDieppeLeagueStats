@@ -63,7 +63,7 @@ model Player {
   id           Int          @id @default(autoincrement())
   name         String
   pdgaNumber   String?
-  username     String?      @unique
+  username     String?
   division                Division
   memberStatus            MemberStatus @default(NON_MEMBER)
   excludeFromChampionship  Boolean      @default(false)
@@ -73,6 +73,8 @@ model Player {
 
   league  League   @relation(fields: [leagueId], references: [id])
   results Result[]
+
+  @@unique([username, leagueId])
 }
 
 model Round {
@@ -99,6 +101,7 @@ model Round {
   poolWinners   ChampionshipPoolWinner[]
   post          Post?
   newspaperImage NewspaperImage?
+  bobTag        BobTag?
 
   @@unique([leagueId, weekNumber])
 }
@@ -170,6 +173,14 @@ model Post {
   content   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+}
+
+model BobTag {
+  id         Int    @id @default(autoincrement())
+  roundId    Int    @unique
+  playerName String
 
   round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
 }

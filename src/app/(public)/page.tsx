@@ -31,6 +31,7 @@ async function getData(league: League) {
         poolWinners: { orderBy: [{ pool: "asc" }, { place: "asc" }] },
         blueLayout: { include: { holePars: { orderBy: { holeNumber: "asc" } } } },
         redLayout: { include: { holePars: { orderBy: { holeNumber: "asc" } } } },
+        bobTag: true,
         _count: { select: { results: true } },
       },
     }),
@@ -342,6 +343,12 @@ function RecentRound({ round, leagueId, playerLookup }: { round: RoundData; leag
                 </div>
               ))}
             </div>
+          </div>
+        )}
+        {round.bobTag && (
+          <div className="mt-4 pt-4 border-t border-slate-100">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">🚌 BOB Tag</p>
+            <PlayerName name={round.bobTag.playerName} lookup={playerLookup} leagueId={leagueId} className="text-sm font-semibold text-slate-800 hover:underline" />
           </div>
         )}
       </CardContent>

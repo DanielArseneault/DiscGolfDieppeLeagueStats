@@ -46,7 +46,7 @@ export async function POST(req: Request) {
 
     for (const result of allResults) {
       let player = result.username
-        ? await prisma.player.findUnique({ where: { username: result.username } })
+        ? await prisma.player.findFirst({ where: { username: result.username, leagueId } })
         : await prisma.player.findFirst({ where: { name: result.name, leagueId } });
 
       if (!player) {

@@ -65,6 +65,7 @@ interface Round {
   poolWinners: SavedPoolWinner[];
   roundWinners: RoundWinnerEntry[];
   post: { content: string } | null;
+  bobTag: { playerName: string } | null;
   newspaperImage: {
     headline: string;
     dateline: string | null;
@@ -159,6 +160,10 @@ export default function RoundManagePage({
   const [aceEntries, setAceEntries] = useState<{ player: string; hole: number; prizeAmount: string }[]>([]);
   const [aceSaving, setAceSaving] = useState(false);
 
+  // BOB Tag state
+  const [bobPlayer, setBobPlayer] = useState("");
+  const [bobSaving, setBobSaving] = useState(false);
+
   // Round winner overrides (non-championship)
   // 1st place: one per division; 2nd place: multiple allowed (ties)
   const [roundWinner1st, setRoundWinner1st] = useState<Record<string, string>>({ BLUE: "", RED: "" });
@@ -222,6 +227,7 @@ export default function RoundManagePage({
       prizeAmount: w.prizeAmount != null ? String(w.prizeAmount) : "",
     })));
 
+    setBobPlayer(data.bobTag?.playerName ?? "");
     setFacebookUrl(data.facebookUrl ?? "");
     setFacebookLabel(data.facebookLabel ?? "");
 
@@ -351,6 +357,22 @@ export default function RoundManagePage({
     });
     await load();
     setCtpSaving(false);
+  }
+
+  // BOB Tag
+  async function handleSaveBob() {
+    setBobSaving(true);
+    if (bobPlayer.trim()) {
+      await fetch(`/api/rounds/${roundId}/bob`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ playerName: bobPlayer.trim() }),
+      });
+    } else {
+      await fetch(`/api/rounds/${roundId}/bob`, { method: "DELETE" });
+    }
+    await load();
+    setBobSaving(false);
   }
 
   // Pool winners
@@ -884,6 +906,42 @@ export default function RoundManagePage({
                     + Add Ace
                   </Button>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* BOB Tag */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">🚌 BOB Tag (Back of the Bus)</CardTitle>
+              <p className="text-xs text-slate-500">
+                Who got the BOB Tag this round. Leave blank if nobody got it.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-3 items-end">
+                <div className="flex-1 space-y-1.5">
+                  <Label className="text-xs">Player</Label>
+                  <Select
+                    value={bobPlayer || "__none__"}
+                    onValueChange={(v) => setBobPlayer(v === "__none__" ? "" : v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select player..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— Clear BOB Tag —</SelectItem>
+                      {round.results.map((r) => (
+                        <SelectItem key={r.id} value={r.player.name}>
+                          {r.player.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button size="sm" onClick={handleSaveBob} disabled={bobSaving} className="mb-0.5">
+                  {bobSaving ? "Saving..." : "Save BOB Tag"}
+                </Button>
               </div>
             </CardContent>
           </Card>

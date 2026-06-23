@@ -56,6 +56,7 @@ export default async function RoundPage({
       poolWinners: { orderBy: [{ pool: "asc" }, { place: "asc" }] },
       blueLayout: { include: { holePars: { orderBy: { holeNumber: "asc" } } } },
       redLayout: { include: { holePars: { orderBy: { holeNumber: "asc" } } } },
+      bobTag: true,
       league: true,
     },
   });
@@ -301,6 +302,23 @@ export default async function RoundPage({
                 </Badge>
               ))}
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {round.bobTag && (
+        <Card className="border-slate-300 bg-gradient-to-br from-slate-50 to-white">
+          <CardHeader>
+            <CardTitle className="text-base text-slate-900">🚌 BOB Tag — Back of the Bus</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PlayerName
+              name={round.bobTag.playerName}
+              lookup={playerLookup}
+              leagueId={round.leagueId}
+              className="font-semibold text-slate-800 text-sm hover:underline"
+            />
+            <span className="text-slate-400 text-sm ml-2">got the BOB Tag this round</span>
           </CardContent>
         </Card>
       )}
