@@ -5,7 +5,8 @@ import { computeHoleStats } from "@/lib/course-stats";
 import { StandingsTable } from "@/components/standings-table";
 import { CourseStatsTable } from "@/components/course-stats-tabs";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { ReactionBar, type ReactionCounts } from "@/components/reaction-bar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Division } from "@/generated/prisma/client";
 import { formatDate, formatScore } from "@/lib/utils";
@@ -32,6 +33,7 @@ async function getData(league: League) {
         blueLayout: { include: { holePars: { orderBy: { holeNumber: "asc" } } } },
         redLayout: { include: { holePars: { orderBy: { holeNumber: "asc" } } } },
         bobTag: true,
+        reactions: true,
         _count: { select: { results: true } },
       },
     }),
@@ -274,14 +276,30 @@ function PlayerName({ name, lookup, leagueId, className }: { name: string; looku
 }
 
 function RecentRound({ round, leagueId, playerLookup }: { round: RoundData; leagueId: number; playerLookup: PlayerLookup }) {
+  const initialCounts = Object.fromEntries(
+    round.reactions.filter((r) => r.target === "round").map((r) => [r.emoji, r.count])
+  ) as ReactionCounts;
+
   return (
     <Card className="border-slate-200">
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <CardTitle className="text-slate-900">Week {round.weekNumber} — Recent Results</CardTitle>
-          <Link href={`/rounds/${round.id}?league=${leagueId}`} className="shrink-0 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 hover:border-blue-300 px-3 py-1 rounded-full transition-colors">
-            Full scorecard →
-          </Link>
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            {round.facebookUrl && (
+              <a
+                href={round.facebookUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 px-3 py-1 rounded-full transition-colors"
+              >
+                {round.facebookLabel ?? "Recap"} ↗
+              </a>
+            )}
+            <Link href={`/rounds/${round.id}?league=${leagueId}`} className="shrink-0 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 hover:border-blue-300 px-3 py-1 rounded-full transition-colors">
+              Full scorecard →
+            </Link>
+          </div>
         </div>
         <p className="text-sm text-slate-500">
           {formatDate(round.date)} · {round._count.results} players
@@ -352,6 +370,9 @@ function RecentRound({ round, leagueId, playerLookup }: { round: RoundData; leag
           </div>
         )}
       </CardContent>
+      <CardFooter className="border-t border-slate-100 bg-slate-50/60 px-6 py-3">
+        <ReactionBar roundId={round.id} target="round" initialCounts={initialCounts} />
+      </CardFooter>
     </Card>
   );
 }
@@ -359,6 +380,9 @@ function RecentRound({ round, leagueId, playerLookup }: { round: RoundData; leag
 // ── Championship round ────────────────────────────────────────────────────────
 
 function ChampionshipResults({ round, poolSummaries, leagueId, playerLookup }: { round: RoundData; poolSummaries: PoolSummary[]; leagueId: number; playerLookup: PlayerLookup }) {
+  const initialCounts = Object.fromEntries(
+    round.reactions.filter((r) => r.target === "round").map((r) => [r.emoji, r.count])
+  ) as ReactionCounts;
   const bluePools = poolSummaries.filter((w) => ["A", "B"].includes(w.pool));
   const redPools = poolSummaries.filter((w) => ["C", "D"].includes(w.pool));
 
@@ -427,6 +451,9 @@ function ChampionshipResults({ round, poolSummaries, leagueId, playerLookup }: {
           </div>
         )}
       </CardContent>
+      <CardFooter className="border-t border-amber-100 bg-amber-50/40 px-6 py-3">
+        <ReactionBar roundId={round.id} target="round" initialCounts={initialCounts} />
+      </CardFooter>
     </Card>
   );
 }
