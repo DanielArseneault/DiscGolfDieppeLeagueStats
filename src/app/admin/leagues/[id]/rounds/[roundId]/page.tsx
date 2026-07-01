@@ -14,6 +14,7 @@ import { computePoolSummaries } from "@/lib/pool-utils";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface CtpWinner {
   hole: number;
@@ -41,6 +42,15 @@ interface RoundWinnerEntry {
   prize?: string;
 }
 
+interface HoleParEntry {
+  holeNumber: number;
+  par: number;
+}
+
+interface CourseLayout {
+  holePars: HoleParEntry[];
+}
+
 interface RoundResult {
   id: number;
   playerId: number;
@@ -49,6 +59,7 @@ interface RoundResult {
   player: { name: string };
   score: number;
   relativeScore: number;
+  holeScores: Record<string, number>;
 }
 
 interface Round {
@@ -66,6 +77,8 @@ interface Round {
   roundWinners: RoundWinnerEntry[];
   post: { content: string } | null;
   bobTag: { playerName: string } | null;
+  blueLayout: CourseLayout | null;
+  redLayout: CourseLayout | null;
   newspaperImage: {
     headline: string;
     dateline: string | null;
@@ -170,6 +183,11 @@ export default function RoundManagePage({
   const [roundWinner1stPrize, setRoundWinner1stPrize] = useState<Record<string, string>>({ BLUE: "", RED: "" });
   const [roundWinner2nds, setRoundWinner2nds] = useState<{ division: "BLUE" | "RED"; playerName: string }[]>([]);
   const [roundWinnerSaving, setRoundWinnerSaving] = useState(false);
+
+  // Score editor state
+  const [editingResult, setEditingResult] = useState<RoundResult | null>(null);
+  const [editScores, setEditScores] = useState<Record<string, number>>({});
+  const [scoreSaving, setScoreSaving] = useState(false);
 
   // Facebook link state
   const [facebookUrl, setFacebookUrl] = useState("");
@@ -494,12 +512,49 @@ export default function RoundManagePage({
     setPhotos(photos.filter((_, j) => j !== index));
   }
 
+  function openScoreEditor(result: RoundResult) {
+    setEditingResult(result);
+    const scores: Record<string, number> = {};
+    for (const [k, v] of Object.entries(result.holeScores)) {
+      const n = Number(v);
+      if (n > 0) scores[k] = n;
+    }
+    setEditScores(scores);
+  }
+
+  async function handleSaveScores() {
+    if (!editingResult) return;
+    setScoreSaving(true);
+    await fetch(`/api/rounds/${roundId}/results/${editingResult.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ holeScores: editScores }),
+    });
+    await load();
+    setEditingResult(null);
+    setScoreSaving(false);
+  }
+
   const blueResults = useMemo(() => round?.results.filter((r) => r.division === "BLUE") ?? [], [round?.results]);
   const redResults = useMemo(() => round?.results.filter((r) => r.division === "RED") ?? [], [round?.results]);
   const poolData = useMemo(
     () => round?.isChampionship ? computePoolGroups(round.results, standings) : null,
     [round?.isChampionship, round?.results, standings]
   );
+
+  const editLayout = editingResult?.division === "BLUE" ? round?.blueLayout : round?.redLayout;
+  const editHoles = useMemo(() => {
+    const pars = editLayout?.holePars;
+    return pars?.length
+      ? [...pars].sort((a, b) => a.holeNumber - b.holeNumber)
+      : Array.from({ length: 18 }, (_, i) => ({ holeNumber: i + 1, par: 3 }));
+  }, [editLayout]);
+  const editTotal = Object.values(editScores).reduce((s, v) => s + v, 0);
+  const editTotalPar = editHoles.reduce((s, h) => s + h.par, 0);
+  const editRelative = editTotal - editTotalPar;
+  const editMidpoint = Math.ceil(editHoles.length / 2);
+  const editFront = editHoles.slice(0, editMidpoint);
+  const editBack = editHoles.slice(editMidpoint);
 
   if (!round) {
     return (
@@ -606,7 +661,12 @@ export default function RoundManagePage({
                                   <span className="w-5 text-center">
                                     {isFirst ? "🥇" : isSecond ? "🥈" : <span className="text-slate-300">·</span>}
                                   </span>
-                                  <span className="text-slate-900">{r.player.name}</span>
+                                  <button
+                                    onClick={() => openScoreEditor(r)}
+                                    className="text-slate-900 hover:text-blue-600 hover:underline text-left"
+                                  >
+                                    {r.player.name}
+                                  </button>
                                   <span className="ml-auto font-mono text-xs text-slate-500">{r.score}</span>
                                 </li>
                               );
@@ -627,7 +687,12 @@ export default function RoundManagePage({
                               {poolData.blueUnqualified.map((r, i) => (
                                 <li key={r.id} className="text-sm flex items-center gap-2">
                                   <span className="text-slate-400 w-4">{i + 1}.</span>
-                                  <span className="text-slate-500">{r.player.name}</span>
+                                  <button
+                                    onClick={() => openScoreEditor(r)}
+                                    className="text-slate-500 hover:text-blue-600 hover:underline text-left"
+                                  >
+                                    {r.player.name}
+                                  </button>
                                   <span className="ml-auto font-mono text-xs text-slate-400">{r.score}</span>
                                 </li>
                               ))}
@@ -641,7 +706,12 @@ export default function RoundManagePage({
                               {poolData.redUnqualified.map((r, i) => (
                                 <li key={r.id} className="text-sm flex items-center gap-2">
                                   <span className="text-slate-400 w-4">{i + 1}.</span>
-                                  <span className="text-slate-500">{r.player.name}</span>
+                                  <button
+                                    onClick={() => openScoreEditor(r)}
+                                    className="text-slate-500 hover:text-blue-600 hover:underline text-left"
+                                  >
+                                    {r.player.name}
+                                  </button>
                                   <span className="ml-auto font-mono text-xs text-slate-400">{r.score}</span>
                                 </li>
                               ))}
@@ -666,7 +736,12 @@ export default function RoundManagePage({
                           {visible.map((r) => (
                             <li key={r.id} className="text-sm flex items-center gap-2">
                               <span className="text-slate-400 w-4">{r.position}.</span>
-                              <span className="text-slate-900">{r.player.name}</span>
+                              <button
+                                onClick={() => openScoreEditor(r)}
+                                className="text-slate-900 hover:text-blue-600 hover:underline text-left"
+                              >
+                                {r.player.name}
+                              </button>
                               <span className="ml-auto font-mono text-xs text-slate-500">{r.score}</span>
                             </li>
                           ))}
@@ -1212,6 +1287,88 @@ export default function RoundManagePage({
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Score Editor Dialog */}
+      <Dialog open={!!editingResult} onOpenChange={(open) => { if (!open) setEditingResult(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-base">
+              Edit Scores — {editingResult?.player.name}
+              <span className="ml-2 text-xs font-normal text-slate-500">
+                {editingResult?.division === "BLUE" ? "🔵 Blue" : "🔴 Red"}
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 gap-x-6 mt-2">
+            {[editFront, editBack].map((group, gi) => (
+              <div key={gi}>
+                <div className="grid grid-cols-[2.5rem_2.5rem_1fr] gap-x-2 mb-1.5">
+                  <span className="text-[11px] font-medium text-slate-400">Hole</span>
+                  <span className="text-[11px] font-medium text-slate-400">Par</span>
+                  <span className="text-[11px] font-medium text-slate-400">Score</span>
+                </div>
+                <div className="space-y-1">
+                  {group.map((h) => {
+                    const val = editScores[String(h.holeNumber)];
+                    const diff = val ? val - h.par : 0;
+                    return (
+                      <div key={h.holeNumber} className="grid grid-cols-[2.5rem_2.5rem_1fr] items-center gap-x-2">
+                        <span className="text-xs text-slate-600 font-medium">{h.holeNumber}</span>
+                        <span className="text-xs text-slate-400">{h.par}</span>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={20}
+                          className={`h-7 text-xs tabular-nums ${
+                            val && diff < 0
+                              ? "border-sky-400 text-sky-600"
+                              : val && diff > 0
+                              ? "border-orange-300 text-orange-500"
+                              : ""
+                          }`}
+                          value={val ?? ""}
+                          onChange={(e) => {
+                            const n = parseInt(e.target.value);
+                            setEditScores((prev) => {
+                              const next = { ...prev };
+                              if (isNaN(n) || n <= 0) delete next[String(h.holeNumber)];
+                              else next[String(h.holeNumber)] = n;
+                              return next;
+                            });
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between pt-3 border-t mt-3">
+            <div className="text-sm">
+              <span className="text-slate-500">Total: </span>
+              <span className="font-semibold text-slate-800">{editTotal}</span>
+              <span className="mx-2 text-slate-300">·</span>
+              <span className={editRelative < 0 ? "font-medium text-sky-600" : editRelative > 0 ? "font-medium text-orange-500" : "text-slate-500"}>
+                {editRelative === 0 ? "E" : editRelative > 0 ? `+${editRelative}` : String(editRelative)}
+              </span>
+              {editLayout && (
+                <span className="text-xs text-slate-400 ml-1">vs par {editTotalPar}</span>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setEditingResult(null)}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={handleSaveScores} disabled={scoreSaving}>
+                {scoreSaving ? "Saving..." : "Save Scores"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
