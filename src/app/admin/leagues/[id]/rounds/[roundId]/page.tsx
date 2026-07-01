@@ -181,7 +181,7 @@ export default function RoundManagePage({
   // 1st place: one per division; 2nd place: multiple allowed (ties)
   const [roundWinner1st, setRoundWinner1st] = useState<Record<string, string>>({ BLUE: "", RED: "" });
   const [roundWinner1stPrize, setRoundWinner1stPrize] = useState<Record<string, string>>({ BLUE: "", RED: "" });
-  const [roundWinner2nds, setRoundWinner2nds] = useState<{ division: "BLUE" | "RED"; playerName: string }[]>([]);
+  const [roundWinner2nds, setRoundWinner2nds] = useState<{ division: "BLUE" | "RED"; playerName: string; prize: string }[]>([]);
   const [roundWinnerSaving, setRoundWinnerSaving] = useState(false);
 
   // Score editor state
@@ -251,10 +251,10 @@ export default function RoundManagePage({
 
     const w1st: Record<string, string> = { BLUE: "", RED: "" };
     const w1stPrize: Record<string, string> = { BLUE: "", RED: "" };
-    const w2nds: { division: "BLUE" | "RED"; playerName: string }[] = [];
+    const w2nds: { division: "BLUE" | "RED"; playerName: string; prize: string }[] = [];
     for (const w of data.roundWinners ?? []) {
       if (w.place === 1) { w1st[w.division] = w.playerName; w1stPrize[w.division] = w.prize ?? ""; }
-      else if (w.place === 2) w2nds.push({ division: w.division as "BLUE" | "RED", playerName: w.playerName });
+      else if (w.place === 2) w2nds.push({ division: w.division as "BLUE" | "RED", playerName: w.playerName, prize: w.prize ?? "" });
     }
     // Pre-populate 1st place from scorecard if no override is saved
     if (!w1st.BLUE) w1st.BLUE = data.results.filter((r: RoundResult) => r.division === "BLUE").find((r: RoundResult) => r.position === 1)?.player.name ?? "";
@@ -332,7 +332,7 @@ export default function RoundManagePage({
         .map(([div, name]) => ({ division: div as "BLUE" | "RED", place: 1, playerName: name.trim(), prize: roundWinner1stPrize[div]?.trim() || undefined })),
       ...roundWinner2nds
         .filter((w) => w.playerName.trim())
-        .map((w) => ({ division: w.division, place: 2, playerName: w.playerName.trim() })),
+        .map((w) => ({ division: w.division, place: 2, playerName: w.playerName.trim(), prize: w.prize?.trim() || undefined })),
     ];
     await fetch(`/api/rounds/${roundId}/winners`, {
       method: "POST",
@@ -729,13 +729,19 @@ export default function RoundManagePage({
                     { label: "🔴 Red Division", results: redResults },
                   ].map(({ label, results }) => {
                     const visible = resultsExpanded ? results : results.slice(0, 5);
+                    const posCounts = results.reduce<Record<number, number>>((acc, r) => {
+                      acc[r.position] = (acc[r.position] ?? 0) + 1;
+                      return acc;
+                    }, {});
                     return (
                       <div key={label}>
                         <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">{label}</p>
                         <ol className="space-y-1">
                           {visible.map((r) => (
                             <li key={r.id} className="text-sm flex items-center gap-2">
-                              <span className="text-slate-400 w-4">{r.position}.</span>
+                              <span className="text-slate-400 w-7 shrink-0 tabular-nums">
+                                {posCounts[r.position] > 1 ? `T${r.position}` : `${r.position}.`}
+                              </span>
                               <button
                                 onClick={() => openScoreEditor(r)}
                                 className="text-slate-900 hover:text-blue-600 hover:underline text-left"
@@ -1043,7 +1049,7 @@ export default function RoundManagePage({
                       {/* 1st place */}
                       <div className="space-y-1">
                         <Label className="text-xs">🥇 1st Place</Label>
-                        <div className="grid grid-cols-[1fr_1fr] gap-2">
+                        <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
                           <Input
                             value={roundWinner1st[div] ?? ""}
                             onChange={(e) => setRoundWinner1st((prev) => ({ ...prev, [div]: e.target.value }))}
@@ -1055,6 +1061,7 @@ export default function RoundManagePage({
                             onChange={(e) => setRoundWinner1stPrize((prev) => ({ ...prev, [div]: e.target.value }))}
                             placeholder="Prize (e.g. $20 or disc)"
                           />
+                          <div className="w-8" aria-hidden />
                         </div>
                         <datalist id={`players-${div}-1`}>
                           {divResults.map((r) => <option key={r.id} value={r.player.name} />)}
@@ -1064,7 +1071,7 @@ export default function RoundManagePage({
                       <div className="space-y-2">
                         <Label className="text-xs">🥈 2nd Place</Label>
                         {divSeconds.map((entry, i) => (
-                          <div key={i} className="flex gap-2">
+                          <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
                             <Input
                               value={entry.playerName}
                               onChange={(e) => {
@@ -1086,6 +1093,27 @@ export default function RoundManagePage({
                               }}
                               placeholder="Player name"
                               list={`players-${div}-2`}
+                            />
+                            <Input
+                              value={entry.prize}
+                              onChange={(e) => {
+                                const prize = e.target.value;
+                                setRoundWinner2nds((prev) => {
+                                  let idx = -1;
+                                  let count = 0;
+                                  for (let j = 0; j < prev.length; j++) {
+                                    if (prev[j].division === div) {
+                                      if (count === i) { idx = j; break; }
+                                      count++;
+                                    }
+                                  }
+                                  if (idx === -1) return prev;
+                                  const next = [...prev];
+                                  next[idx] = { ...next[idx], prize };
+                                  return next;
+                                });
+                              }}
+                              placeholder="Prize (e.g. $20 or disc)"
                             />
                             <Button
                               variant="ghost"
@@ -1115,7 +1143,7 @@ export default function RoundManagePage({
                           size="sm"
                           variant="outline"
                           className="text-xs"
-                          onClick={() => setRoundWinner2nds((prev) => [...prev, { division: div, playerName: "" }])}
+                          onClick={() => setRoundWinner2nds((prev) => [...prev, { division: div, playerName: "", prize: "" }])}
                         >
                           + Add 2nd Place
                         </Button>

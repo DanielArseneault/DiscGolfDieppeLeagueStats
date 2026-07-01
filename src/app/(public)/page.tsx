@@ -293,6 +293,7 @@ function RecentRound({ round, leagueId, playerLookup }: { round: RoundData; leag
           {([Division.BLUE, Division.RED] as Division[]).map((div) => {
             const top3 = round.results.filter((r) => r.division === div).slice(0, 3);
             const overrideWinner = round.roundWinners.find((w) => w.division === div && w.place === 1);
+            const secondPrize = round.roundWinners.find((w) => w.division === div && w.place === 2 && w.prize)?.prize ?? null;
             return (
               <div key={div}>
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
@@ -301,19 +302,25 @@ function RecentRound({ round, leagueId, playerLookup }: { round: RoundData; leag
                 {top3.length === 0 ? (
                   <p className="text-slate-400 text-sm">No results</p>
                 ) : (
-                  <ol className="space-y-1">
+                  <ol className="space-y-1.5">
                     {top3.map((r, i) => {
                       const displayName = i === 0 && overrideWinner ? overrideWinner.playerName : r.player.name;
                       const playerId = i === 0 && overrideWinner
                         ? playerLookup.get(overrideWinner.playerName.toLowerCase().trim()) ?? r.player.id
                         : r.player.id;
+                      const prize = i === 0 ? (overrideWinner?.prize ?? null) : i === 1 ? secondPrize : null;
                       return (
-                        <li key={r.id} className="flex items-center gap-3 text-sm">
-                          <span className="text-slate-400 w-4 text-right">{i + 1}.</span>
+                        <li key={r.id} className="flex items-center gap-2 text-sm flex-wrap">
+                          <span className="text-slate-400 w-4 text-right shrink-0">{i + 1}.</span>
                           <Link href={`/players/${playerId}?league=${leagueId}`} className="font-medium text-slate-900 hover:underline">
                             {displayName}
                           </Link>
-                          <span className={`ml-auto font-mono text-xs ${
+                          {prize && (
+                            <Badge className="bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100 text-xs">
+                              {prize}
+                            </Badge>
+                          )}
+                          <span className={`ml-auto font-mono text-xs shrink-0 ${
                             r.relativeScore < 0 ? "text-emerald-600" : r.relativeScore > 0 ? "text-orange-500" : "text-slate-500"
                           }`}>
                             {r.score} ({formatScore(r.relativeScore)})

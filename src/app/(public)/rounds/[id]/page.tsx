@@ -230,7 +230,7 @@ export default async function RoundPage({
             const firstPrize = savedFirst?.prize ?? null;
             const savedSeconds = round.roundWinners.filter((w) => w.division === div && w.place === 2);
             // Fall back to scorecard position-2 players if no overrides saved
-            const seconds: { id: number; playerName: string }[] = savedSeconds.length > 0
+            const seconds: { id: number; playerName: string; prize?: string | null }[] = savedSeconds.length > 0
               ? savedSeconds
               : divResults.filter((r) => r.position === 2).map((r) => ({ id: r.id, playerName: r.player.name }));
             return { div, firstName, firstPrize, seconds };
@@ -258,15 +258,20 @@ export default async function RoundPage({
                               <PlayerName name={firstName} lookup={playerLookup} leagueId={round.leagueId} className="font-semibold text-slate-800 text-sm hover:underline" />
                               {firstPrize && (
                                 <Badge className="bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100 text-xs">
-                                  🏅 {firstPrize}
+                                  {firstPrize}
                                 </Badge>
                               )}
                             </div>
                           )}
                           {seconds.map((w) => (
-                            <div key={w.id} className="flex items-center gap-2">
+                            <div key={w.id} className="flex items-center gap-1.5 flex-wrap">
                               <span className="text-base shrink-0">🥈</span>
                               <PlayerName name={w.playerName} lookup={playerLookup} leagueId={round.leagueId} className="font-semibold text-slate-800 text-sm hover:underline" />
+                              {w.prize && (
+                                <Badge className="bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100 text-xs">
+                                  {w.prize}
+                                </Badge>
+                              )}
                             </div>
                           ))}
                         </div>
