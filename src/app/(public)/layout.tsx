@@ -1,11 +1,13 @@
 import { prisma } from "@/lib/db";
 import { PublicHeader } from "@/components/public-header";
+import { TrackPageView } from "@/components/track-page-view";
 
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
   const leagues = await prisma.league.findMany({ orderBy: { year: "desc" } });
 
   return (
     <>
+      <TrackPageView />
       <PublicHeader leagues={leagues} />
       <main className="flex-1 max-w-6xl mx-auto px-4 pt-14 pb-8 w-full">
         {children}
