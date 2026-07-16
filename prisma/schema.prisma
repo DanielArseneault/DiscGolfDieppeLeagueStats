@@ -198,6 +198,16 @@ model RoundReaction {
   @@unique([roundId, emoji, target])
 }
 
+model PageView {
+  id        Int      @id @default(autoincrement())
+  path      String
+  visitorId String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([path])
+}
+
 model NewspaperImage {
   id          Int      @id @default(autoincrement())
   roundId     Int      @unique
