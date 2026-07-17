@@ -24,7 +24,27 @@ export async function POST(req: Request) {
     return new NextResponse(null, { status: 204 });
   }
 
-  await prisma.pageView.create({ data: { path, visitorId } });
+  // The referrer field is only present on entry views (first view of a page
+  // load). Store the external hostname, or "direct" when the visitor arrived
+  // without one; client-side navigations (no field) store null.
+  let referrer: string | null = null;
+  if (typeof body?.referrer === "string") {
+    referrer = "direct";
+    try {
+      const url = new URL(body.referrer);
+      const selfHost = new URL(req.url).hostname;
+      if (url.hostname && url.hostname !== selfHost && url.hostname.length <= 255) {
+        referrer = url.hostname;
+      }
+    } catch {
+      // unparseable/empty referrer — keep "direct"
+    }
+  }
+
+  const userAgent = req.headers.get("user-agent") ?? "";
+  const device = userAgent ? (/Mobi|Android|iPhone|iPad/i.test(userAgent) ? "mobile" : "desktop") : null;
+
+  await prisma.pageView.create({ data: { path, visitorId, referrer, device } });
 
   return new NextResponse(null, { status: 204 });
 }

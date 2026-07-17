@@ -202,6 +202,8 @@ model PageView {
   id        Int      @id @default(autoincrement())
   path      String
   visitorId String
+  referrer  String?
+  device    String?
   createdAt DateTime @default(now())
 
   @@index([createdAt])
