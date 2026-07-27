@@ -51,32 +51,32 @@ export function StandingsTable({ standings, division, bestScoresCount, leagueId 
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-slate-200 text-left">
-            <th className="pb-3 pr-4 font-medium text-slate-500 w-8">#</th>
-            <th className="pb-3 pr-4 font-medium text-slate-500">Player</th>
-            <th className="pb-3 pr-4 font-medium text-slate-500 text-center">Rounds</th>
-            <th className="pb-3 pr-4 font-medium text-slate-500 text-center">
+            <th className="sticky left-0 z-10 bg-white pb-3 pr-4 font-medium text-slate-500 w-10">#</th>
+            <th className="sticky left-10 z-10 bg-white pb-3 pr-4 font-medium text-slate-500 border-r border-slate-200">Player</th>
+            <th className="pb-3 pr-4 font-medium text-slate-500 text-center whitespace-nowrap">Rounds</th>
+            <th className="pb-3 pr-4 font-medium text-slate-500 text-center whitespace-nowrap">
               Best {bestScoresCount}
             </th>
-            <th className="pb-3 pr-4 font-medium text-slate-500 text-center hidden md:table-cell">Scores</th>
-            <th className="pb-3 font-medium text-slate-500 text-center">Pool</th>
+            <th className="pb-3 pr-4 font-medium text-slate-500 text-center whitespace-nowrap">Scores</th>
+            <th className="pb-3 font-medium text-slate-500 text-center whitespace-nowrap">Pool</th>
           </tr>
         </thead>
         <tbody>
           {filtered.map((s) => (
             <tr
               key={s.playerId}
-              className="border-b border-slate-100 hover:bg-slate-50 transition-colors"
+              className="group border-b border-slate-100 hover:bg-slate-50 transition-colors"
             >
-              <td className="py-3 pr-4">
+              <td className="sticky left-0 z-10 bg-white group-hover:bg-slate-50 py-3 pr-4 transition-colors">
                 <div className="flex items-center gap-1.5">
                   <span className="text-slate-400 font-mono text-xs">{s.rank}</span>
                   <RankChangeIndicator change={s.rankChange} />
                 </div>
               </td>
-              <td className="py-3 pr-4">
+              <td className="sticky left-10 z-10 bg-white group-hover:bg-slate-50 py-3 pr-4 border-r border-slate-100 transition-colors">
                 <Link
                   href={`/players/${s.playerId}?league=${leagueId}`}
-                  className="font-medium text-slate-900 hover:text-blue-600 hover:underline transition-colors"
+                  className="font-medium text-slate-900 hover:text-blue-600 hover:underline transition-colors whitespace-nowrap"
                 >
                   {s.playerName}
                 </Link>
@@ -90,12 +90,12 @@ export function StandingsTable({ standings, division, bestScoresCount, leagueId 
               <td className="py-3 pr-4 text-center tabular-nums font-semibold text-slate-900">
                 {s.qualified ? s.qualifyingTotal : "–"}
               </td>
-              <td className="py-3 pr-4 hidden md:table-cell">
-                <div className="flex gap-1 flex-wrap justify-center">
+              <td className="py-3 pr-4">
+                <div className="flex gap-1 flex-nowrap justify-center">
                   {s.allScores.map((score, i) => (
                     <span
                       key={i}
-                      className={`text-xs px-1.5 py-0.5 rounded font-mono ${
+                      className={`text-xs px-1.5 py-0.5 rounded font-mono whitespace-nowrap ${
                         s.bestScores.includes(score) && s.bestScores.indexOf(score) !== -1
                           ? "bg-emerald-100 text-emerald-800 font-semibold"
                           : "bg-slate-100 text-slate-600"
