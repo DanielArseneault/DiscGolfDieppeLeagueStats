@@ -21,6 +21,19 @@ const POOL_COLORS: Record<string, "blue" | "green" | "red" | "yellow"> = {
   D: "yellow",
 };
 
+function getBestScoreFlags(allScores: number[], bestScores: number[]): boolean[] {
+  const remaining = new Map<number, number>();
+  for (const score of bestScores) {
+    remaining.set(score, (remaining.get(score) ?? 0) + 1);
+  }
+  return allScores.map((score) => {
+    const count = remaining.get(score) ?? 0;
+    if (count <= 0) return false;
+    remaining.set(score, count - 1);
+    return true;
+  });
+}
+
 function RankChangeIndicator({ change }: { change: number | null }) {
   if (change === null) return <span className="text-xs text-slate-300 font-medium">new</span>;
   if (change === 0) return <span className="text-xs text-slate-300">—</span>;
@@ -92,16 +105,16 @@ export function StandingsTable({ standings, division, bestScoresCount, leagueId 
               </td>
               <td className="py-3 pr-4">
                 <div className="flex gap-1 flex-nowrap justify-center">
-                  {s.allScores.map((score, i) => (
+                  {getBestScoreFlags(s.allScores, s.bestScores).map((isBest, i) => (
                     <span
                       key={i}
                       className={`text-xs px-1.5 py-0.5 rounded font-mono whitespace-nowrap ${
-                        s.bestScores.includes(score) && s.bestScores.indexOf(score) !== -1
+                        isBest
                           ? "bg-emerald-100 text-emerald-800 font-semibold"
                           : "bg-slate-100 text-slate-600"
                       }`}
                     >
-                      {score}
+                      {s.allScores[i]}
                     </span>
                   ))}
                 </div>

@@ -118,6 +118,19 @@ export const getStandings = cache(async function getStandings(leagueId: number):
   });
 });
 
+// Compares two players' counted scores best-to-worst (both already sorted ascending);
+// the first round where one score beats the other decides the tie.
+function countbackCompare(a: number[], b: number[]): number {
+  const len = Math.max(a.length, b.length);
+  for (let i = 0; i < len; i++) {
+    const av = a[i];
+    const bv = b[i];
+    if (av === undefined || bv === undefined) return (av === undefined ? 1 : 0) - (bv === undefined ? 1 : 0);
+    if (av !== bv) return av - bv;
+  }
+  return 0;
+}
+
 function rankAndAssignPools(
   standings: PlayerStanding[],
   division: Division,
@@ -133,6 +146,8 @@ function rankAndAssignPools(
       const bBucket = Math.min(b.roundsPlayed, bestScoresCount);
       if (aBucket !== bBucket) return bBucket - aBucket;
       if (a.qualifyingTotal !== b.qualifyingTotal) return a.qualifyingTotal - b.qualifyingTotal;
+      const countback = countbackCompare(a.bestScores, b.bestScores);
+      if (countback !== 0) return countback;
       return a.playerName.localeCompare(b.playerName);
     });
 

@@ -108,6 +108,8 @@ export default async function PlayerPage({
       select: {
         playerId: true,
         score: true,
+        relativeScore: true,
+        holeScores: true,
         round: { select: { weekNumber: true } },
         player: { select: { division: true } },
       },
@@ -168,6 +170,19 @@ export default async function PlayerPage({
     ? Math.round(rankValues.reduce((s, r) => s + r, 0) / rankValues.length)
     : null;
 
+  // Field (division) comparison stats
+  const fieldResults = allLeagueResults.filter((r) => r.player.division === player.division);
+  const fieldAvgScore = fieldResults.length > 0
+    ? fieldResults.reduce((s, r) => s + r.relativeScore, 0) / fieldResults.length
+    : null;
+  const scoringAvgDelta = avgScore != null && fieldAvgScore != null
+    ? Math.round((avgScore - fieldAvgScore) * 10) / 10
+    : null;
+  const divisionStandings = standings.filter((s) => s.division === player.division);
+  const percentile = standing && divisionStandings.length > 0
+    ? Math.max(1, Math.round((standing.rank / divisionStandings.length) * 100))
+    : null;
+
   // Per-hole stats
   const holePars = player.division === Division.BLUE
     ? (layoutRound?.blueLayout?.holePars ?? [])
@@ -175,6 +190,12 @@ export default async function PlayerPage({
   const playerHoleStats = holePars.length > 0
     ? computeHoleStats(
         qualifyingResults.map((r) => r.holeScores as Record<string, number>),
+        holePars
+      )
+    : null;
+  const fieldHoleStats = holePars.length > 0
+    ? computeHoleStats(
+        fieldResults.map((r) => r.holeScores as Record<string, number>),
         holePars
       )
     : null;
@@ -321,7 +342,9 @@ export default async function PlayerPage({
               <div className="pb-5 grid grid-cols-3 gap-3 text-center">
                 <div>
                   <div className="text-2xl sm:text-3xl font-bold text-slate-900">#{standing.rank}</div>
-                  <div className="text-xs text-slate-500 mt-0.5">Division Rank</div>
+                  <div className="text-xs text-slate-500 mt-0.5">
+                    Division Rank{percentile != null && <span className="text-slate-400"> · Top {percentile}%</span>}
+                  </div>
                 </div>
                 <div>
                   <div className={`text-2xl sm:text-3xl font-bold ${standing.qualified ? "text-emerald-600" : "text-orange-500"}`}>
@@ -366,6 +389,35 @@ export default async function PlayerPage({
                   </div>
                 </div>
               </div>
+
+              {/* Field comparison */}
+              {scoringAvgDelta != null && (
+                <div className="pt-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3 text-center">
+                    Vs. {player.division === Division.BLUE ? "Blue" : "Red"} Division Field
+                  </p>
+                  <div className="flex justify-center gap-8">
+                    <CompactStat
+                      label="Scoring Avg. vs Field"
+                      value={`${scoringAvgDelta <= 0 ? "" : "+"}${scoringAvgDelta}`}
+                      valueClass={scoringAvgDelta < 0 ? "text-emerald-600" : scoringAvgDelta > 0 ? "text-orange-500" : "text-slate-500"}
+                      center
+                    />
+                    <CompactStat
+                      label="Field Avg."
+                      value={fieldAvgScore != null ? formatScore(Math.round(fieldAvgScore * 10) / 10) : "–"}
+                      center
+                    />
+                  </div>
+                  <p className="text-xs text-slate-400 text-center mt-2">
+                    {scoringAvgDelta < 0
+                      ? `Averaging ${Math.abs(scoringAvgDelta)} stroke${Math.abs(scoringAvgDelta) !== 1 ? "s" : ""} better than the division field per round`
+                      : scoringAvgDelta > 0
+                        ? `Averaging ${scoringAvgDelta} stroke${scoringAvgDelta !== 1 ? "s" : ""} worse than the division field per round`
+                        : "Averaging the same as the division field per round"}
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -455,7 +507,7 @@ export default async function PlayerPage({
       {playerHoleStats && qualifyingResults.length > 0 && (
         <div>
           <h2 className="text-lg font-semibold text-slate-900 mb-3">Hole Performance</h2>
-          <CourseStatsSection stats={playerHoleStats} />
+          <CourseStatsSection stats={playerHoleStats} fieldStats={fieldHoleStats ?? undefined} />
         </div>
       )}
 

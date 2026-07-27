@@ -7,6 +7,7 @@ function diffClass(d: number | null) {
   if (d == null) return "";
   if (d <= -0.4) return "bg-emerald-100 text-emerald-800";
   if (d < 0) return "bg-emerald-50 text-emerald-700";
+  if (d === 0) return "bg-slate-100 text-slate-600";
   if (d < 0.4) return "bg-red-50 text-orange-700";
   return "bg-red-100 text-red-800";
 }
@@ -23,7 +24,9 @@ function ChevronIcon({ open }: { open: boolean }) {
   );
 }
 
-export function CourseStatsTable({ stats }: { stats: HoleStat[] }) {
+export function CourseStatsTable({ stats, fieldStats }: { stats: HoleStat[]; fieldStats?: HoleStat[] }) {
+  const fieldByHole = new Map((fieldStats ?? []).map((s) => [s.holeNumber, s]));
+
   const rows: { label: string; render: (s: HoleStat) => React.ReactNode }[] = [
     { label: "Par", render: (s) => <span className="text-slate-500">{s.par}</span> },
     {
@@ -61,6 +64,32 @@ export function CourseStatsTable({ stats }: { stats: HoleStat[] }) {
       label: "Aces",
       render: (s) => <span className={s.aces > 0 ? "font-bold text-purple-600" : "text-slate-300"}>{s.aces}</span>,
     },
+    ...(fieldStats
+      ? [
+          {
+            label: "Field Avg",
+            render: (s: HoleStat) => {
+              const field = fieldByHole.get(s.holeNumber);
+              return field?.avg != null ? (
+                <span className="text-slate-500">{field.avg.toFixed(2)}</span>
+              ) : <span className="text-slate-300">—</span>;
+            },
+          },
+          {
+            label: "Vs. Field",
+            render: (s: HoleStat) => {
+              const field = fieldByHole.get(s.holeNumber);
+              if (s.avg == null || field?.avg == null) return <span className="text-slate-300">—</span>;
+              const diff = Math.round((s.avg - field.avg) * 100) / 100;
+              return (
+                <span className={`inline-block rounded px-1 font-medium ${diffClass(diff)}`}>
+                  {diff > 0 ? "+" : ""}{diff.toFixed(2)}
+                </span>
+              );
+            },
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -97,7 +126,7 @@ export function CourseStatsTable({ stats }: { stats: HoleStat[] }) {
   );
 }
 
-export function CourseStatsSection({ stats }: { stats: HoleStat[] }) {
+export function CourseStatsSection({ stats, fieldStats }: { stats: HoleStat[]; fieldStats?: HoleStat[] }) {
   const [open, setOpen] = useState(true);
 
   return (
@@ -111,7 +140,7 @@ export function CourseStatsSection({ stats }: { stats: HoleStat[] }) {
       </button>
       {open && (
         <div className="px-6 pb-6 pt-4 border-t border-slate-100">
-          <CourseStatsTable stats={stats} />
+          <CourseStatsTable stats={stats} fieldStats={fieldStats} />
         </div>
       )}
     </div>
