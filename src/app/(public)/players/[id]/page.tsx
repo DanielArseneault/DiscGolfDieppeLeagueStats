@@ -288,7 +288,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
                   <ShotMixBar breakdown={roundBreakdown} />
                 </div>
                 {(roundBreakdown.bestF9 != null || roundBreakdown.bestB9 != null) && (
-                  <div className="flex flex-wrap gap-x-8 gap-y-2 pt-2" style={{ borderTop: "1px solid var(--line-2)" }}>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-3 pt-2 sm:grid-cols-4 sm:gap-x-8" style={{ borderTop: "1px solid var(--line-2)" }}>
                     {roundBreakdown.bestF9 != null && <CompactStat label="Best F9" value={toPar(roundBreakdown.bestF9)} ink={signInk(roundBreakdown.bestF9)} />}
                     {roundBreakdown.f9Avg != null && <CompactStat label="F9 avg" value={toParAvg(roundBreakdown.f9Avg)} ink={signInk(roundBreakdown.f9Avg)} />}
                     {roundBreakdown.bestB9 != null && <CompactStat label="Best B9" value={toPar(roundBreakdown.bestB9)} ink={signInk(roundBreakdown.bestB9)} />}
@@ -357,14 +357,14 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
           <SectionTitle>Round history</SectionTitle>
           <div className="overflow-hidden rounded-[var(--r-card)] border" style={{ borderColor: "var(--line)" }}>
             <div
-              className="grid px-6 py-3 font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[.13em]"
-              style={{ gridTemplateColumns: "1fr 100px 90px 90px 120px", background: "var(--bg-subtle)", color: "var(--ink-muted)" }}
+              className="grid grid-cols-[1fr_54px_54px_64px] px-4 py-3 font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[.13em] sm:grid-cols-[1fr_100px_90px_90px_120px] sm:px-6"
+              style={{ background: "var(--bg-subtle)", color: "var(--ink-muted)" }}
             >
               <div>Round</div>
               <div className="text-center">Score</div>
               <div className="text-center">+/−</div>
               <div className="text-center">Position</div>
-              <div className="text-center">Standing</div>
+              <div className="hidden text-center sm:block">Standing</div>
             </div>
             {allRounds.map((round) => {
               const result = resultByRoundId.get(round.id);
@@ -372,14 +372,14 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
               return (
                 <div
                   key={round.id}
-                  className="grid items-center px-6 py-3"
-                  style={{ gridTemplateColumns: "1fr 100px 90px 90px 120px", borderTop: "1px solid var(--line-3)" }}
+                  className="grid grid-cols-[1fr_54px_54px_64px] items-center px-4 py-2.5 sm:grid-cols-[1fr_100px_90px_90px_120px] sm:px-6 sm:py-3"
+                  style={{ borderTop: "1px solid var(--line-3)" }}
                 >
                   <div>
                     <Link href={`/rounds/${round.id}?league=${player.leagueId}`} className="text-sm font-semibold" style={{ color: "var(--ink)" }}>
                       {round.isChampionship ? "Championship" : `Week ${round.weekNumber}`}
                     </Link>
-                    <p className="font-[family-name:var(--font-mono)] text-[11px]" style={{ color: "var(--ink-muted)" }}>
+                    <p className="font-[family-name:var(--font-mono)] text-[11px] whitespace-nowrap" style={{ color: "var(--ink-muted)" }}>
                       {formatDate(round.date)}
                     </p>
                   </div>
@@ -392,7 +392,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
                   <div className="text-center text-sm" style={{ color: "var(--ink-2)" }}>
                     {result ? formatPosition(result.position) : <span style={{ color: "var(--ink-muted)" }}>—</span>}
                   </div>
-                  <div className="text-center">
+                  <div className="hidden text-center sm:block">
                     {weekStanding ? (
                       <span className="inline-flex items-center gap-1.5 font-[family-name:var(--font-mono)] text-sm">
                         <span style={{ color: "var(--ink)" }}>#{weekStanding.rank}</span>
@@ -583,15 +583,16 @@ function Hero({
 
 function TrendChart({ rounds }: { rounds: { round: { weekNumber: number }; relativeScore: number }[] }) {
   const width = 480;
-  const height = 140;
+  const height = 160;
   const padX = 16;
-  const padY = 16;
+  const padTop = 28;
+  const padBottom = 16;
   const values = rounds.map((r) => r.relativeScore);
   const min = Math.min(0, ...values);
   const max = Math.max(0, ...values);
   const range = max - min || 1;
   const x = (i: number) => padX + (i / Math.max(1, rounds.length - 1)) * (width - padX * 2);
-  const y = (v: number) => padY + (1 - (v - min) / range) * (height - padY * 2);
+  const y = (v: number) => padTop + (1 - (v - min) / range) * (height - padTop - padBottom);
   const points = rounds.map((r, i) => `${x(i)},${y(r.relativeScore)}`).join(" ");
   const parY = y(0);
 
@@ -599,9 +600,25 @@ function TrendChart({ rounds }: { rounds: { round: { weekNumber: number }; relat
     <svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full">
       <line x1={padX} y1={parY} x2={width - padX} y2={parY} stroke="var(--line-strong)" strokeWidth="1" strokeDasharray="4 3" />
       <polyline points={points} fill="none" stroke="var(--positive)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-      {rounds.map((r, i) => (
-        <circle key={r.round.weekNumber} cx={x(i)} cy={y(r.relativeScore)} r="3" fill="var(--positive)" />
-      ))}
+      {rounds.map((r, i) => {
+        const py = y(r.relativeScore);
+        const labelAbove = py - padTop > 14;
+        return (
+          <g key={r.round.weekNumber}>
+            <circle cx={x(i)} cy={py} r="3" fill="var(--positive)" />
+            <text
+              x={x(i)}
+              y={labelAbove ? py - 8 : py + 16}
+              textAnchor="middle"
+              className="font-[family-name:var(--font-mono)] text-[15px] lg:text-[11px]"
+              fontWeight="600"
+              fill={signInk(r.relativeScore)}
+            >
+              {toPar(r.relativeScore)}
+            </text>
+          </g>
+        );
+      })}
     </svg>
   );
 }
