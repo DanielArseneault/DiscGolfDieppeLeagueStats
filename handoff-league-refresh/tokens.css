@@ -1,10 +1,8 @@
-@import "tailwindcss";
-
-/* Design tokens — Dieppe League stats refresh (handoff-league-refresh/tokens.css).
+/* Dieppe League stats refresh — colour tokens, both themes.
    Dark is the default; light is opted into with data-theme="light" on <html>.
    RULES: *-bg / *-surface / --accent are FILLS. *-fg / --ink* / --positive / --negative are INK.
-   Never cross them, and always pair a tint bg with its own fg. Scoped to `.site` (the public
-   site shell) via the rules further down so admin, which doesn't opt in, is unaffected. */
+   Never cross them, and always pair a tint bg with its own fg. */
+
 :root {
   /* surfaces */
   --bg-app: #0e1310;
@@ -39,35 +37,23 @@
   --negative: #e2803f;
 
   /* tint ramp — bg + fg always used together */
-  --tint-best-bg: #c9f24d;
-  --tint-best-fg: #16200f;
-  --tint-good-bg: #4c9e43;
-  --tint-good-fg: #0f1a10;
+  --tint-best-bg: #c9f24d;  --tint-best-fg: #16200f;
+  --tint-good-bg: #4c9e43;  --tint-good-fg: #0f1a10;
   --tint-even-bg: #26302a;
-  --tint-warn-bg: #4a3526;
-  --tint-warn-fg: #f0cfae;
-  --tint-bad-bg: #e2803f;
-  --tint-bad-fg: #22140a;
+  --tint-warn-bg: #4a3526;  --tint-warn-fg: #f0cfae;
+  --tint-bad-bg:  #e2803f;  --tint-bad-fg:  #22140a;
   --ring-good: #6f8f2a;
   --ring-bad: #9c4f1c;
 
   /* divisions */
-  --blue-ink: #7cb2ea;
-  --blue-dot: #4f8fd6;
-  --blue-surface: #1c2a3a;
-  --blue-solid: #2b6cb0;
-  --blue-on: #eaf3ff;
-  --red-ink: #e88a80;
-  --red-dot: #c2453f;
-  --red-surface: #33201e;
-  --red-solid: #a8322c;
-  --red-on: #ffeceb;
+  --blue-ink: #7cb2ea; --blue-dot: #4f8fd6; --blue-surface: #1c2a3a;
+  --blue-solid: #2b6cb0; --blue-on: #eaf3ff;
+  --red-ink: #e88a80;  --red-dot: #c2453f;  --red-surface: #33201e;
+  --red-solid: #a8322c; --red-on: #ffeceb;
 
   /* pools — intentionally not the performance accents */
-  --pool-a-bg: #243027;
-  --pool-a-fg: #b9cbb2;
-  --pool-b-bg: #1e2529;
-  --pool-b-fg: #a8bcc6;
+  --pool-a-bg: #243027; --pool-a-fg: #b9cbb2;
+  --pool-b-bg: #1e2529; --pool-b-fg: #a8bcc6;
 
   /* misc */
   --gold: #f0c04a;
@@ -75,10 +61,8 @@
   --neutral-bar: #3a4a3f;
 
   /* compare page */
-  --a-ink: #c9f24d;
-  --a-bar: #c9f24d;
-  --b-ink: #8fb6e8;
-  --b-bar: #5b87c4;
+  --a-ink: #c9f24d; --a-bar: #c9f24d;
+  --b-ink: #8fb6e8; --b-bar: #5b87c4;
 
   /* over the hero photograph — IDENTICAL in both themes */
   --on-photo: #eef1e9;
@@ -98,6 +82,10 @@
   --page-pad: 32px;
   --card-gap: 24px;
   --transition: 140ms ease;
+
+  /* type */
+  --font-sans: 'Bricolage Grotesque', sans-serif;
+  --font-mono: 'DM Mono', monospace;
 }
 
 :root[data-theme="light"] {
@@ -128,42 +116,28 @@
   --positive: #2c7a4b;
   --negative: #8a4517;
 
-  --tint-best-bg: #cfe8c6;
-  --tint-best-fg: #1e5c33;
-  --tint-good-bg: #e4f0da;
-  --tint-good-fg: #25663a;
+  --tint-best-bg: #cfe8c6;  --tint-best-fg: #1e5c33;
+  --tint-good-bg: #e4f0da;  --tint-good-fg: #25663a;
   --tint-even-bg: #f0eee6;
-  --tint-warn-bg: #faeade;
-  --tint-warn-fg: #8a4517;
-  --tint-bad-bg: #f4dcc6;
-  --tint-bad-fg: #8a4517;
+  --tint-warn-bg: #faeade;  --tint-warn-fg: #8a4517;
+  --tint-bad-bg:  #f4dcc6;  --tint-bad-fg:  #8a4517;
   --ring-good: #7ba55f;
   --ring-bad: #c78242;
 
-  --blue-ink: #2b6cb0;
-  --blue-dot: #2b6cb0;
-  --blue-surface: #eaf1fa;
-  --blue-solid: #2b6cb0;
-  --blue-on: #eaf3ff;
-  --red-ink: #a8322c;
-  --red-dot: #c2453f;
-  --red-surface: #fbeceb;
-  --red-solid: #a8322c;
-  --red-on: #ffeceb;
+  --blue-ink: #2b6cb0; --blue-dot: #2b6cb0; --blue-surface: #eaf1fa;
+  --blue-solid: #2b6cb0; --blue-on: #eaf3ff;
+  --red-ink: #a8322c;  --red-dot: #c2453f;  --red-surface: #fbeceb;
+  --red-solid: #a8322c; --red-on: #ffeceb;
 
-  --pool-a-bg: #eef2ea;
-  --pool-a-fg: #2c5a3c;
-  --pool-b-bg: #eaf1fa;
-  --pool-b-fg: #2b6cb0;
+  --pool-a-bg: #eef2ea; --pool-a-fg: #2c5a3c;
+  --pool-b-bg: #eaf1fa; --pool-b-fg: #2b6cb0;
 
   --gold: #8a6510;
   --track: #e7e4d8;
   --neutral-bar: #d9d5c6;
 
-  --a-ink: #2c7a4b;
-  --a-bar: #2c7a4b;
-  --b-ink: #2b6cb0;
-  --b-bar: #7ba3d4;
+  --a-ink: #2c7a4b; --a-bar: #2c7a4b;
+  --b-ink: #2b6cb0; --b-bar: #7ba3d4;
 
   /* unchanged on purpose — the photo scrim stays dark */
   --on-photo: #eef1e9;
@@ -173,26 +147,13 @@
   --on-photo-scrim: rgba(14, 19, 16, 0.55);
 }
 
-/* Public site shell — scoped so the token system and its global element rules
-   (link colour, body-level bg/ink) never bleed into /admin, which does not opt in. */
-.site {
+body {
+  margin: 0;
   background: var(--bg-app);
   color: var(--ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
-.site a {
-  color: var(--positive);
-  text-decoration: none;
-}
-.site a:hover {
-  text-decoration: underline;
-}
-
-/* Chrome links (nav, buttons, pills) opt out of the body link underline — they carry their
-   own hover treatment (colour/background shift) instead. */
-.site .nav-link,
-.site .nav-link:hover {
-  text-decoration: none;
-}
+a { color: var(--positive); text-decoration: none; }
+a:hover { text-decoration: underline; }
