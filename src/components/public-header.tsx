@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useSearchParams, usePathname } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 interface League {
   id: number;
@@ -22,7 +24,11 @@ function NavLinks({ leagues, onClose }: { leagues: League[]; onClose?: () => voi
       <a
         href={`${href}${q}`}
         onClick={onClose}
-        className={`transition-colors ${active ? "text-white font-semibold underline underline-offset-4" : "text-green-100 hover:text-white"}`}
+        className="nav-link text-[14px] transition-colors"
+        style={{
+          color: active ? "var(--ink)" : "var(--ink-2)",
+          fontWeight: active ? 600 : 400,
+        }}
       >
         {label}
       </a>
@@ -33,7 +39,7 @@ function NavLinks({ leagues, onClose }: { leagues: League[]; onClose?: () => voi
     <>
       {navLink("/", "Standings")}
       {navLink("/rounds", "Rounds")}
-      <a href="/admin" onClick={onClose} className="hover:text-white transition-colors font-medium text-green-200">
+      <a href="/admin" onClick={onClose} className="nav-link text-[14px]" style={{ color: "var(--ink-muted)" }}>
         Admin
       </a>
     </>
@@ -43,23 +49,31 @@ function NavLinks({ leagues, onClose }: { leagues: League[]; onClose?: () => voi
 function NavLinksFallback() {
   return (
     <>
-      <a href="/" className="hover:text-white transition-colors">Standings</a>
-      <a href="/rounds" className="hover:text-white transition-colors">Rounds</a>
-      <a href="/admin" className="hover:text-white transition-colors font-medium text-green-200">Admin</a>
+      <a href="/" className="nav-link text-[14px]" style={{ color: "var(--ink-2)" }}>Standings</a>
+      <a href="/rounds" className="nav-link text-[14px]" style={{ color: "var(--ink-2)" }}>Rounds</a>
+      <a href="/admin" className="nav-link text-[14px]" style={{ color: "var(--ink-muted)" }}>Admin</a>
     </>
   );
 }
 
-export function PublicHeader({ leagues }: { leagues: League[] }) {
-  const [scrolled, setScrolled] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
+function Logo() {
+  return (
+    <Link href="/" className="nav-link flex shrink-0 items-center gap-2.5">
+      <span
+        className="flex h-[30px] w-[30px] items-center justify-center rounded-full"
+        style={{ background: "var(--accent)" }}
+      >
+        <span className="h-[11px] w-[11px] rounded-full" style={{ border: "2px solid var(--accent-ink)" }} />
+      </span>
+      <span className="hidden text-[15px] font-extrabold tracking-tight sm:inline" style={{ color: "var(--ink)" }}>
+        Dieppe DGC League
+      </span>
+    </Link>
+  );
+}
 
-  useEffect(() => {
-    const handler = () => setScrolled(window.scrollY > 80);
-    handler();
-    window.addEventListener("scroll", handler, { passive: true });
-    return () => window.removeEventListener("scroll", handler);
-  }, []);
+export function PublicHeader({ leagues }: { leagues: League[] }) {
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -72,50 +86,53 @@ export function PublicHeader({ leagues }: { leagues: League[] }) {
 
   return (
     <header
-      className={`fixed top-0 z-50 w-full transition-all duration-300 ${
-        scrolled || menuOpen ? "bg-green-800 shadow-lg" : "bg-transparent"
-      }`}
+      className="fixed top-0 z-50 w-full backdrop-blur-[10px]"
+      style={{ background: "var(--bg-nav)", borderBottom: "1px solid var(--line-2)" }}
     >
-      <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-        <a href="/" className="flex items-center gap-2 font-bold text-white tracking-tight">
-          <span className="text-xl">🥏</span>
-          <span className="hidden sm:inline">Dieppe DGC League</span>
-        </a>
+      <div className="mx-auto flex h-14 max-w-[var(--container)] items-center justify-between px-8">
+        <Logo />
 
         {/* Desktop nav */}
-        <nav className="hidden sm:flex items-center gap-4 text-sm text-green-100">
+        <nav className="hidden items-center gap-6 sm:flex">
           <Suspense fallback={<NavLinksFallback />}>
             <NavLinks leagues={leagues} />
           </Suspense>
+          <ThemeToggle />
         </nav>
 
-        {/* Mobile hamburger */}
-        <button
-          className="sm:hidden text-white p-2 -mr-2 rounded-md hover:bg-white/10 transition-colors"
-          onClick={() => setMenuOpen((o) => !o)}
-          aria-label={menuOpen ? "Close menu" : "Open menu"}
-          aria-expanded={menuOpen}
-        >
-          {menuOpen ? (
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          ) : (
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          )}
-        </button>
+        {/* Mobile controls */}
+        <div className="flex items-center gap-2 sm:hidden">
+          <button
+            className="flex h-10 w-10 items-center justify-center rounded-full transition-colors"
+            style={{ color: "var(--ink)" }}
+            onClick={() => setMenuOpen((o) => !o)}
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={menuOpen}
+          >
+            {menuOpen ? (
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            ) : (
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Mobile drawer */}
       {menuOpen && (
-        <div className="sm:hidden border-t border-green-700 px-4 py-4">
-          <nav className="flex flex-col gap-4 text-sm text-green-100">
+        <div className="px-8 py-4 sm:hidden" style={{ borderTop: "1px solid var(--line-2)" }}>
+          <nav className="flex flex-col gap-4">
             <Suspense fallback={<NavLinksFallback />}>
               <NavLinks leagues={leagues} onClose={() => setMenuOpen(false)} />
             </Suspense>
           </nav>
+          <div className="mt-4 pt-4" style={{ borderTop: "1px solid var(--line-2)" }}>
+            <ThemeToggle variant="switch" />
+          </div>
         </div>
       )}
     </header>

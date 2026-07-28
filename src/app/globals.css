@@ -1,13 +1,199 @@
 @import "tailwindcss";
 
+/* Design tokens — Dieppe League stats refresh (handoff-league-refresh/tokens.css).
+   Light is the default; dark is opted into with data-theme="dark" on <html>.
+   RULES: *-bg / *-surface / --accent are FILLS. *-fg / --ink* / --positive / --negative are INK.
+   Never cross them, and always pair a tint bg with its own fg. Scoped to `.site` (the public
+   site shell) via the rules further down so admin, which doesn't opt in, is unaffected. */
+:root[data-theme="dark"] {
+  /* surfaces */
+  --bg-app: #0e1310;
+  --bg-card: #141a16;
+  --bg-subtle: #161d18;
+  --bg-inset: #111713;
+  --row-tint: #171f19;
+  --hero-a: #1b2620;
+  --bg-nav: rgba(14, 19, 16, 0.92);
+
+  /* lines */
+  --line: #2a352d;
+  --line-2: #232e27;
+  --line-3: #1c2620;
+  --line-strong: #3b4c40;
+  --accent-border: #3f5c3a;
+
+  /* ink — --ink-muted is the 4.5:1 floor; never go lighter for text */
+  --ink: #eef1e9;
+  --ink-2: #c7d1c8;
+  --ink-3: #a9b7ac;
+  --ink-muted: #93a397;
+
+  /* accent (fill) + its ink */
+  --accent: #c9f24d;
+  --accent-ink: #141a16;
+  --accent-soft: #1e2b22;
+  --chip-neutral: #23302a;
+
+  /* semantic ink */
+  --positive: #c9f24d;
+  --negative: #e2803f;
+
+  /* tint ramp — bg + fg always used together */
+  --tint-best-bg: #c9f24d;
+  --tint-best-fg: #16200f;
+  --tint-good-bg: #4c9e43;
+  --tint-good-fg: #0f1a10;
+  --tint-even-bg: #26302a;
+  --tint-warn-bg: #4a3526;
+  --tint-warn-fg: #f0cfae;
+  --tint-bad-bg: #e2803f;
+  --tint-bad-fg: #22140a;
+  --ring-good: #6f8f2a;
+  --ring-bad: #9c4f1c;
+
+  /* divisions */
+  --blue-ink: #7cb2ea;
+  --blue-dot: #4f8fd6;
+  --blue-surface: #1c2a3a;
+  --blue-solid: #2b6cb0;
+  --blue-on: #eaf3ff;
+  --red-ink: #e88a80;
+  --red-dot: #c2453f;
+  --red-surface: #33201e;
+  --red-solid: #a8322c;
+  --red-on: #ffeceb;
+
+  /* pools — intentionally not the performance accents */
+  --pool-a-bg: #243027;
+  --pool-a-fg: #b9cbb2;
+  --pool-b-bg: #1e2529;
+  --pool-b-fg: #a8bcc6;
+
+  /* misc */
+  --gold: #f0c04a;
+  --track: #2a352d;
+  --neutral-bar: #3a4a3f;
+
+  /* compare page */
+  --a-ink: #c9f24d;
+  --a-bar: #c9f24d;
+  --b-ink: #8fb6e8;
+  --b-bar: #5b87c4;
+
+  /* over the hero photograph — IDENTICAL in both themes */
+  --on-photo: #eef1e9;
+  --on-photo-2: #c7d1c8;
+  --on-photo-muted: #a9b7ac;
+  --on-photo-accent: #c9f24d;
+  --on-photo-scrim: rgba(14, 19, 16, 0.55);
+}
+
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  /* geometry — theme-independent, so it lives on the bare :root rather than
+     either theme block */
+  --r-card: 24px;
+  --r-panel: 14px;
+  --r-control: 10px;
+  --r-cell: 8px;
+  --r-chip: 6px;
+  --r-pill: 999px;
+  --container: 1120px;
+  --page-pad: 32px;
+  --card-gap: 24px;
+  --transition: 140ms ease;
+
+  --bg-app: #f4f3ed;
+  --bg-card: #ffffff;
+  --bg-subtle: #fbfaf6;
+  --bg-inset: #f7f6f1;
+  --row-tint: #fbfbf7;
+  --hero-a: #ffffff;
+  --bg-nav: rgba(251, 250, 246, 0.94);
+
+  --line: #e4e1d8;
+  --line-2: #eceae2;
+  --line-3: #f1efe7;
+  --line-strong: #d9d5c6;
+  --accent-border: #a9c69a;
+
+  --ink: #1f2320;
+  --ink-2: #3f3b31;
+  --ink-3: #5f5a4e;
+  --ink-muted: #6f6a5c;
+
+  --accent: #1f4d33;
+  --accent-ink: #f4f2e7;
+  --accent-soft: #eef2ea;
+  --chip-neutral: #f1efe7;
+
+  --positive: #2c7a4b;
+  --negative: #8a4517;
+
+  --tint-best-bg: #cfe8c6;
+  --tint-best-fg: #1e5c33;
+  --tint-good-bg: #e4f0da;
+  --tint-good-fg: #25663a;
+  --tint-even-bg: #f0eee6;
+  --tint-warn-bg: #faeade;
+  --tint-warn-fg: #8a4517;
+  --tint-bad-bg: #f4dcc6;
+  --tint-bad-fg: #8a4517;
+  --ring-good: #7ba55f;
+  --ring-bad: #c78242;
+
+  --blue-ink: #2b6cb0;
+  --blue-dot: #2b6cb0;
+  --blue-surface: #eaf1fa;
+  --blue-solid: #2b6cb0;
+  --blue-on: #eaf3ff;
+  --red-ink: #a8322c;
+  --red-dot: #c2453f;
+  --red-surface: #fbeceb;
+  --red-solid: #a8322c;
+  --red-on: #ffeceb;
+
+  --pool-a-bg: #eef2ea;
+  --pool-a-fg: #2c5a3c;
+  --pool-b-bg: #eaf1fa;
+  --pool-b-fg: #2b6cb0;
+
+  --gold: #8a6510;
+  --track: #e7e4d8;
+  --neutral-bar: #d9d5c6;
+
+  --a-ink: #2c7a4b;
+  --a-bar: #2c7a4b;
+  --b-ink: #2b6cb0;
+  --b-bar: #7ba3d4;
+
+  /* unchanged on purpose — the photo scrim stays dark */
+  --on-photo: #eef1e9;
+  --on-photo-2: #c7d1c8;
+  --on-photo-muted: #a9b7ac;
+  --on-photo-accent: #c9f24d;
+  --on-photo-scrim: rgba(14, 19, 16, 0.55);
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
+/* Public site shell — scoped so the token system and its global element rules
+   (link colour, body-level bg/ink) never bleed into /admin, which does not opt in. */
+.site {
+  background: var(--bg-app);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Newspaper fonts loaded via Google Fonts in newspaper component */
+.site a {
+  color: var(--positive);
+  text-decoration: none;
+}
+.site a:hover {
+  text-decoration: underline;
+}
+
+/* Chrome links (nav, buttons, pills) opt out of the body link underline — they carry their
+   own hover treatment (colour/background shift) instead. */
+.site .nav-link,
+.site .nav-link:hover {
+  text-decoration: none;
+}

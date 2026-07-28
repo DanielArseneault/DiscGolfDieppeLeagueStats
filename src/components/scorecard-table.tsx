@@ -1,5 +1,5 @@
-import { formatScore } from "@/lib/utils";
 import Link from "next/link";
+import { toPar, signInk, strokeMark } from "@/lib/design-helpers";
 
 interface HolePar {
   holeNumber: number;
@@ -22,13 +22,21 @@ interface ScorecardTableProps {
   leagueId: number;
 }
 
-export function ScorecardTable({ results, holePars, divisionLabel, leagueId }: ScorecardTableProps) {
-  const holes =
-    holePars.length > 0
-      ? holePars
-      : Array.from({ length: 18 }, (_, i) => ({ holeNumber: i + 1, par: 3 }));
+const LEGEND: { label: string; strokes: number; par: number }[] = [
+  { label: "Eagle", strokes: 1, par: 3 },
+  { label: "Birdie", strokes: 2, par: 3 },
+  { label: "Par", strokes: 3, par: 3 },
+  { label: "Bogey", strokes: 4, par: 3 },
+  { label: "Double+", strokes: 5, par: 3 },
+];
 
-  const totalPar = holes.reduce((s, h) => s + h.par, 0);
+const FROZEN_COLS = "38px 190px 62px";
+const HOLE_COL_WIDTH = 38;
+const HEADER_H = 40;
+const ROW_H = 40;
+
+export function ScorecardTable({ results, holePars, divisionLabel, leagueId }: ScorecardTableProps) {
+  const holes = holePars.length > 0 ? holePars : Array.from({ length: 18 }, (_, i) => ({ holeNumber: i + 1, par: 3 }));
 
   const posCounts = results.reduce<Record<number, number>>((acc, r) => {
     acc[r.position] = (acc[r.position] ?? 0) + 1;
@@ -37,118 +45,125 @@ export function ScorecardTable({ results, holePars, divisionLabel, leagueId }: S
 
   return (
     <div>
-      <h3 className="font-semibold text-slate-700 mb-3 text-sm uppercase tracking-wide">
-        {divisionLabel}
-      </h3>
-      <div className="overflow-x-auto rounded-lg border border-slate-200 shadow-sm">
-        <table className="w-full text-xs min-w-max">
-          <thead>
-            <tr className="bg-slate-50 border-b border-slate-200">
-              <th className="px-3 py-2 text-center font-semibold text-slate-500 w-10 sticky left-0 z-10 bg-slate-50">Pos</th>
-              <th className="px-3 py-2 text-left font-semibold text-slate-500 w-[120px] sticky left-10 z-10 bg-slate-50">Name</th>
-              <th className="px-3 py-2 text-center font-semibold text-slate-500 w-14 sticky left-[160px] z-10 bg-slate-50 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.1)]">Total</th>
-              <th className="px-3 py-2 text-center font-semibold text-slate-400 w-10">Thru</th>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-[15px] font-semibold" style={{ color: "var(--ink)" }}>
+          {divisionLabel}
+        </h3>
+        <div className="flex flex-wrap gap-3">
+          {LEGEND.map((l) => {
+            const mark = strokeMark(l.strokes, l.par);
+            return (
+              <span key={l.label} className="flex items-center gap-1.5 font-[family-name:var(--font-mono)] text-[10px]" style={{ color: "var(--ink-muted)" }}>
+                <span
+                  className="inline-flex h-4 w-4 items-center justify-center rounded-full"
+                  style={{ background: mark.bg, boxShadow: mark.ring !== "none" ? mark.ring : undefined, border: mark.bg === "transparent" ? "1px solid var(--line-strong)" : undefined }}
+                />
+                {l.label}
+              </span>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="flex overflow-hidden rounded-[var(--r-card)] border" style={{ borderColor: "var(--line)", background: "var(--bg-card)" }}>
+        {/* Frozen: Pos / Name / Total — plain flow, never scrolls, so nothing needs sticky positioning. */}
+        <div className="shrink-0" style={{ borderRight: "1px solid var(--line)" }}>
+          <div
+            className="grid items-center px-2"
+            style={{ gridTemplateColumns: FROZEN_COLS, gap: "3px", height: HEADER_H, background: "var(--bg-subtle)" }}
+          >
+            <div className="text-center font-[family-name:var(--font-mono)] text-[10px]" style={{ color: "var(--ink-muted)" }}>Pos</div>
+            <div className="font-[family-name:var(--font-mono)] text-[10px]" style={{ color: "var(--ink-muted)" }}>Name</div>
+            <div className="text-center font-[family-name:var(--font-mono)] text-[10px]" style={{ color: "var(--ink-muted)" }}>Total</div>
+          </div>
+          {results.map((r, idx) => (
+            <div
+              key={idx}
+              className="grid items-center px-2"
+              style={{
+                gridTemplateColumns: FROZEN_COLS,
+                gap: "3px",
+                height: ROW_H,
+                background: idx === 0 ? "var(--row-tint)" : "var(--bg-card)",
+                borderTop: "1px solid var(--line-3)",
+              }}
+            >
+              <div className="text-center font-[family-name:var(--font-mono)] text-xs" style={{ color: "var(--ink-2)" }}>
+                {r.position === 0 ? "—" : posCounts[r.position] > 1 ? `T${r.position}` : r.position}
+              </div>
+              <div className="min-w-0">
+                {r.playerId ? (
+                  <Link href={`/players/${r.playerId}?league=${leagueId}`} className="block truncate text-sm font-semibold" style={{ color: "var(--ink)" }}>
+                    {r.playerName}
+                  </Link>
+                ) : (
+                  <div className="truncate text-sm font-semibold" style={{ color: "var(--ink)" }}>{r.playerName}</div>
+                )}
+              </div>
+              <div className="text-center font-[family-name:var(--font-mono)] text-sm font-semibold" style={{ color: "var(--ink)" }}>
+                {r.score}
+                <span className="ml-1 text-[11px] font-normal" style={{ color: signInk(r.relativeScore) }}>
+                  {toPar(r.relativeScore)}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Scrollable: hole-by-hole scores. */}
+        <div className="min-w-0 flex-1 overflow-x-auto">
+          <div style={{ minWidth: holes.length * HOLE_COL_WIDTH }}>
+            <div
+              className="grid items-center"
+              style={{ gridTemplateColumns: `repeat(${holes.length}, ${HOLE_COL_WIDTH}px)`, height: HEADER_H, background: "var(--bg-subtle)" }}
+            >
               {holes.map((h) => (
-                <th key={h.holeNumber} className="w-8 text-center font-semibold text-slate-600 p-0">
-                  <div className="pt-2 pb-1 px-1">{h.holeNumber}</div>
-                  <div className="text-[10px] text-slate-400 font-normal border-t border-slate-200 py-1">
-                    {h.par}
-                  </div>
-                </th>
-              ))}
-              <th className="px-3 py-2 text-center font-semibold text-slate-600 w-14">
-                <div className="pb-1">Round</div>
-                <div className="text-[10px] text-slate-400 font-normal border-t border-slate-200 py-1">
-                  {totalPar}
+                <div key={h.holeNumber} className="text-center">
+                  <div className="font-[family-name:var(--font-mono)] text-[11px]" style={{ color: "var(--ink-2)" }}>{h.holeNumber}</div>
+                  <div className="font-[family-name:var(--font-mono)] text-[9px]" style={{ color: "var(--ink-muted)" }}>{h.par}</div>
                 </div>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
+              ))}
+            </div>
             {results.map((r, idx) => {
               const hs = r.holeScores;
               return (
-                <tr
+                <div
                   key={idx}
-                  className={`border-b border-slate-100 hover:bg-green-50/40 transition-colors ${
-                    idx % 2 === 1 ? "bg-slate-50/70" : "bg-white"
-                  }`}
+                  className="grid items-center"
+                  style={{
+                    gridTemplateColumns: `repeat(${holes.length}, ${HOLE_COL_WIDTH}px)`,
+                    height: ROW_H,
+                    background: idx === 0 ? "var(--row-tint)" : "var(--bg-card)",
+                    borderTop: "1px solid var(--line-3)",
+                  }}
                 >
-                  <td className={`px-3 py-2.5 text-center text-slate-500 font-medium sticky left-0 z-10 ${idx % 2 === 1 ? "bg-slate-50" : "bg-white"}`}>
-                    {r.position === 0 ? "—" : posCounts[r.position] > 1 ? `T${r.position}` : r.position}
-                  </td>
-                  <td className={`px-3 py-2.5 sticky left-10 z-10 ${idx % 2 === 1 ? "bg-slate-50" : "bg-white"}`}>
-                    {r.playerId ? (
-                      <Link href={`/players/${r.playerId}?league=${leagueId}`} className="w-[96px] truncate font-medium text-blue-600 hover:underline block">
-                        {r.playerName}
-                      </Link>
-                    ) : (
-                      <div className="w-[96px] truncate font-medium text-slate-800">{r.playerName}</div>
-                    )}
-                  </td>
-                  <td
-                    className={`px-2 py-2.5 text-center font-semibold tabular-nums sticky left-[160px] z-10 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.1)] ${
-                      idx % 2 === 1 ? "bg-slate-50" : "bg-white"
-                    } ${
-                      r.relativeScore < 0
-                        ? "text-sky-600"
-                        : r.relativeScore > 0
-                        ? "text-orange-500"
-                        : "text-slate-500"
-                    }`}
-                  >
-                    {formatScore(r.relativeScore)}
-                  </td>
-                  <td className="px-2 py-2.5 text-center text-slate-400">F</td>
                   {holes.map((h) => (
-                    <td key={h.holeNumber} className="px-1 py-2 text-center">
-                      <HoleScore score={hs[h.holeNumber]} par={h.par} />
-                    </td>
+                    <div key={h.holeNumber} className="flex justify-center">
+                      <HoleScore score={hs[String(h.holeNumber)]} par={h.par} />
+                    </div>
                   ))}
-                  <td className="px-2 py-2.5 text-center font-bold text-slate-800 tabular-nums">
-                    {r.score}
-                  </td>
-                </tr>
+                </div>
               );
             })}
-          </tbody>
-        </table>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
 function HoleScore({ score, par }: { score: number | undefined; par: number }) {
-  if (!score) return <span className="text-slate-300">–</span>;
-  const diff = score - par;
-
-  if (diff <= -2) {
-    return (
-      <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-sky-500 text-white font-bold text-[11px] ring-2 ring-sky-400 ring-offset-1">
-        {score}
-      </span>
-    );
+  if (!score) return <span style={{ color: "var(--ink-muted)" }}>–</span>;
+  const mark = strokeMark(score, par);
+  if (mark.bg === "transparent") {
+    return <span style={{ color: mark.fg }}>{score}</span>;
   }
-  if (diff === -1) {
-    return (
-      <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-sky-400 text-white font-medium text-[11px]">
-        {score}
-      </span>
-    );
-  }
-  if (diff === 1) {
-    return (
-      <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-orange-300 text-white font-medium text-[11px]">
-        {score}
-      </span>
-    );
-  }
-  if (diff >= 2) {
-    return (
-      <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-orange-500 text-white font-medium text-[11px] ring-2 ring-orange-400 ring-offset-1">
-        {score}
-      </span>
-    );
-  }
-  return <span className="text-slate-700 text-[11px]">{score}</span>;
+  return (
+    <span
+      className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px]"
+      style={{ background: mark.bg, color: mark.fg, fontWeight: mark.weight, boxShadow: mark.ring !== "none" ? mark.ring : undefined }}
+    >
+      {score}
+    </span>
+  );
 }
