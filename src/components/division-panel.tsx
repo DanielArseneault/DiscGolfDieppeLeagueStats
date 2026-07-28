@@ -73,12 +73,12 @@ export function DivisionPanel({
 
       <SectionTitle>{standingsTitle}</SectionTitle>
       <Card>
-        <CardContent className="pt-6">
-          <p className="mb-4 text-xs" style={{ color: "var(--ink-muted)" }}>
+        <div className="px-7 pt-6 pb-4">
+          <p className="text-xs" style={{ color: "var(--ink-muted)" }}>
             Best {bestScoresCount} of {qualifyingWeeks} qualifying rounds counted · Minimum {minWeeks} rounds to qualify
           </p>
-          <StandingsTable standings={standings} division={division} bestScoresCount={bestScoresCount} leagueId={leagueId} />
-        </CardContent>
+        </div>
+        <StandingsTable standings={standings} division={division} bestScoresCount={bestScoresCount} leagueId={leagueId} />
       </Card>
 
       {divisionStats && (

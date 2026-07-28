@@ -111,7 +111,7 @@ export function ScorecardTable({ results, holePars, divisionLabel, leagueId }: S
         </div>
 
         {/* Scrollable: hole-by-hole scores. */}
-        <div className="flex-1 overflow-x-auto">
+        <div className="min-w-0 flex-1 overflow-x-auto">
           <div style={{ minWidth: holes.length * HOLE_COL_WIDTH }}>
             <div
               className="grid items-center"
