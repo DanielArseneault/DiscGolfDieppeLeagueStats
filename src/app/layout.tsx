@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, DM_Mono } from "next/font/google";
+import { cookies } from "next/headers";
+import { THEME_COOKIE, type Theme } from "@/lib/theme";
 import "./globals.css";
 
 const bricolageGrotesque = Bricolage_Grotesque({
@@ -18,21 +20,16 @@ export const metadata: Metadata = {
   description: "Dieppe Disc Golf Mixed Summer League standings, results, and more.",
 };
 
-const THEME_INIT_SCRIPT = `
-(function () {
-  try {
-    var t = localStorage.getItem("ddgc-theme");
-    if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
-  } catch (e) {}
-})();
-`;
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const cookieStore = await cookies();
+  const theme: Theme = cookieStore.get(THEME_COOKIE)?.value === "dark" ? "dark" : "light";
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${bricolageGrotesque.variable} ${dmMono.variable}`} suppressHydrationWarning>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
-      </head>
+    <html
+      lang="en"
+      data-theme={theme}
+      className={`${bricolageGrotesque.variable} ${dmMono.variable}`}
+    >
       <body className="antialiased min-h-screen flex flex-col">{children}</body>
     </html>
   );

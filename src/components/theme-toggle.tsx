@@ -7,17 +7,17 @@ export function ThemeToggle({ variant = "icon" }: { variant?: "icon" | "switch" 
   // The switch only ever mounts client-side (inside the mobile drawer, which starts
   // closed), so it's safe to read the real theme immediately instead of guessing —
   // that avoids a visible jump each time the drawer opens. The icon variant is part
-  // of the always-rendered desktop nav, so it must still guess-then-correct to keep
-  // its first client render matching the server-rendered markup.
+  // of the always-rendered desktop nav, so its first client render must match the
+  // server-rendered markup; "light" is the server default when no theme cookie is set.
   const [theme, setTheme] = useState<Theme>(() => {
     if (variant === "switch" && typeof document !== "undefined") {
-      return document.documentElement.dataset.theme === "light" ? "light" : "dark";
+      return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
     }
-    return "dark";
+    return "light";
   });
 
   useEffect(() => {
-    setTheme(document.documentElement.dataset.theme === "light" ? "light" : "dark");
+    setTheme(document.documentElement.dataset.theme === "dark" ? "dark" : "light");
   }, []);
 
   const isDark = theme === "dark";

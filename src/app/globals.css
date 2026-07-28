@@ -1,11 +1,11 @@
 @import "tailwindcss";
 
 /* Design tokens — Dieppe League stats refresh (handoff-league-refresh/tokens.css).
-   Dark is the default; light is opted into with data-theme="light" on <html>.
+   Light is the default; dark is opted into with data-theme="dark" on <html>.
    RULES: *-bg / *-surface / --accent are FILLS. *-fg / --ink* / --positive / --negative are INK.
    Never cross them, and always pair a tint bg with its own fg. Scoped to `.site` (the public
    site shell) via the rules further down so admin, which doesn't opt in, is unaffected. */
-:root {
+:root[data-theme="dark"] {
   /* surfaces */
   --bg-app: #0e1310;
   --bg-card: #141a16;
@@ -100,7 +100,7 @@
   --transition: 140ms ease;
 }
 
-:root[data-theme="light"] {
+:root {
   --bg-app: #f4f3ed;
   --bg-card: #ffffff;
   --bg-subtle: #fbfaf6;
