@@ -467,7 +467,10 @@ function CompareRow({
 }) {
   const size = small ? "text-[13px]" : "text-base";
   return (
-    <div className="grid items-center gap-2 py-2" style={{ gridTemplateColumns: "minmax(0,1fr) 190px minmax(0,1fr)", borderTop: "1px solid var(--line-3)" }}>
+    <div
+      className="grid grid-cols-[minmax(0,1fr)_84px_minmax(0,1fr)] items-center gap-2 py-2 sm:grid-cols-[minmax(0,1fr)_190px_minmax(0,1fr)]"
+      style={{ borderTop: "1px solid var(--line-3)" }}
+    >
       <div className={`flex items-center justify-end gap-1.5 text-right font-[family-name:var(--font-mono)] font-semibold ${size}`} style={{ color: inkA ?? "var(--ink)" }}>
         {valueA}
         {better === "A" && <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: "var(--positive)" }} />}
