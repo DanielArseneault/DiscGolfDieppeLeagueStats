@@ -86,8 +86,11 @@
   --on-photo-muted: #a9b7ac;
   --on-photo-accent: #c9f24d;
   --on-photo-scrim: rgba(14, 19, 16, 0.55);
+}
 
-  /* geometry */
+:root {
+  /* geometry — theme-independent, so it lives on the bare :root rather than
+     either theme block */
   --r-card: 24px;
   --r-panel: 14px;
   --r-control: 10px;
@@ -98,9 +101,7 @@
   --page-pad: 32px;
   --card-gap: 24px;
   --transition: 140ms ease;
-}
 
-:root {
   --bg-app: #f4f3ed;
   --bg-card: #ffffff;
   --bg-subtle: #fbfaf6;
