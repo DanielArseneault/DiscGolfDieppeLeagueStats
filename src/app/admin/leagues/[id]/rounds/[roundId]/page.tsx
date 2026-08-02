@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { NewspaperPreview } from "@/components/newspaper/newspaper-preview";
 import { generateFacebookPost, generateChampionshipPost, generateNewspaperBody } from "@/lib/post-generator";
 import { computePoolSummaries } from "@/lib/pool-utils";
+import { normalizeTagInput, BOB_TAG } from "@/lib/tags";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -56,12 +57,12 @@ interface RoundResult {
   playerId: number;
   position: number;
   division: string;
-  player: { name: string };
+  player: { name: string; gender: string | null };
   score: number;
   relativeScore: number;
   holeScores: Record<string, number>;
-  tagBefore: number | null;
-  tagAfter: number | null;
+  tagBefore: string | null;
+  tagAfter: string | null;
 }
 
 interface Round {
@@ -187,6 +188,10 @@ export default function RoundManagePage({
   const [tagsAfterSaving, setTagsAfterSaving] = useState(false);
   const [autoAssigning, setAutoAssigning] = useState(false);
   const [tagError, setTagError] = useState("");
+  const [tagSort, setTagSort] = useState<{ field: "position" | "name"; dir: "asc" | "desc" }>({
+    field: "name",
+    dir: "asc",
+  });
 
   // Round winner overrides (non-championship)
   // 1st place: one per division; 2nd place: multiple allowed (ties)
@@ -413,12 +418,6 @@ export default function RoundManagePage({
     setBobSaving(false);
   }
 
-  // Tag ladder
-  function parseTag(v: string): number | null {
-    const n = parseInt(v, 10);
-    return v.trim() === "" || isNaN(n) ? null : n;
-  }
-
   async function handleSaveTagsBefore() {
     if (!round) return;
     setTagsBeforeSaving(true);
@@ -426,7 +425,7 @@ export default function RoundManagePage({
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        tags: round.results.map((r) => ({ resultId: r.id, tagBefore: parseTag(tagBefores[r.id] ?? "") })),
+        tags: round.results.map((r) => ({ resultId: r.id, tagBefore: normalizeTagInput(tagBefores[r.id] ?? "") })),
       }),
     });
     await load();
@@ -440,7 +439,7 @@ export default function RoundManagePage({
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        tags: round.results.map((r) => ({ resultId: r.id, tagAfter: parseTag(tagAfters[r.id] ?? "") })),
+        tags: round.results.map((r) => ({ resultId: r.id, tagAfter: normalizeTagInput(tagAfters[r.id] ?? "") })),
       }),
     });
     await load();
@@ -460,16 +459,33 @@ export default function RoundManagePage({
     setAutoAssigning(false);
   }
 
+  function sortTagResults(results: RoundResult[]): RoundResult[] {
+    const { field, dir } = tagSort;
+    const sign = dir === "asc" ? 1 : -1;
+    return [...results].sort((a, b) => {
+      if (field === "name") return sign * a.player.name.localeCompare(b.player.name);
+      return sign * (a.position - b.position);
+    });
+  }
+
+  function toggleTagSort(field: "position" | "name") {
+    setTagSort((prev) =>
+      prev.field === field ? { field, dir: prev.dir === "asc" ? "desc" : "asc" } : { field, dir: "asc" }
+    );
+  }
+
   function findDuplicateTags(results: RoundResult[], tagValues: Record<number, string>): Set<number> {
-    const counts = new Map<number, number>();
+    // BoB is a shared bucket — any number of players can legitimately hold it —
+    // so it's excluded from duplicate detection.
+    const counts = new Map<string, number>();
     for (const r of results) {
-      const n = parseTag(tagValues[r.id] ?? "");
-      if (n != null) counts.set(n, (counts.get(n) ?? 0) + 1);
+      const n = normalizeTagInput(tagValues[r.id] ?? "");
+      if (n != null && n !== BOB_TAG) counts.set(n, (counts.get(n) ?? 0) + 1);
     }
     const dupeNumbers = new Set([...counts.entries()].filter(([, c]) => c > 1).map(([n]) => n));
     const dupeResultIds = new Set<number>();
     for (const r of results) {
-      const n = parseTag(tagValues[r.id] ?? "");
+      const n = normalizeTagInput(tagValues[r.id] ?? "");
       if (n != null && dupeNumbers.has(n)) dupeResultIds.add(r.id);
     }
     return dupeResultIds;
@@ -1297,8 +1313,38 @@ export default function RoundManagePage({
         {/* ── TAGS ── */}
         <TabsContent value="tags" className="space-y-6 mt-4 max-w-3xl">
           {(() => {
-            const dupeBefore = findDuplicateTags(round.results, tagBefores);
-            const dupeAfter = findDuplicateTags(round.results, tagAfters);
+            // Tags are only reshuffled within a division/gender pool (see auto-assign),
+            // so the same number can legitimately show up in two different pools —
+            // duplicate detection is scoped per pool, not across the whole round.
+            const tagGroups = [
+              { label: "🔵 Blue Division", results: blueResults.filter((r) => r.player.gender !== "FEMALE") },
+              { label: "🔵 Blue Division — Female", results: blueResults.filter((r) => r.player.gender === "FEMALE") },
+              { label: "🔴 Red Division", results: redResults.filter((r) => r.player.gender !== "FEMALE") },
+              { label: "🔴 Red Division — Female", results: redResults.filter((r) => r.player.gender === "FEMALE") },
+            ]
+              .filter(({ label, results }) => results.length > 0 || !label.includes("Female"))
+              .map(({ label, results }) => {
+                const sorted = sortTagResults(results);
+                return {
+                  label,
+                  results: sorted,
+                  dupeBefore: findDuplicateTags(sorted, tagBefores),
+                  dupeAfter: findDuplicateTags(sorted, tagAfters),
+                };
+              });
+
+            const anyDupes = tagGroups.some((g) => g.dupeBefore.size > 0 || g.dupeAfter.size > 0);
+
+            // Explicit tabIndex so Tab moves down a column (Brought In, then
+            // Tag After) instead of the browser's default left-to-right order.
+            const beforeTabIndex = new Map<number, number>();
+            const afterTabIndex = new Map<number, number>();
+            let tabCursor = 1;
+            for (const { results } of tagGroups) {
+              for (const r of results) beforeTabIndex.set(r.id, tabCursor++);
+              for (const r of results) afterTabIndex.set(r.id, tabCursor++);
+            }
+
             return (
               <>
                 <Card>
@@ -1306,23 +1352,36 @@ export default function RoundManagePage({
                     <CardTitle className="text-base">🎫 Tag Ladder</CardTitle>
                     <p className="text-xs text-slate-500">
                       Record which tag each player checked in with. Once the round is final, auto-assign
-                      reshuffles tags per division: among players who brought a tag, the best finisher gets
-                      the lowest tag number in that day&apos;s pool, and so on (ties go to whoever held the
-                      lower tag beforehand). Players with no tag aren&apos;t part of the shuffle — give a
-                      player their first tag by typing a number directly into &quot;Tag After&quot; and saving.
+                      reshuffles tags per division: among players who brought a tag or {BOB_TAG}, the best
+                      finisher gets the lowest tag number in that day&apos;s pool, and so on (ties go to
+                      whoever held the lower tag beforehand). The number of tags in circulation stays fixed —
+                      anyone who falls out of the numbered tags (or never had one) becomes {BOB_TAG}, and
+                      any number of players can hold {BOB_TAG} at once. Female players are shuffled in their
+                      own pool, separate from the rest of the division. Players with nothing recorded
+                      aren&apos;t part of the shuffle — give a player their first tag by typing a number or
+                      &quot;{BOB_TAG}&quot; directly into &quot;Tag After&quot; and saving.
                     </p>
                   </CardHeader>
                   <CardContent className="space-y-6">
-                    {[
-                      { label: "🔵 Blue Division", results: blueResults },
-                      { label: "🔴 Red Division", results: redResults },
-                    ].map(({ label, results }) => (
+                    {tagGroups.map(({ label, results, dupeBefore, dupeAfter }) => (
                       <div key={label}>
                         <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">{label}</p>
                         <div className="space-y-1.5">
                           <div className="grid grid-cols-[1fr_4rem_6rem_6rem] gap-2 text-[11px] font-medium text-slate-400 px-1">
-                            <span>Player</span>
-                            <span>Score</span>
+                            <button
+                              type="button"
+                              onClick={() => toggleTagSort("name")}
+                              className="text-left flex items-center gap-0.5 hover:text-slate-600"
+                            >
+                              Player{tagSort.field === "name" && (tagSort.dir === "asc" ? " ▲" : " ▼")}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => toggleTagSort("position")}
+                              className="text-left flex items-center gap-0.5 hover:text-slate-600"
+                            >
+                              Score{tagSort.field === "position" && (tagSort.dir === "asc" ? " ▲" : " ▼")}
+                            </button>
                             <span>Brought In</span>
                             <span>Tag After</span>
                           </div>
@@ -1331,8 +1390,9 @@ export default function RoundManagePage({
                               <span className="text-sm text-slate-800 truncate">{r.player.name}</span>
                               <span className="text-xs font-mono text-slate-500">{r.score}</span>
                               <Input
-                                type="number"
-                                min={1}
+                                type="text"
+                                placeholder={`# or ${BOB_TAG}`}
+                                tabIndex={beforeTabIndex.get(r.id)}
                                 className={`h-8 text-sm ${dupeBefore.has(r.id) ? "border-amber-400" : ""}`}
                                 value={tagBefores[r.id] ?? ""}
                                 onChange={(e) =>
@@ -1340,8 +1400,9 @@ export default function RoundManagePage({
                                 }
                               />
                               <Input
-                                type="number"
-                                min={1}
+                                type="text"
+                                placeholder={`# or ${BOB_TAG}`}
+                                tabIndex={afterTabIndex.get(r.id)}
                                 className={`h-8 text-sm ${dupeAfter.has(r.id) ? "border-amber-400" : ""}`}
                                 value={tagAfters[r.id] ?? ""}
                                 onChange={(e) =>
@@ -1356,9 +1417,10 @@ export default function RoundManagePage({
                         </div>
                       </div>
                     ))}
-                    {(dupeBefore.size > 0 || dupeAfter.size > 0) && (
+                    {anyDupes && (
                       <p className="text-xs text-amber-600">
-                        ⚠ Duplicate tag numbers highlighted above — fix before saving if that wasn&apos;t intentional.
+                        ⚠ Duplicate tag numbers highlighted above (within the same division/pool) — fix before
+                        saving if that wasn&apos;t intentional.
                       </p>
                     )}
                     {tagError && <p className="text-sm text-red-600">{tagError}</p>}

@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { auth } from "@/auth";
+import { normalizeTagInput } from "@/lib/tags";
 
 interface TagUpdate {
   resultId: number;
-  tagBefore?: number | null;
-  tagAfter?: number | null;
+  tagBefore?: string | null;
+  tagAfter?: string | null;
 }
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -20,8 +21,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       prisma.result.update({
         where: { id: resultId, roundId: Number(id) },
         data: {
-          ...(tagBefore !== undefined ? { tagBefore } : {}),
-          ...(tagAfter !== undefined ? { tagAfter } : {}),
+          ...(tagBefore !== undefined ? { tagBefore: tagBefore == null ? null : normalizeTagInput(tagBefore) } : {}),
+          ...(tagAfter !== undefined ? { tagAfter: tagAfter == null ? null : normalizeTagInput(tagAfter) } : {}),
         },
       })
     )

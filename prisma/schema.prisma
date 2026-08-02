@@ -12,6 +12,11 @@ enum Division {
   RED
 }
 
+enum Gender {
+  MALE
+  FEMALE
+}
+
 enum MemberStatus {
   MEMBER
   NON_MEMBER
@@ -65,10 +70,11 @@ model Player {
   pdgaNumber   String?
   username     String?
   division                Division
+  gender                  Gender?
   memberStatus            MemberStatus @default(NON_MEMBER)
   excludeFromChampionship  Boolean      @default(false)
   championshipPoolOverride String?
-  currentTag              Int?
+  currentTag              String?
   leagueId                Int
   createdAt               DateTime     @default(now())
 
@@ -118,8 +124,8 @@ model Result {
   score         Int
   relativeScore Int
   holeScores    Json
-  tagBefore     Int?
-  tagAfter      Int?
+  tagBefore     String?
+  tagAfter      String?
   createdAt     DateTime @default(now())
 
   round  Round  @relation(fields: [roundId], references: [id], onDelete: Cascade)
