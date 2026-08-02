@@ -60,12 +60,15 @@ interface RoundResult {
   score: number;
   relativeScore: number;
   holeScores: Record<string, number>;
+  tagBefore: number | null;
+  tagAfter: number | null;
 }
 
 interface Round {
   id: number;
   weekNumber: number;
   isChampionship: boolean;
+  isDraft: boolean;
   date: string;
   notes: string | null;
   facebookUrl: string | null;
@@ -177,6 +180,14 @@ export default function RoundManagePage({
   const [bobPlayer, setBobPlayer] = useState("");
   const [bobSaving, setBobSaving] = useState(false);
 
+  // Tag ladder state — keyed by resultId
+  const [tagBefores, setTagBefores] = useState<Record<number, string>>({});
+  const [tagAfters, setTagAfters] = useState<Record<number, string>>({});
+  const [tagsBeforeSaving, setTagsBeforeSaving] = useState(false);
+  const [tagsAfterSaving, setTagsAfterSaving] = useState(false);
+  const [autoAssigning, setAutoAssigning] = useState(false);
+  const [tagError, setTagError] = useState("");
+
   // Round winner overrides (non-championship)
   // 1st place: one per division; 2nd place: multiple allowed (ties)
   const [roundWinner1st, setRoundWinner1st] = useState<Record<string, string>>({ BLUE: "", RED: "" });
@@ -246,6 +257,15 @@ export default function RoundManagePage({
     })));
 
     setBobPlayer(data.bobTag?.playerName ?? "");
+
+    const befores: Record<number, string> = {};
+    const afters: Record<number, string> = {};
+    for (const r of data.results) {
+      befores[r.id] = r.tagBefore != null ? String(r.tagBefore) : "";
+      afters[r.id] = r.tagAfter != null ? String(r.tagAfter) : "";
+    }
+    setTagBefores(befores);
+    setTagAfters(afters);
     setFacebookUrl(data.facebookUrl ?? "");
     setFacebookLabel(data.facebookLabel ?? "");
 
@@ -391,6 +411,68 @@ export default function RoundManagePage({
     }
     await load();
     setBobSaving(false);
+  }
+
+  // Tag ladder
+  function parseTag(v: string): number | null {
+    const n = parseInt(v, 10);
+    return v.trim() === "" || isNaN(n) ? null : n;
+  }
+
+  async function handleSaveTagsBefore() {
+    if (!round) return;
+    setTagsBeforeSaving(true);
+    await fetch(`/api/rounds/${roundId}/tags`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tags: round.results.map((r) => ({ resultId: r.id, tagBefore: parseTag(tagBefores[r.id] ?? "") })),
+      }),
+    });
+    await load();
+    setTagsBeforeSaving(false);
+  }
+
+  async function handleSaveTagsAfter() {
+    if (!round) return;
+    setTagsAfterSaving(true);
+    await fetch(`/api/rounds/${roundId}/tags`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tags: round.results.map((r) => ({ resultId: r.id, tagAfter: parseTag(tagAfters[r.id] ?? "") })),
+      }),
+    });
+    await load();
+    setTagsAfterSaving(false);
+  }
+
+  async function handleAutoAssignTags() {
+    setAutoAssigning(true);
+    setTagError("");
+    const res = await fetch(`/api/rounds/${roundId}/tags/auto-assign`, { method: "POST" });
+    if (!res.ok) {
+      const err = await res.json();
+      setTagError(err.error ?? "Failed to auto-assign tags");
+    } else {
+      await load();
+    }
+    setAutoAssigning(false);
+  }
+
+  function findDuplicateTags(results: RoundResult[], tagValues: Record<number, string>): Set<number> {
+    const counts = new Map<number, number>();
+    for (const r of results) {
+      const n = parseTag(tagValues[r.id] ?? "");
+      if (n != null) counts.set(n, (counts.get(n) ?? 0) + 1);
+    }
+    const dupeNumbers = new Set([...counts.entries()].filter(([, c]) => c > 1).map(([n]) => n));
+    const dupeResultIds = new Set<number>();
+    for (const r of results) {
+      const n = parseTag(tagValues[r.id] ?? "");
+      if (n != null && dupeNumbers.has(n)) dupeResultIds.add(r.id);
+    }
+    return dupeResultIds;
   }
 
   // Pool winners
@@ -597,8 +679,13 @@ export default function RoundManagePage({
           <Link href={`/admin/leagues/${leagueId}`} className="text-sm text-slate-500 hover:text-slate-700">
             ← League Dashboard
           </Link>
-          <h1 className="text-2xl font-bold text-slate-900 mt-1">
+          <h1 className="text-2xl font-bold text-slate-900 mt-1 flex items-center gap-2">
             {round.isChampionship ? "Championship" : `Week ${round.weekNumber}`}
+            {round.isDraft && (
+              <span className="text-xs font-medium uppercase tracking-wide text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+                Draft
+              </span>
+            )}
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">
             {new Date(round.date).toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" })}
@@ -613,6 +700,12 @@ export default function RoundManagePage({
       <Tabs defaultValue="results">
         <TabsList className="mb-2">
           <TabsTrigger value="results">Results, CTP & Aces</TabsTrigger>
+          <TabsTrigger value="tags">
+            Tags
+            {round.results.some((r) => r.tagAfter != null) && (
+              <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+            )}
+          </TabsTrigger>
           <TabsTrigger value="post">
             Facebook Post
             {postDone && <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />}
@@ -1199,6 +1292,103 @@ export default function RoundManagePage({
               Permanently deletes all results for this round.
             </p>
           </div>
+        </TabsContent>
+
+        {/* ── TAGS ── */}
+        <TabsContent value="tags" className="space-y-6 mt-4 max-w-3xl">
+          {(() => {
+            const dupeBefore = findDuplicateTags(round.results, tagBefores);
+            const dupeAfter = findDuplicateTags(round.results, tagAfters);
+            return (
+              <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">🎫 Tag Ladder</CardTitle>
+                    <p className="text-xs text-slate-500">
+                      Record which tag each player checked in with. Once the round is final, auto-assign
+                      reshuffles tags per division: among players who brought a tag, the best finisher gets
+                      the lowest tag number in that day&apos;s pool, and so on. Players with no tag aren&apos;t
+                      part of the shuffle — give a player their first tag by typing a number directly into
+                      &quot;Tag After&quot; and saving.
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {[
+                      { label: "🔵 Blue Division", results: blueResults },
+                      { label: "🔴 Red Division", results: redResults },
+                    ].map(({ label, results }) => (
+                      <div key={label}>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">{label}</p>
+                        <div className="space-y-1.5">
+                          <div className="grid grid-cols-[1fr_4rem_6rem_6rem] gap-2 text-[11px] font-medium text-slate-400 px-1">
+                            <span>Player</span>
+                            <span>Score</span>
+                            <span>Brought In</span>
+                            <span>Tag After</span>
+                          </div>
+                          {results.map((r) => (
+                            <div key={r.id} className="grid grid-cols-[1fr_4rem_6rem_6rem] gap-2 items-center">
+                              <span className="text-sm text-slate-800 truncate">{r.player.name}</span>
+                              <span className="text-xs font-mono text-slate-500">{r.score}</span>
+                              <Input
+                                type="number"
+                                min={1}
+                                className={`h-8 text-sm ${dupeBefore.has(r.id) ? "border-amber-400" : ""}`}
+                                value={tagBefores[r.id] ?? ""}
+                                onChange={(e) =>
+                                  setTagBefores((prev) => ({ ...prev, [r.id]: e.target.value }))
+                                }
+                              />
+                              <Input
+                                type="number"
+                                min={1}
+                                className={`h-8 text-sm ${dupeAfter.has(r.id) ? "border-amber-400" : ""}`}
+                                value={tagAfters[r.id] ?? ""}
+                                onChange={(e) =>
+                                  setTagAfters((prev) => ({ ...prev, [r.id]: e.target.value }))
+                                }
+                              />
+                            </div>
+                          ))}
+                          {results.length === 0 && (
+                            <p className="text-xs text-slate-400">No results yet.</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    {(dupeBefore.size > 0 || dupeAfter.size > 0) && (
+                      <p className="text-xs text-amber-600">
+                        ⚠ Duplicate tag numbers highlighted above — fix before saving if that wasn&apos;t intentional.
+                      </p>
+                    )}
+                    {tagError && <p className="text-sm text-red-600">{tagError}</p>}
+                    <div className="flex items-center gap-3 pt-1 flex-wrap">
+                      <Button size="sm" onClick={handleSaveTagsBefore} disabled={tagsBeforeSaving}>
+                        {tagsBeforeSaving ? "Saving..." : "Save Tags Brought In"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleAutoAssignTags}
+                        disabled={autoAssigning || round.isDraft}
+                        title={round.isDraft ? "Finalize the round (re-import without Draft checked) before auto-assigning" : undefined}
+                      >
+                        {autoAssigning ? "Assigning..." : "Auto-Assign New Tags"}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={handleSaveTagsAfter} disabled={tagsAfterSaving}>
+                        {tagsAfterSaving ? "Saving..." : "Save Tag Changes"}
+                      </Button>
+                    </div>
+                    {round.isDraft && (
+                      <p className="text-xs text-slate-400">
+                        This round is still a draft, so auto-assign is disabled. You can still record tags brought in.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              </>
+            );
+          })()}
         </TabsContent>
 
         {/* ── FACEBOOK POST ── */}

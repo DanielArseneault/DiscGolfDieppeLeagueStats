@@ -70,6 +70,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
                         </span>
                         <span className="text-sm text-slate-500">{formatDate(round.date)}</span>
                         {round.isChampionship && <Badge variant="outline" className="text-amber-600 border-amber-300">Championship</Badge>}
+                        {round.isDraft && <Badge variant="outline" className="text-amber-600 border-amber-300">Draft</Badge>}
                         <Badge variant="secondary">{round._count.results} players</Badge>
                       </div>
                       <div className="flex gap-3 mt-1.5 text-xs">

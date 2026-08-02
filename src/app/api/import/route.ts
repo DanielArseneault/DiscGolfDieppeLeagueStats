@@ -12,6 +12,7 @@ export async function POST(req: Request) {
   const blueLayoutId = formData.get("blueLayoutId") ? Number(formData.get("blueLayoutId")) : null;
   const redLayoutId = formData.get("redLayoutId") ? Number(formData.get("redLayoutId")) : null;
   const isChampionship = formData.get("isChampionship") === "true";
+  const isDraft = formData.get("isDraft") === "true";
 
   if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 });
   if (!weekNumber || !date) return NextResponse.json({ error: "weekNumber and date required" }, { status: 400 });
@@ -35,8 +36,8 @@ export async function POST(req: Request) {
   try {
     const round = await prisma.round.upsert({
       where: { leagueId_weekNumber: { leagueId, weekNumber } },
-      create: { leagueId, weekNumber, date: new Date(date), blueLayoutId, redLayoutId, isChampionship },
-      update: { date: new Date(date), blueLayoutId, redLayoutId, isChampionship },
+      create: { leagueId, weekNumber, date: new Date(date), blueLayoutId, redLayoutId, isChampionship, isDraft },
+      update: { date: new Date(date), blueLayoutId, redLayoutId, isChampionship, isDraft },
     });
 
     const allResults = [
@@ -77,6 +78,7 @@ export async function POST(req: Request) {
           score: result.roundTotalScore,
           relativeScore: result.roundRelativeScore,
           holeScores: result.holeScores,
+          tagBefore: player.currentTag,
         },
         update: {
           division: result.division,

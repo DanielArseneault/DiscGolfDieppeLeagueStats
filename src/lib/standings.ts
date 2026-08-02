@@ -79,6 +79,7 @@ export const getStandings = cache(async function getStandings(leagueId: number):
     where: {
       leagueId,
       isChampionship: false,
+      isDraft: false,
       weekNumber: { lte: league.qualifyingWeeks },
     },
     select: { id: true, weekNumber: true },

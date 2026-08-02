@@ -21,7 +21,7 @@ async function getData(league: League) {
   const [standings, recentRound, qualifyingRoundsPlayed, allResults] = await Promise.all([
     getStandings(league.id),
     prisma.round.findFirst({
-      where: { leagueId: league.id },
+      where: { leagueId: league.id, isDraft: false },
       orderBy: { weekNumber: "desc" },
       include: {
         results: {
@@ -38,7 +38,7 @@ async function getData(league: League) {
         _count: { select: { results: true } },
       },
     }),
-    prisma.round.count({ where: { leagueId: league.id, isChampionship: false } }),
+    prisma.round.count({ where: { leagueId: league.id, isChampionship: false, isDraft: false } }),
     prisma.result.findMany({
       where: { round: { leagueId: league.id } },
       select: { division: true, holeScores: true },

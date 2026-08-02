@@ -13,7 +13,7 @@ type Round = Awaited<ReturnType<typeof getRounds>>[number];
 
 async function getRounds(leagueId: number) {
   return prisma.round.findMany({
-    where: { leagueId },
+    where: { leagueId, isDraft: false },
     orderBy: { weekNumber: "desc" },
     include: {
       roundWinners: { orderBy: [{ division: "asc" }, { place: "asc" }] },

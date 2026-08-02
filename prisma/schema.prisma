@@ -68,6 +68,7 @@ model Player {
   memberStatus            MemberStatus @default(NON_MEMBER)
   excludeFromChampionship  Boolean      @default(false)
   championshipPoolOverride String?
+  currentTag              Int?
   leagueId                Int
   createdAt               DateTime     @default(now())
 
@@ -86,6 +87,7 @@ model Round {
   redLayoutId   Int?
   notes            String?
   isChampionship   Boolean  @default(false)
+  isDraft          Boolean  @default(false)
   facebookUrl      String?
   facebookLabel    String?
   createdAt        DateTime @default(now())
@@ -116,6 +118,8 @@ model Result {
   score         Int
   relativeScore Int
   holeScores    Json
+  tagBefore     Int?
+  tagAfter      Int?
   createdAt     DateTime @default(now())
 
   round  Round  @relation(fields: [roundId], references: [id], onDelete: Cascade)
