@@ -22,9 +22,11 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   const assignments: { resultId: number; playerId: number; tagAfter: number }[] = [];
 
   for (const division of [Division.BLUE, Division.RED]) {
+    // Ties (equal position) are broken by previous tag — whoever held the lower
+    // (better) tag before the round keeps priority for the lower tag after.
     const pool = round.results
       .filter((r) => r.division === division && r.tagBefore != null)
-      .sort((a, b) => a.position - b.position);
+      .sort((a, b) => a.position - b.position || a.tagBefore! - b.tagBefore!);
 
     const tagNumbers = pool.map((r) => r.tagBefore!).sort((a, b) => a - b);
 

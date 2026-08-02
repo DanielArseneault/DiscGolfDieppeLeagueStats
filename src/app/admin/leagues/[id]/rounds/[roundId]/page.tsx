@@ -1307,9 +1307,9 @@ export default function RoundManagePage({
                     <p className="text-xs text-slate-500">
                       Record which tag each player checked in with. Once the round is final, auto-assign
                       reshuffles tags per division: among players who brought a tag, the best finisher gets
-                      the lowest tag number in that day&apos;s pool, and so on. Players with no tag aren&apos;t
-                      part of the shuffle — give a player their first tag by typing a number directly into
-                      &quot;Tag After&quot; and saving.
+                      the lowest tag number in that day&apos;s pool, and so on (ties go to whoever held the
+                      lower tag beforehand). Players with no tag aren&apos;t part of the shuffle — give a
+                      player their first tag by typing a number directly into &quot;Tag After&quot; and saving.
                     </p>
                   </CardHeader>
                   <CardContent className="space-y-6">
