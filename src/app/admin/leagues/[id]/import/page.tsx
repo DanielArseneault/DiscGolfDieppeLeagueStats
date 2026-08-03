@@ -38,7 +38,9 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const [mode, setMode] = useState<"file" | "url">("file");
   const [file, setFile] = useState<File | null>(null);
+  const [udiscUrl, setUdiscUrl] = useState("");
   const [weekNumber, setWeekNumber] = useState("");
   const [date, setDate] = useState("");
   const [isChampionship, setIsChampionship] = useState(false);
@@ -47,6 +49,7 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
   const [redLayoutId, setRedLayoutId] = useState("");
   const [layouts, setLayouts] = useState<Layout[]>([]);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [urlRoundId, setUrlRoundId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -66,34 +69,94 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
 
   async function handleImport(e: React.FormEvent) {
     e.preventDefault();
-    if (!file || (!isChampionship && !weekNumber) || !date) return;
+    if (mode === "file") {
+      if (!file || (!isChampionship && !weekNumber) || !date) return;
 
-    setLoading(true);
-    setError("");
+      setLoading(true);
+      setError("");
 
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("leagueId", leagueId);
-    formData.append("weekNumber", isChampionship ? "99" : weekNumber);
-    formData.append("date", date);
-    formData.append("isChampionship", String(isChampionship));
-    formData.append("isDraft", String(isDraft));
-    if (blueLayoutId) formData.append("blueLayoutId", blueLayoutId);
-    if (redLayoutId) formData.append("redLayoutId", redLayoutId);
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("leagueId", leagueId);
+      formData.append("weekNumber", isChampionship ? "99" : weekNumber);
+      formData.append("date", date);
+      formData.append("isChampionship", String(isChampionship));
+      formData.append("isDraft", String(isDraft));
+      if (blueLayoutId) formData.append("blueLayoutId", blueLayoutId);
+      if (redLayoutId) formData.append("redLayoutId", redLayoutId);
 
-    try {
-      const res = await fetch("/api/import", { method: "POST", body: formData });
-      if (!res.ok) {
-        const err = await res.json();
-        setError(err.error ?? "Import failed");
-        return;
+      try {
+        const res = await fetch("/api/import", { method: "POST", body: formData });
+        if (!res.ok) {
+          const err = await res.json();
+          setError(err.error ?? "Import failed");
+          return;
+        }
+        setPreview(await res.json());
+      } catch {
+        setError("Failed to import. Check the file format.");
+      } finally {
+        setLoading(false);
       }
-      setPreview(await res.json());
-    } catch {
-      setError("Failed to import. Check the file format.");
-    } finally {
-      setLoading(false);
+    } else {
+      if (!udiscUrl || (!isChampionship && !weekNumber) || !date) return;
+
+      setLoading(true);
+      setError("");
+
+      try {
+        const res = await fetch("/api/rounds", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            leagueId: Number(leagueId),
+            weekNumber: isChampionship ? 99 : Number(weekNumber),
+            date,
+            isChampionship,
+            blueLayoutId: blueLayoutId || undefined,
+            redLayoutId: redLayoutId || undefined,
+            udiscUrl,
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          setError(err.error ?? "Failed to create round");
+          return;
+        }
+        const round = await res.json();
+        setUrlRoundId(round.id);
+      } catch {
+        setError("Failed to create round. Check the UDisc URL.");
+      } finally {
+        setLoading(false);
+      }
     }
+  }
+
+  if (urlRoundId) {
+    return (
+      <div className="space-y-6 max-w-2xl">
+        <div>
+          <Link href={`/admin/leagues/${leagueId}`} className="text-sm text-slate-500 hover:text-slate-700">
+            ← League Dashboard
+          </Link>
+          <h1 className="text-2xl font-bold text-slate-900 mt-1">Round Created</h1>
+          <p className="text-slate-500 mt-0.5">
+            Saved as a draft — no results yet. Use &quot;Sync from UDisc&quot; on the round page once scores are posted.
+          </p>
+        </div>
+        <Card>
+          <CardContent className="pt-6 flex gap-3">
+            <Button onClick={() => router.push(`/admin/leagues/${leagueId}/rounds/${urlRoundId}`)}>
+              Manage Round →
+            </Button>
+            <Button variant="outline" onClick={() => { setUrlRoundId(null); setUdiscUrl(""); }}>
+              Create Another
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   if (preview) {
@@ -147,46 +210,86 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
         </Link>
         <h1 className="text-2xl font-bold text-slate-900 mt-1">Import Round</h1>
         <p className="text-slate-500 mt-0.5">
-          Upload a UDisc export file (.xlsx) to import league night results.
+          {mode === "file"
+            ? "Upload a UDisc export file (.xlsx) to import league night results."
+            : "Set up a round ahead of time from its UDisc event URL. Results come later via Sync from UDisc."}
         </p>
+      </div>
+
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          variant={mode === "file" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setMode("file")}
+        >
+          Upload File
+        </Button>
+        <Button
+          type="button"
+          variant={mode === "url" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setMode("url")}
+        >
+          From UDisc URL
+        </Button>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">UDisc Export File</CardTitle>
+          <CardTitle className="text-base">{mode === "file" ? "UDisc Export File" : "UDisc Event URL"}</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleImport} className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="file">File (.xlsx)</Label>
-              <Input
-                ref={fileRef}
-                id="file"
-                type="file"
-                accept=".xlsx,.csv,.xls"
-                onChange={(e) => {
-                  const f = e.target.files?.[0] ?? null;
-                  setFile(f);
-                  if (f) {
-                    const parsed = parseFilename(f.name);
-                    if (parsed.date) setDate(parsed.date);
-                    if (parsed.weekNumber) setWeekNumber(parsed.weekNumber);
-                  }
-                }}
-                required
-              />
-              <p className="text-xs text-slate-400">
-                Export from UDisc: Scoring › League › Export scores ·{" "}
-                <a
-                  href="https://udisc.com/leagues/dieppe-dgc-league-f9TbbX/schedule"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline hover:text-slate-600"
-                >
-                  Open UDisc schedule ↗
-                </a>
-              </p>
-            </div>
+            {mode === "file" ? (
+              <div className="space-y-2">
+                <Label htmlFor="file">File (.xlsx)</Label>
+                <Input
+                  key="file-input"
+                  ref={fileRef}
+                  id="file"
+                  type="file"
+                  accept=".xlsx,.csv,.xls"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0] ?? null;
+                    setFile(f);
+                    if (f) {
+                      const parsed = parseFilename(f.name);
+                      if (parsed.date) setDate(parsed.date);
+                      if (parsed.weekNumber) setWeekNumber(parsed.weekNumber);
+                    }
+                  }}
+                  required
+                />
+                <p className="text-xs text-slate-400">
+                  Export from UDisc: Scoring › League › Export scores ·{" "}
+                  <a
+                    href="https://udisc.com/leagues/dieppe-dgc-league-f9TbbX/schedule"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-slate-600"
+                  >
+                    Open UDisc schedule ↗
+                  </a>
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="udiscUrl">UDisc Event URL</Label>
+                <Input
+                  key="url-input"
+                  id="udiscUrl"
+                  type="url"
+                  value={udiscUrl}
+                  onChange={(e) => setUdiscUrl(e.target.value)}
+                  placeholder="https://udisc.com/events/..."
+                  required
+                />
+                <p className="text-xs text-slate-400">
+                  The event page URL, not the export link — e.g. the page you&apos;d normally open to view the leaderboard.
+                </p>
+              </div>
+            )}
 
             <label className="flex items-center gap-3 cursor-pointer select-none">
               <input
@@ -201,20 +304,22 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
               </div>
             </label>
 
-            <label className="flex items-center gap-3 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={isDraft}
-                onChange={(e) => setIsDraft(e.target.checked)}
-                className="w-4 h-4 rounded border-slate-300"
-              />
-              <div>
-                <span className="text-sm font-medium text-slate-900">Draft (round not finished yet)</span>
-                <p className="text-xs text-slate-500">
-                  Hidden from public pages until you re-import with this unchecked. Lets you manage tags before the round is final.
-                </p>
-              </div>
-            </label>
+            {mode === "file" && (
+              <label className="flex items-center gap-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isDraft}
+                  onChange={(e) => setIsDraft(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-300"
+                />
+                <div>
+                  <span className="text-sm font-medium text-slate-900">Draft (round not finished yet)</span>
+                  <p className="text-xs text-slate-500">
+                    Hidden from public pages until you re-import with this unchecked. Lets you manage tags before the round is final.
+                  </p>
+                </div>
+              </label>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               {!isChampionship && (
@@ -283,8 +388,12 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
 
             {error && <p className="text-sm text-red-600">{error}</p>}
 
-            <Button type="submit" className="w-full" disabled={loading || !file}>
-              {loading ? "Importing..." : "Import Round"}
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={loading || (mode === "file" ? !file : !udiscUrl)}
+            >
+              {loading ? "Saving..." : mode === "file" ? "Import Round" : "Create Round"}
             </Button>
           </form>
         </CardContent>

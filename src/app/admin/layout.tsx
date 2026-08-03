@@ -13,9 +13,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               <Link href="/admin" className="font-medium text-white shrink-0">
                 Admin
               </Link>
-              <Link href="/admin/leagues" className="text-slate-400 hover:text-white transition-colors shrink-0">
-                Leagues
-              </Link>
               <Link href="/admin/layouts" className="text-slate-400 hover:text-white transition-colors shrink-0">
                 Layouts
               </Link>

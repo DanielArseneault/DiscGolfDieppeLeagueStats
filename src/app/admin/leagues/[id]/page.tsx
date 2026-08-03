@@ -8,7 +8,7 @@ import { formatDate } from "@/lib/utils";
 import { getStandings } from "@/lib/standings";
 import { PoolExclusions } from "@/components/admin/pool-exclusions";
 import { CollapsibleCard } from "@/components/admin/collapsible-card";
-import { RemoveDraftButton } from "@/components/admin/remove-draft-button";
+import { DraftToggleButton } from "@/components/admin/draft-toggle-button";
 
 export default async function LeagueDashboard({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -34,7 +34,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <Link href="/admin/leagues" className="text-sm text-slate-500 hover:text-slate-700">
+          <Link href="/admin" className="text-sm text-slate-500 hover:text-slate-700">
             ← All Leagues
           </Link>
           <h1 className="text-2xl font-bold text-slate-900 mt-1">{league.name}</h1>
@@ -92,7 +92,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      {round.isDraft && <RemoveDraftButton roundId={round.id} />}
+                      <DraftToggleButton roundId={round.id} isDraft={round.isDraft} />
                       <Button asChild variant="outline" size="sm">
                         <Link href={`/rounds/${round.id}`}>View</Link>
                       </Button>

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
-export function RemoveDraftButton({ roundId }: { roundId: number }) {
+export function DraftToggleButton({ roundId, isDraft }: { roundId: number; isDraft: boolean }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
 
@@ -13,7 +13,7 @@ export function RemoveDraftButton({ roundId }: { roundId: number }) {
     await fetch(`/api/rounds/${roundId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isDraft: false }),
+      body: JSON.stringify({ isDraft: !isDraft }),
     });
     router.refresh();
     setSaving(false);
@@ -21,7 +21,7 @@ export function RemoveDraftButton({ roundId }: { roundId: number }) {
 
   return (
     <Button size="sm" variant="outline" onClick={handleClick} disabled={saving}>
-      {saving ? "Removing..." : "Remove Draft"}
+      {saving ? "Saving..." : isDraft ? "Remove Draft" : "Mark as Draft"}
     </Button>
   );
 }
