@@ -16,7 +16,7 @@ function formatDateLabel(dateStr: string) {
 
 function LegendKey({ color, label, line }: { color: string; label: string; line?: boolean }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+    <span className="inline-flex items-center gap-1.5 text-xs text-[var(--ink-muted)]">
       {line ? (
         <span className="inline-block w-4 rounded-full" style={{ height: 2, backgroundColor: color }} />
       ) : (
@@ -49,11 +49,11 @@ export function PageViewsChart({
     <div className="viz-root relative">
       <div className="flex h-7 items-center justify-between gap-4">
         {active ? (
-          <div className="pointer-events-none rounded-md border border-slate-200 bg-white px-2 py-1 text-xs shadow-sm">
-            <span className="font-semibold text-slate-900">{active.views.toLocaleString()}</span>{" "}
-            <span className="text-slate-500">views</span>{" "}
-            <span className="font-semibold text-slate-900">{active.visitors.toLocaleString()}</span>{" "}
-            <span className="text-slate-500">
+          <div className="pointer-events-none rounded-md border border-[var(--line)] bg-[var(--bg-card)] px-2 py-1 text-xs shadow-sm">
+            <span className="font-semibold text-[var(--ink)]">{active.views.toLocaleString()}</span>{" "}
+            <span className="text-[var(--ink-muted)]">views</span>{" "}
+            <span className="font-semibold text-[var(--ink)]">{active.visitors.toLocaleString()}</span>{" "}
+            <span className="text-[var(--ink-muted)]">
               visitors · {formatDateLabel(active.date)}
               {activeRound && ` · ${activeRound} round`}
             </span>
@@ -69,7 +69,7 @@ export function PageViewsChart({
 
       <div className="relative mt-2">
         <div
-          className="flex h-40 items-end gap-[2px] border-b border-slate-200"
+          className="flex h-40 items-end gap-[2px] border-b border-[var(--line)]"
           role="group"
           aria-label="Daily page views and unique visitors"
         >
@@ -137,7 +137,7 @@ export function PageViewsChart({
           {data.map((d) => (
             <span key={d.date} className="flex h-3 flex-1 items-center justify-center">
               {markerByDate.has(d.date) && (
-                <span className="text-[8px] leading-none text-slate-400" title={`${markerByDate.get(d.date)} round`}>
+                <span className="text-[8px] leading-none text-[var(--ink-muted)]" title={`${markerByDate.get(d.date)} round`}>
                   ▲
                 </span>
               )}
@@ -146,7 +146,7 @@ export function PageViewsChart({
         </div>
       )}
 
-      <div className="relative mt-1 flex justify-between text-xs text-slate-400">
+      <div className="relative mt-1 flex justify-between text-xs text-[var(--ink-muted)]">
         <span>{formatDateLabel(data[0]?.date ?? "")}</span>
         <span>{formatDateLabel(data[data.length - 1]?.date ?? "")}</span>
         {markers.length > 0 && (
@@ -162,12 +162,12 @@ export function WeekdayViewsChart({ data }: { data: WeekdayViews[] }) {
 
   return (
     <div className="viz-root">
-      <div className="flex h-32 items-end gap-3 border-b border-slate-200">
+      <div className="flex h-32 items-end gap-3 border-b border-[var(--line)]">
         {data.map((d) => {
           const heightPct = (d.views / max) * 100;
           return (
             <div key={d.weekday} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
-              <span className="text-xs text-slate-700 tabular-nums">{d.views.toLocaleString()}</span>
+              <span className="text-xs text-[var(--ink-2)] tabular-nums">{d.views.toLocaleString()}</span>
               <span
                 className="w-full max-w-[24px] rounded-t-[4px]"
                 style={{
@@ -181,7 +181,7 @@ export function WeekdayViewsChart({ data }: { data: WeekdayViews[] }) {
       </div>
       <div className="mt-1 flex gap-3">
         {data.map((d) => (
-          <span key={d.weekday} className="flex-1 text-center text-xs text-slate-400">
+          <span key={d.weekday} className="flex-1 text-center text-xs text-[var(--ink-muted)]">
             {d.weekday}
           </span>
         ))}

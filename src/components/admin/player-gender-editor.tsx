@@ -50,7 +50,7 @@ export function PlayerGenderEditor({ players }: { players: Player[] }) {
       <button
         type="button"
         onClick={toggleSort}
-        className="text-xs font-medium text-slate-500 hover:text-slate-700 flex items-center gap-0.5"
+        className="text-xs font-medium text-[var(--ink-muted)] hover:text-[var(--ink)] flex items-center gap-0.5"
       >
         Sort by name {sortDir === "asc" ? "▲" : "▼"}
       </button>
@@ -73,11 +73,11 @@ function DivisionTable({
 }) {
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">{label}</p>
-      <div className="rounded-md border border-slate-200 divide-y divide-slate-100">
+      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)] mb-2">{label}</p>
+      <div className="rounded-md border border-[var(--line)] divide-y divide-[var(--line-2)]">
         {players.map((p) => (
           <div key={p.id} className="flex items-center justify-between px-4 py-2.5">
-            <span className="text-sm font-medium text-slate-900">{p.name}</span>
+            <span className="text-sm font-medium text-[var(--ink)]">{p.name}</span>
             <Select
               value={p.gender ?? "unspecified"}
               onValueChange={(v) => onChange(p, v)}
@@ -96,7 +96,7 @@ function DivisionTable({
             </Select>
           </div>
         ))}
-        {players.length === 0 && <p className="text-xs text-slate-400 px-4 py-3">No players yet.</p>}
+        {players.length === 0 && <p className="text-xs text-[var(--ink-muted)] px-4 py-3">No players yet.</p>}
       </div>
     </div>
   );

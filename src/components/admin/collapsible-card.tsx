@@ -21,9 +21,9 @@ export function CollapsibleCard({ title, description, defaultOpen = true, childr
       >
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">{title}</CardTitle>
-          <span className="text-slate-400 text-sm">{open ? "▲" : "▼"}</span>
+          <span className="text-[var(--ink-muted)] text-sm">{open ? "▲" : "▼"}</span>
         </div>
-        {description && <p className="text-xs text-slate-500">{description}</p>}
+        {description && <p className="text-xs text-[var(--ink-muted)]">{description}</p>}
       </CardHeader>
       {open && <CardContent>{children}</CardContent>}
     </Card>

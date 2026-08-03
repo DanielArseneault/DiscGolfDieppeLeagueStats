@@ -94,26 +94,26 @@ function DivisionTable({
 }) {
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">{label}</p>
-      <div className="rounded-md border border-slate-200 divide-y divide-slate-100">
+      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)] mb-2">{label}</p>
+      <div className="rounded-md border border-[var(--line)] divide-y divide-[var(--line-2)]">
         {players.map((p) => {
           const val = currentValue(p);
           const isExcluded = val === "exclude";
           const isOverridden = !isExcluded && p.championshipPoolOverride !== null;
           return (
-            <div key={p.playerId} className={`flex items-center justify-between px-4 py-2.5 ${isExcluded ? "bg-slate-50" : ""}`}>
+            <div key={p.playerId} className={`flex items-center justify-between px-4 py-2.5 ${isExcluded ? "bg-[var(--bg-inset)]" : ""}`}>
               <div className="flex items-center gap-3">
-                <span className={`text-sm font-medium ${isExcluded ? "text-slate-400 line-through" : "text-slate-900"}`}>
+                <span className={`text-sm font-medium ${isExcluded ? "text-[var(--ink-muted)] line-through" : "text-[var(--ink)]"}`}>
                   {p.playerName}
                 </span>
-                <span className="text-xs text-slate-400 tabular-nums">{p.qualifyingTotal}</span>
+                <span className="text-xs text-[var(--ink-muted)] tabular-nums">{p.qualifyingTotal}</span>
                 {isOverridden && (
-                  <span className="text-xs text-amber-600 font-medium">overridden</span>
+                  <span className="text-xs text-[var(--tint-warn-fg)] font-medium">overridden</span>
                 )}
               </div>
               <div className="flex items-center gap-2">
                 {!isExcluded && p.championshipPool && (
-                  <span className="text-xs text-slate-400">
+                  <span className="text-xs text-[var(--ink-muted)]">
                     {isOverridden ? "→" : ""} Pool {p.championshipPool}
                   </span>
                 )}

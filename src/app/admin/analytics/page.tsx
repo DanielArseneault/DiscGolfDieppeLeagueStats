@@ -15,11 +15,11 @@ function StatTile({
   return (
     <Card>
       <CardContent className="py-5">
-        <div className="text-sm text-slate-500">{label}</div>
-        <div className="text-3xl font-semibold text-slate-900 mt-1">
+        <div className="text-sm text-[var(--ink-muted)]">{label}</div>
+        <div className="text-3xl font-semibold text-[var(--ink)] mt-1">
           {typeof value === "number" ? value.toLocaleString() : value}
         </div>
-        {detail && <div className="text-xs text-slate-500 mt-1">{detail}</div>}
+        {detail && <div className="text-xs text-[var(--ink-muted)] mt-1">{detail}</div>}
       </CardContent>
     </Card>
   );
@@ -46,14 +46,14 @@ function DeviceSplitBar({ devices }: { devices: { device: string; views: number 
       <div className="mt-3 space-y-1.5">
         {devices.map((d) => (
           <div key={d.device} className="flex items-center justify-between text-sm">
-            <span className="inline-flex items-center gap-1.5 text-slate-700">
+            <span className="inline-flex items-center gap-1.5 text-[var(--ink-2)]">
               <span
                 className="inline-block size-2.5 rounded-[3px]"
                 style={{ backgroundColor: DEVICE_COLORS[d.device] }}
               />
               {DEVICE_LABELS[d.device] ?? d.device}
             </span>
-            <span className="text-slate-500 tabular-nums">
+            <span className="text-[var(--ink-muted)] tabular-nums">
               {d.views.toLocaleString()} · {Math.round((d.views / total) * 100)}%
             </span>
           </div>
@@ -74,13 +74,15 @@ function formatRoundDate(dateKey: string) {
 
 function RangePicker({ active }: { active: RangeDays }) {
   return (
-    <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
+    <div className="inline-flex rounded-lg border border-[var(--line)] bg-[var(--bg-card)] p-0.5">
       {RANGE_OPTIONS.map((days) => (
         <Link
           key={days}
           href={days === 30 ? "/admin/analytics" : `/admin/analytics?days=${days}`}
           className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-            days === active ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-900"
+            days === active
+              ? "bg-[var(--accent)] text-[var(--accent-ink)]"
+              : "text-[var(--ink-muted)] hover:text-[var(--ink)]"
           }`}
         >
           {days} days
@@ -116,7 +118,7 @@ export default async function AnalyticsPage({
   return (
     <div className="space-y-8 max-w-4xl">
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-slate-900">Site Analytics</h1>
+        <h1 className="text-2xl font-bold text-[var(--ink)]">Site Analytics</h1>
         <RangePicker active={days} />
       </div>
 
@@ -142,7 +144,7 @@ export default async function AnalyticsPage({
 
       <Card>
         <CardContent className="py-6">
-          <h2 className="text-sm font-semibold text-slate-900 mb-4">Page views — last {days} days</h2>
+          <h2 className="text-sm font-semibold text-[var(--ink)] mb-4">Page views — last {days} days</h2>
           <PageViewsChart data={summary.dailyTrend} markers={summary.roundMarkers} />
         </CardContent>
       </Card>
@@ -150,7 +152,7 @@ export default async function AnalyticsPage({
       <div className="grid md:grid-cols-2 gap-8">
         <Card>
           <CardContent className="py-6">
-            <h2 className="text-sm font-semibold text-slate-900 mb-4">
+            <h2 className="text-sm font-semibold text-[var(--ink)] mb-4">
               Views by day of week — last {days} days
             </h2>
             <WeekdayViewsChart data={summary.weekdayTrend} />
@@ -159,21 +161,21 @@ export default async function AnalyticsPage({
 
         <Card>
           <CardContent className="py-6">
-            <h2 className="text-sm font-semibold text-slate-900 mb-4">
+            <h2 className="text-sm font-semibold text-[var(--ink)] mb-4">
               Traffic sources — last {days} days
             </h2>
             {summary.trafficSources.length === 0 ? (
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-[var(--ink-muted)]">
                 No entry visits recorded yet. Sources accumulate as visitors arrive from links.
               </p>
             ) : (
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-[var(--line-2)]">
                 {summary.trafficSources.map((source) => (
                   <div key={source.source} className="flex items-center justify-between py-2 text-sm">
-                    <span className="text-slate-700">
+                    <span className="text-[var(--ink-2)]">
                       {SOURCE_LABELS[source.source] ?? source.source}
                     </span>
-                    <span className="text-slate-500 tabular-nums">
+                    <span className="text-[var(--ink-muted)] tabular-nums">
                       {source.entries.toLocaleString()}
                     </span>
                   </div>
@@ -187,11 +189,11 @@ export default async function AnalyticsPage({
       <div className="grid md:grid-cols-2 gap-8">
         <Card>
           <CardContent className="py-6">
-            <h2 className="text-sm font-semibold text-slate-900 mb-4">
+            <h2 className="text-sm font-semibold text-[var(--ink)] mb-4">
               Devices — last {days} days
             </h2>
             {summary.devices.length === 0 ? (
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-[var(--ink-muted)]">
                 No device data yet. It accumulates on new page views.
               </p>
             ) : (
@@ -202,20 +204,20 @@ export default async function AnalyticsPage({
 
         <Card>
           <CardContent className="py-6">
-            <h2 className="text-sm font-semibold text-slate-900 mb-4">
+            <h2 className="text-sm font-semibold text-[var(--ink)] mb-4">
               Traffic around rounds — last {days} days
             </h2>
             {summary.roundTraffic.length === 0 ? (
-              <p className="text-sm text-slate-500">No rounds fall inside this range.</p>
+              <p className="text-sm text-[var(--ink-muted)]">No rounds fall inside this range.</p>
             ) : (
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-[var(--line-2)]">
                 {summary.roundTraffic.map((round) => (
                   <div key={round.date} className="flex items-center justify-between py-2 text-sm">
-                    <span className="text-slate-700">
+                    <span className="text-[var(--ink-2)]">
                       {round.label}{" "}
-                      <span className="text-xs text-slate-400">{formatRoundDate(round.date)}</span>
+                      <span className="text-xs text-[var(--ink-muted)]">{formatRoundDate(round.date)}</span>
                     </span>
-                    <span className="text-slate-500 tabular-nums">
+                    <span className="text-[var(--ink-muted)] tabular-nums">
                       {round.views.toLocaleString()} views in 3 days
                     </span>
                   </div>
@@ -228,18 +230,18 @@ export default async function AnalyticsPage({
 
       <Card>
         <CardContent className="py-6">
-          <h2 className="text-sm font-semibold text-slate-900 mb-4">Top pages — last {days} days</h2>
+          <h2 className="text-sm font-semibold text-[var(--ink)] mb-4">Top pages — last {days} days</h2>
           {summary.topPages.length === 0 ? (
-            <p className="text-sm text-slate-500">No page views recorded yet.</p>
+            <p className="text-sm text-[var(--ink-muted)]">No page views recorded yet.</p>
           ) : (
-            <div className="divide-y divide-slate-100">
+            <div className="divide-y divide-[var(--line-2)]">
               {summary.topPages.map((page) => (
                 <div key={page.path} className="flex items-center justify-between gap-4 py-2 text-sm">
                   <div className="min-w-0">
-                    <span className="text-slate-700">{page.label}</span>{" "}
-                    <span className="font-mono text-xs text-slate-400">{page.path}</span>
+                    <span className="text-[var(--ink-2)]">{page.label}</span>{" "}
+                    <span className="font-mono text-xs text-[var(--ink-muted)]">{page.path}</span>
                   </div>
-                  <span className="text-slate-500 tabular-nums shrink-0">
+                  <span className="text-[var(--ink-muted)] tabular-nums shrink-0">
                     {page.views.toLocaleString()}
                   </span>
                 </div>

@@ -81,12 +81,12 @@ function LayoutForm({
       <div>
         <div className="flex items-center justify-between mb-2">
           <Label>Par per Hole</Label>
-          <span className="text-sm text-slate-500">Total par: <strong>{totalPar}</strong></span>
+          <span className="text-sm text-[var(--ink-muted)]">Total par: <strong>{totalPar}</strong></span>
         </div>
         <div className="grid grid-cols-9 gap-1.5">
           {holePars.map((hp, i) => (
             <div key={hp.holeNumber} className="text-center">
-              <div className="text-xs text-slate-400 mb-1">H{hp.holeNumber}</div>
+              <div className="text-xs text-[var(--ink-muted)] mb-1">H{hp.holeNumber}</div>
               <Input
                 type="number"
                 min={2}
@@ -145,8 +145,8 @@ export default function LayoutsPage() {
     <div className="space-y-6 max-w-4xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Course Layouts</h1>
-          <p className="text-slate-500 mt-1">Manage tee layouts and par values for each hole.</p>
+          <h1 className="text-2xl font-bold text-[var(--ink)]">Course Layouts</h1>
+          <p className="text-[var(--ink-muted)] mt-1">Manage tee layouts and par values for each hole.</p>
         </div>
         <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setEditing(undefined); }}>
           <DialogTrigger asChild>
@@ -194,7 +194,7 @@ export default function LayoutsPage() {
         </div>
       ) : layouts.length === 0 ? (
         <Card className="border-dashed border-2">
-          <CardContent className="py-8 text-center text-slate-500">
+          <CardContent className="py-8 text-center text-[var(--ink-muted)]">
             No layouts yet. Add a Blue and Red layout to track per-hole par values.
           </CardContent>
         </Card>
@@ -209,7 +209,7 @@ export default function LayoutsPage() {
                     <div>
                       <CardTitle className="text-base">{layout.name}</CardTitle>
                       {layout.description && (
-                        <p className="text-sm text-slate-500 mt-0.5">{layout.description}</p>
+                        <p className="text-sm text-[var(--ink-muted)] mt-0.5">{layout.description}</p>
                       )}
                     </div>
                     <div className="flex gap-2">
@@ -232,12 +232,12 @@ export default function LayoutsPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-xs text-slate-500 mb-2">Total par: <strong>{totalPar}</strong></p>
+                  <p className="text-xs text-[var(--ink-muted)] mb-2">Total par: <strong>{totalPar}</strong></p>
                   <div className="grid grid-cols-9 gap-1 text-center text-xs">
                     {layout.holePars.map((hp) => (
-                      <div key={hp.holeNumber} className="bg-slate-50 rounded px-1 py-1.5">
-                        <div className="text-slate-400">H{hp.holeNumber}</div>
-                        <div className="font-semibold text-slate-700">{hp.par}</div>
+                      <div key={hp.holeNumber} className="bg-[var(--bg-inset)] rounded px-1 py-1.5">
+                        <div className="text-[var(--ink-muted)]">H{hp.holeNumber}</div>
+                        <div className="font-semibold text-[var(--ink-2)]">{hp.par}</div>
                       </div>
                     ))}
                   </div>

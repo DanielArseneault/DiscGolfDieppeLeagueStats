@@ -6,6 +6,10 @@
    Never cross them, and always pair a tint bg with its own fg. Scoped to `.site` (the public
    site shell) via the rules further down so admin, which doesn't opt in, is unaffected. */
 :root[data-theme="dark"] {
+  /* tells native form controls (date pickers, number spinners, checkboxes,
+     scrollbars) to render dark instead of defaulting to the OS light theme */
+  color-scheme: dark;
+
   /* surfaces */
   --bg-app: #0e1310;
   --bg-card: #141a16;
@@ -89,6 +93,8 @@
 }
 
 :root {
+  color-scheme: light;
+
   /* geometry — theme-independent, so it lives on the bare :root rather than
      either theme block */
   --r-card: 24px;
@@ -197,3 +203,18 @@
 .site .nav-link:hover {
   text-decoration: none;
 }
+
+/* Admin shell — same token system as .site, opted into separately so admin can carry its
+   own density/nav treatment (see admin-nav.tsx) without affecting the public site. */
+.admin {
+  background: var(--bg-app);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.admin .nav-link,
+.admin .nav-link:hover {
+  text-decoration: none;
+}
+

@@ -3,18 +3,18 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const badgeVariants = cva(
-  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors",
+  "inline-flex items-center rounded-[var(--r-pill)] border px-2.5 py-0.5 text-xs font-semibold transition-colors",
   {
     variants: {
       variant: {
-        default: "border-transparent bg-slate-900 text-white",
-        secondary: "border-transparent bg-slate-100 text-slate-900",
-        destructive: "border-transparent bg-red-100 text-red-800",
-        outline: "text-slate-900",
-        blue: "border-transparent bg-blue-100 text-blue-800",
-        red: "border-transparent bg-red-100 text-red-700",
-        green: "border-transparent bg-green-100 text-green-800",
-        yellow: "border-transparent bg-yellow-100 text-yellow-800",
+        default: "border-transparent bg-[var(--accent)] text-[var(--accent-ink)]",
+        secondary: "border-transparent bg-[var(--chip-neutral)] text-[var(--ink)]",
+        destructive: "border-transparent bg-[var(--tint-bad-bg)] text-[var(--tint-bad-fg)]",
+        outline: "border-[var(--line)] text-[var(--ink)]",
+        blue: "border-transparent bg-[var(--blue-surface)] text-[var(--blue-ink)]",
+        red: "border-transparent bg-[var(--red-surface)] text-[var(--red-ink)]",
+        green: "border-transparent bg-[var(--tint-good-bg)] text-[var(--tint-good-fg)]",
+        yellow: "border-transparent bg-[var(--tint-warn-bg)] text-[var(--tint-warn-fg)]",
       },
     },
     defaultVariants: {

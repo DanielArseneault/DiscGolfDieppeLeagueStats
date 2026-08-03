@@ -20,7 +20,6 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
       orderBy: { weekNumber: "desc" },
       include: {
         _count: { select: { results: true } },
-        ctpWinners: { select: { id: true } },
       },
     }),
     getStandings(Number(id)),
@@ -32,11 +31,11 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <Link href="/admin" className="text-sm text-slate-500 hover:text-slate-700">
+          <Link href="/admin" className="text-sm text-[var(--ink-muted)] hover:text-[var(--ink)]">
             ← All Leagues
           </Link>
-          <h1 className="text-2xl font-bold text-slate-900 mt-1">{league.name}</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
+          <h1 className="text-2xl font-bold text-[var(--ink)] mt-1">{league.name}</h1>
+          <p className="text-sm text-[var(--ink-muted)] mt-0.5">
             {league.year} · {league.location} · {formatDate(league.startDate)} – {formatDate(league.endDate)}
           </p>
         </div>
@@ -52,49 +51,38 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
 
       {rounds.length === 0 ? (
         <Card className="border-dashed border-2">
-          <CardContent className="py-12 text-center text-slate-500">
+          <CardContent className="py-12 text-center text-[var(--ink-muted)]">
             No rounds yet. Import the first round to get started.
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-3">
-          {rounds.map((round) => {
-            const ctpDone = round.ctpWinners.length > 0;
-
-            return (
-              <Card key={round.id}>
-                <CardContent className="py-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="flex items-center gap-3">
-                        <span className="font-semibold text-slate-900">
-                          {round.isChampionship ? "Championship" : `Week ${round.weekNumber}`}
-                        </span>
-                        <span className="text-sm text-slate-500">{formatDate(round.date)}</span>
-                        {round.isChampionship && <Badge variant="outline" className="text-amber-600 border-amber-300">Championship</Badge>}
-                        {round.isDraft && <Badge variant="outline" className="text-amber-600 border-amber-300">Draft</Badge>}
-                        <Badge variant="secondary">{round._count.results} players</Badge>
-                      </div>
-                      <div className="flex gap-3 mt-1.5 text-xs">
-                        <span className={ctpDone ? "text-emerald-600 font-medium" : "text-slate-300"}>
-                          ● CTP
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <DraftToggleButton roundId={round.id} isDraft={round.isDraft} />
-                      <Button asChild variant="outline" size="sm">
-                        <Link href={`/rounds/${round.id}`}>View</Link>
-                      </Button>
-                      <Button asChild size="sm">
-                        <Link href={`/admin/leagues/${id}/rounds/${round.id}`}>Manage</Link>
-                      </Button>
-                    </div>
+          {rounds.map((round) => (
+            <Card key={round.id}>
+              <CardContent className="py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="font-semibold text-[var(--ink)]">
+                      {round.isChampionship ? "Championship" : `Week ${round.weekNumber}`}
+                    </span>
+                    <span className="text-sm text-[var(--ink-muted)]">{formatDate(round.date)}</span>
+                    {round.isChampionship && <Badge variant="outline" className="text-[var(--gold)] border-[var(--gold)]">Championship</Badge>}
+                    {round.isDraft && <Badge variant="outline" className="text-[var(--tint-warn-fg)] border-[var(--tint-warn-fg)]">Draft</Badge>}
+                    <Badge variant="secondary">{round._count.results} players</Badge>
                   </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                  <div className="flex gap-2">
+                    {round.isDraft && <DraftToggleButton roundId={round.id} isDraft={round.isDraft} />}
+                    <Button asChild variant="outline" size="sm">
+                      <Link href={`/rounds/${round.id}`}>View</Link>
+                    </Button>
+                    <Button asChild size="sm">
+                      <Link href={`/admin/leagues/${id}/rounds/${round.id}`}>Manage</Link>
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
 

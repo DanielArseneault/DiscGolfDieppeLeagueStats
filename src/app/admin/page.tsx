@@ -33,10 +33,12 @@ function LeagueForm({
   initial,
   onSave,
   onClose,
+  onDeleted,
 }: {
   initial?: League;
   onSave: () => void;
   onClose: () => void;
+  onDeleted: () => void;
 }) {
   const [name, setName] = useState(initial?.name ?? "");
   const [shortName, setShortName] = useState(initial?.shortName ?? "");
@@ -51,6 +53,9 @@ function LeagueForm({
   const [facebookLabel, setFacebookLabel] = useState(initial?.facebookLabel ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   async function handleSave() {
     if (!name.trim() || !location.trim() || !startDate || !endDate) return;
@@ -74,7 +79,41 @@ function LeagueForm({
     }
   }
 
+  async function handleDelete() {
+    if (!initial) return;
+    setDeleting(true);
+    setDeleteError("");
+    const res = await fetch(`/api/leagues/${initial.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const body = await res.json();
+      setDeleteError(body.error ?? "Delete failed");
+      setDeleting(false);
+      return;
+    }
+    onDeleted();
+  }
+
   const isValid = name.trim() && location.trim() && startDate && endDate;
+
+  if (confirmingDelete) {
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-[var(--ink)]">
+          Delete <strong>{initial?.name}</strong>? This cannot be undone — all rounds, results, and
+          standings for this league will be permanently removed.
+        </p>
+        {deleteError && <p className="text-sm text-red-600">{deleteError}</p>}
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setConfirmingDelete(false)} disabled={deleting}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+            {deleting ? "Deleting..." : "Delete League"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -90,9 +129,9 @@ function LeagueForm({
       </div>
 
       <div className="space-y-2">
-        <Label>Short Name <span className="text-slate-400 font-normal">(optional)</span></Label>
+        <Label>Short Name <span className="text-[var(--ink-muted)] font-normal">(optional)</span></Label>
         <Input value={shortName} onChange={(e) => setShortName(e.target.value)} placeholder="e.g. ADG Summer League" />
-        <p className="text-xs text-slate-400">Displayed below the full name in the public hero banner.</p>
+        <p className="text-xs text-[var(--ink-muted)]">Displayed below the full name in the public hero banner.</p>
       </div>
 
       <div className="space-y-2">
@@ -102,7 +141,7 @@ function LeagueForm({
 
       <div className="space-y-3">
         <div className="space-y-2">
-          <Label>Facebook Post URL <span className="text-slate-400 font-normal">(optional)</span></Label>
+          <Label>Facebook Post URL <span className="text-[var(--ink-muted)] font-normal">(optional)</span></Label>
           <Input
             value={facebookUrl}
             onChange={(e) => setFacebookUrl(e.target.value)}
@@ -111,7 +150,7 @@ function LeagueForm({
           />
         </div>
         <div className="space-y-2">
-          <Label>Button Label <span className="text-slate-400 font-normal">(optional)</span></Label>
+          <Label>Button Label <span className="text-[var(--ink-muted)] font-normal">(optional)</span></Label>
           <Input
             value={facebookLabel}
             onChange={(e) => setFacebookLabel(e.target.value)}
@@ -119,7 +158,7 @@ function LeagueForm({
             disabled={!facebookUrl}
           />
         </div>
-        <p className="text-xs text-slate-400">Shown as a button in the hero banner on the public homepage.</p>
+        <p className="text-xs text-[var(--ink-muted)]">Shown as a button in the hero banner on the public homepage.</p>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -150,11 +189,24 @@ function LeagueForm({
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <div className="flex justify-end gap-2">
-        <Button variant="outline" onClick={onClose}>Cancel</Button>
-        <Button onClick={handleSave} disabled={saving || !isValid}>
-          {saving ? "Saving..." : "Save League"}
-        </Button>
+      <div className="flex items-center justify-between gap-2">
+        {initial ? (
+          <Button
+            variant="outline"
+            className="text-red-600 hover:text-red-700"
+            onClick={() => setConfirmingDelete(true)}
+          >
+            Delete League
+          </Button>
+        ) : (
+          <div />
+        )}
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleSave} disabled={saving || !isValid}>
+            {saving ? "Saving..." : "Save League"}
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -165,12 +217,11 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<League | undefined>();
-  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
     try {
-      const res = await fetch("/api/leagues");
+      const res = await fetch("/api/leagues", { cache: "no-store" });
       const data = await res.json();
       setLeagues(data);
     } finally {
@@ -180,15 +231,9 @@ export default function AdminPage() {
 
   useEffect(() => { load(); }, []);
 
-  async function handleDelete(id: number) {
-    if (!confirm("Delete this league? This cannot be undone.")) return;
-    setDeleteError(null);
-    const res = await fetch(`/api/leagues/${id}`, { method: "DELETE" });
-    if (!res.ok) {
-      const body = await res.json();
-      setDeleteError(body.error ?? "Delete failed");
-      return;
-    }
+  function handleDeleted() {
+    setOpen(false);
+    setEditing(undefined);
     load();
   }
 
@@ -196,8 +241,8 @@ export default function AdminPage() {
     <div className="space-y-6 max-w-3xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Leagues</h1>
-          <p className="text-slate-500 mt-1">Create and manage league seasons.</p>
+          <h1 className="text-2xl font-bold text-[var(--ink)]">Leagues</h1>
+          <p className="text-[var(--ink-muted)] mt-1">Create and manage league seasons.</p>
         </div>
         <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setEditing(undefined); }}>
           <DialogTrigger asChild>
@@ -211,16 +256,11 @@ export default function AdminPage() {
               initial={editing}
               onSave={load}
               onClose={() => setOpen(false)}
+              onDeleted={handleDeleted}
             />
           </DialogContent>
         </Dialog>
       </div>
-
-      {deleteError && (
-        <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-          {deleteError}
-        </div>
-      )}
 
       {loading ? (
         <div className="space-y-4">
@@ -233,9 +273,8 @@ export default function AdminPage() {
                     <Skeleton className="h-4 w-28" />
                   </div>
                   <div className="flex gap-2">
-                    <Skeleton className="h-8 w-24 rounded-md" />
-                    <Skeleton className="h-8 w-14 rounded-md" />
                     <Skeleton className="h-8 w-16 rounded-md" />
+                    <Skeleton className="h-8 w-14 rounded-md" />
                   </div>
                 </div>
               </CardHeader>
@@ -251,7 +290,7 @@ export default function AdminPage() {
         </div>
       ) : leagues.length === 0 ? (
         <Card className="border-dashed border-2">
-          <CardContent className="py-8 text-center text-slate-500">
+          <CardContent className="py-8 text-center text-[var(--ink-muted)]">
             No leagues yet. Add one to get started.
           </CardContent>
         </Card>
@@ -266,11 +305,11 @@ export default function AdminPage() {
                       <CardTitle className="text-base">{league.name}</CardTitle>
                       <Badge variant="secondary">{league.year}</Badge>
                     </div>
-                    <p className="text-sm text-slate-500 mt-0.5">{league.location}</p>
+                    <p className="text-sm text-[var(--ink-muted)] mt-0.5">{league.location}</p>
                   </div>
                   <div className="flex gap-2">
-                    <Button asChild variant="outline" size="sm">
-                      <Link href={`/admin/leagues/${league.id}`}>View Rounds</Link>
+                    <Button asChild size="sm">
+                      <Link href={`/admin/leagues/${league.id}`}>Rounds</Link>
                     </Button>
                     <Button
                       variant="outline"
@@ -279,30 +318,22 @@ export default function AdminPage() {
                     >
                       Edit
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDelete(league.id)}
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      Delete
-                    </Button>
                   </div>
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-3 gap-4 text-sm text-slate-600">
+                <div className="grid grid-cols-3 gap-4 text-sm text-[var(--ink-2)]">
                   <div>
-                    <span className="text-slate-400 text-xs">Dates</span>
+                    <span className="text-[var(--ink-muted)] text-xs">Dates</span>
                     <p>{toDateInput(league.startDate)} → {toDateInput(league.endDate)}</p>
                   </div>
                   <div>
-                    <span className="text-slate-400 text-xs">Qualifying weeks</span>
+                    <span className="text-[var(--ink-muted)] text-xs">Qualifying weeks</span>
                     <p>{league.qualifyingWeeks}</p>
                   </div>
                   <div>
-                    <span className="text-slate-400 text-xs">Best {league.bestScoresCount} of {league.qualifyingWeeks}, min {league.minWeeks}</span>
-                    <p className="text-xs text-slate-500">Standings rules</p>
+                    <span className="text-[var(--ink-muted)] text-xs">Best {league.bestScoresCount} of {league.qualifyingWeeks}, min {league.minWeeks}</span>
+                    <p className="text-xs text-[var(--ink-muted)]">Standings rules</p>
                   </div>
                 </div>
               </CardContent>

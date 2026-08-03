@@ -137,11 +137,11 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
     return (
       <div className="space-y-6 max-w-2xl">
         <div>
-          <Link href={`/admin/leagues/${leagueId}`} className="text-sm text-slate-500 hover:text-slate-700">
+          <Link href={`/admin/leagues/${leagueId}`} className="text-sm text-[var(--ink-muted)] hover:text-[var(--ink)]">
             ← League Dashboard
           </Link>
-          <h1 className="text-2xl font-bold text-slate-900 mt-1">Round Created</h1>
-          <p className="text-slate-500 mt-0.5">
+          <h1 className="text-2xl font-bold text-[var(--ink)] mt-1">Round Created</h1>
+          <p className="text-[var(--ink-muted)] mt-0.5">
             Saved as a draft — no results yet. Use &quot;Sync from UDisc&quot; on the round page once scores are posted.
           </p>
         </div>
@@ -163,13 +163,13 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
     return (
       <div className="space-y-6 max-w-2xl">
         <div>
-          <Link href={`/admin/leagues/${leagueId}`} className="text-sm text-slate-500 hover:text-slate-700">
+          <Link href={`/admin/leagues/${leagueId}`} className="text-sm text-[var(--ink-muted)] hover:text-[var(--ink)]">
             ← League Dashboard
           </Link>
-          <h1 className="text-2xl font-bold text-slate-900 mt-1">Import Complete</h1>
-          <p className="text-slate-500 mt-0.5">{isChampionship ? "Championship round" : `Week ${preview.weekNumber}`} data has been imported.</p>
+          <h1 className="text-2xl font-bold text-[var(--ink)] mt-1">Import Complete</h1>
+          <p className="text-[var(--ink-muted)] mt-0.5">{isChampionship ? "Championship round" : `Week ${preview.weekNumber}`} data has been imported.</p>
           {isDraft && (
-            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-2 inline-block">
+            <p className="text-xs text-[var(--tint-warn-fg)] bg-[var(--tint-warn-bg)] border border-[var(--tint-warn-fg)] rounded px-2 py-1 mt-2 inline-block">
               Saved as a draft — hidden from public pages until you re-import with Draft unchecked.
             </p>
           )}
@@ -178,14 +178,14 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
           <CardContent className="pt-6 space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-sm text-slate-500">Blue Division</p>
+                <p className="text-sm text-[var(--ink-muted)]">Blue Division</p>
                 <p className="text-2xl font-bold">{preview.blueCount} players</p>
-                <p className="text-xs text-slate-400 mt-1">Inferred par: {preview.inferredBluePar}</p>
+                <p className="text-xs text-[var(--ink-muted)] mt-1">Inferred par: {preview.inferredBluePar}</p>
               </div>
               <div>
-                <p className="text-sm text-slate-500">Red Division</p>
+                <p className="text-sm text-[var(--ink-muted)]">Red Division</p>
                 <p className="text-2xl font-bold">{preview.redCount} players</p>
-                <p className="text-xs text-slate-400 mt-1">Inferred par: {preview.inferredRedPar}</p>
+                <p className="text-xs text-[var(--ink-muted)] mt-1">Inferred par: {preview.inferredRedPar}</p>
               </div>
             </div>
             <div className="flex gap-3 pt-2">
@@ -205,11 +205,11 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
-        <Link href={`/admin/leagues/${leagueId}`} className="text-sm text-slate-500 hover:text-slate-700">
+        <Link href={`/admin/leagues/${leagueId}`} className="text-sm text-[var(--ink-muted)] hover:text-[var(--ink)]">
           ← League Dashboard
         </Link>
-        <h1 className="text-2xl font-bold text-slate-900 mt-1">Import Round</h1>
-        <p className="text-slate-500 mt-0.5">
+        <h1 className="text-2xl font-bold text-[var(--ink)] mt-1">Import Round</h1>
+        <p className="text-[var(--ink-muted)] mt-0.5">
           {mode === "file"
             ? "Upload a UDisc export file (.xlsx) to import league night results."
             : "Set up a round ahead of time from its UDisc event URL. Results come later via Sync from UDisc."}
@@ -261,13 +261,13 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
                   }}
                   required
                 />
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-[var(--ink-muted)]">
                   Export from UDisc: Scoring › League › Export scores ·{" "}
                   <a
                     href="https://udisc.com/leagues/dieppe-dgc-league-f9TbbX/schedule"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="underline hover:text-slate-600"
+                    className="underline hover:text-[var(--ink)]"
                   >
                     Open UDisc schedule ↗
                   </a>
@@ -285,7 +285,7 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
                   placeholder="https://udisc.com/events/..."
                   required
                 />
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-[var(--ink-muted)]">
                   The event page URL, not the export link — e.g. the page you&apos;d normally open to view the leaderboard.
                 </p>
               </div>
@@ -296,11 +296,11 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
                 type="checkbox"
                 checked={isChampionship}
                 onChange={(e) => setIsChampionship(e.target.checked)}
-                className="w-4 h-4 rounded border-slate-300"
+                className="w-4 h-4 rounded border-[var(--line)]"
               />
               <div>
-                <span className="text-sm font-medium text-slate-900">Championship round</span>
-                <p className="text-xs text-slate-500">Excluded from qualifying standings</p>
+                <span className="text-sm font-medium text-[var(--ink)]">Championship round</span>
+                <p className="text-xs text-[var(--ink-muted)]">Excluded from qualifying standings</p>
               </div>
             </label>
 
@@ -310,11 +310,11 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
                   type="checkbox"
                   checked={isDraft}
                   onChange={(e) => setIsDraft(e.target.checked)}
-                  className="w-4 h-4 rounded border-slate-300"
+                  className="w-4 h-4 rounded border-[var(--line)]"
                 />
                 <div>
-                  <span className="text-sm font-medium text-slate-900">Draft (round not finished yet)</span>
-                  <p className="text-xs text-slate-500">
+                  <span className="text-sm font-medium text-[var(--ink)]">Draft (round not finished yet)</span>
+                  <p className="text-xs text-[var(--ink-muted)]">
                     Hidden from public pages until you re-import with this unchecked. Lets you manage tags before the round is final.
                   </p>
                 </div>
@@ -379,7 +379,7 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
             </div>
 
             {layouts.length === 0 && (
-              <p className="text-xs text-amber-600 bg-amber-50 rounded p-2">
+              <p className="text-xs text-[var(--tint-warn-fg)] bg-[var(--tint-warn-bg)] rounded p-2">
                 No layouts configured yet.{" "}
                 <Link href="/admin/layouts" className="underline">Add layouts</Link>{" "}
                 to track per-hole par values, or import without one.

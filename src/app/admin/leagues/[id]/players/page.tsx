@@ -21,11 +21,11 @@ export default async function LeaguePlayersPage({ params }: { params: Promise<{ 
   return (
     <div className="space-y-6">
       <div>
-        <Link href={`/admin/leagues/${id}`} className="text-sm text-slate-500 hover:text-slate-700">
+        <Link href={`/admin/leagues/${id}`} className="text-sm text-[var(--ink-muted)] hover:text-[var(--ink)]">
           ← {league.name}
         </Link>
-        <h1 className="text-2xl font-bold text-slate-900 mt-1">Players</h1>
-        <p className="text-sm text-slate-500 mt-0.5">
+        <h1 className="text-2xl font-bold text-[var(--ink)] mt-1">Players</h1>
+        <p className="text-sm text-[var(--ink-muted)] mt-0.5">
           Set each player&apos;s gender so the tag ladder can keep a separate tag pool for female
           players in each division.
         </p>

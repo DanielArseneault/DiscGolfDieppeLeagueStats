@@ -29,7 +29,7 @@ export function ThemeToggle({ variant = "icon" }: { variant?: "icon" | "switch" 
         role="switch"
         aria-checked={isDark}
         onClick={() => setTheme(toggleTheme())}
-        className="flex w-full items-center justify-between py-1"
+        className="flex w-full cursor-pointer items-center justify-between py-1"
       >
         <span className="text-[14px] font-medium" style={{ color: "var(--ink)" }}>
           {isDark ? "Dark mode" : "Light mode"}
@@ -58,7 +58,7 @@ export function ThemeToggle({ variant = "icon" }: { variant?: "icon" | "switch" 
       type="button"
       onClick={() => setTheme(toggleTheme())}
       aria-label={`Switch to ${isDark ? "light" : "dark"} mode`}
-      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-[var(--ink-muted)] transition-colors hover:border-[var(--accent-border)]"
+      className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 border-[var(--ink-muted)] transition-colors hover:border-[var(--accent-border)]"
     >
       {isDark ? (
         <span className="block h-2.5 w-2.5 rounded-full bg-[var(--ink-2)]" />
