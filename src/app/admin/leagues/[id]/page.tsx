@@ -8,6 +8,7 @@ import { formatDate } from "@/lib/utils";
 import { getStandings } from "@/lib/standings";
 import { PoolExclusions } from "@/components/admin/pool-exclusions";
 import { CollapsibleCard } from "@/components/admin/collapsible-card";
+import { RemoveDraftButton } from "@/components/admin/remove-draft-button";
 
 export default async function LeagueDashboard({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -41,9 +42,14 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
             {league.year} · {league.location} · {formatDate(league.startDate)} – {formatDate(league.endDate)}
           </p>
         </div>
-        <Button asChild>
-          <Link href={`/admin/leagues/${id}/import`}>Import Round</Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button asChild variant="outline">
+            <Link href={`/admin/leagues/${id}/players`}>Players</Link>
+          </Button>
+          <Button asChild>
+            <Link href={`/admin/leagues/${id}/import`}>Import Round</Link>
+          </Button>
+        </div>
       </div>
 
       {rounds.length === 0 ? (
@@ -70,6 +76,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
                         </span>
                         <span className="text-sm text-slate-500">{formatDate(round.date)}</span>
                         {round.isChampionship && <Badge variant="outline" className="text-amber-600 border-amber-300">Championship</Badge>}
+                        {round.isDraft && <Badge variant="outline" className="text-amber-600 border-amber-300">Draft</Badge>}
                         <Badge variant="secondary">{round._count.results} players</Badge>
                       </div>
                       <div className="flex gap-3 mt-1.5 text-xs">
@@ -85,6 +92,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
                       </div>
                     </div>
                     <div className="flex gap-2">
+                      {round.isDraft && <RemoveDraftButton roundId={round.id} />}
                       <Button asChild variant="outline" size="sm">
                         <Link href={`/rounds/${round.id}`}>View</Link>
                       </Button>

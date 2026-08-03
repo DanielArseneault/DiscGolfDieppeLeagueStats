@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { NewspaperPreview } from "@/components/newspaper/newspaper-preview";
 import { generateFacebookPost, generateChampionshipPost, generateNewspaperBody } from "@/lib/post-generator";
 import { computePoolSummaries } from "@/lib/pool-utils";
+import { normalizeTagInput, BOB_TAG } from "@/lib/tags";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -56,16 +57,20 @@ interface RoundResult {
   playerId: number;
   position: number;
   division: string;
-  player: { name: string };
+  player: { name: string; gender: string | null };
   score: number;
   relativeScore: number;
   holeScores: Record<string, number>;
+  tagBefore: string | null;
+  tagAfter: string | null;
+  leftEarly: boolean;
 }
 
 interface Round {
   id: number;
   weekNumber: number;
   isChampionship: boolean;
+  isDraft: boolean;
   date: string;
   notes: string | null;
   facebookUrl: string | null;
@@ -177,6 +182,18 @@ export default function RoundManagePage({
   const [bobPlayer, setBobPlayer] = useState("");
   const [bobSaving, setBobSaving] = useState(false);
 
+  // Tag ladder state — keyed by resultId
+  const [tagBefores, setTagBefores] = useState<Record<number, string>>({});
+  const [tagAfters, setTagAfters] = useState<Record<number, string>>({});
+  const [leftEarlys, setLeftEarlys] = useState<Record<number, boolean>>({});
+  const [tagsSaving, setTagsSaving] = useState(false);
+  const [autoAssigning, setAutoAssigning] = useState(false);
+  const [tagError, setTagError] = useState("");
+  const [tagSort, setTagSort] = useState<{ field: "position" | "name"; dir: "asc" | "desc" }>({
+    field: "name",
+    dir: "asc",
+  });
+
   // Round winner overrides (non-championship)
   // 1st place: one per division; 2nd place: multiple allowed (ties)
   const [roundWinner1st, setRoundWinner1st] = useState<Record<string, string>>({ BLUE: "", RED: "" });
@@ -188,6 +205,10 @@ export default function RoundManagePage({
   const [editingResult, setEditingResult] = useState<RoundResult | null>(null);
   const [editScores, setEditScores] = useState<Record<string, number>>({});
   const [scoreSaving, setScoreSaving] = useState(false);
+
+  // Round date
+  const [roundDate, setRoundDate] = useState("");
+  const [dateSaving, setDateSaving] = useState(false);
 
   // Facebook link state
   const [facebookUrl, setFacebookUrl] = useState("");
@@ -234,6 +255,7 @@ export default function RoundManagePage({
   async function load() {
     const data: Round = await fetch(`/api/rounds/${roundId}`).then((r) => r.json());
     setRound(data);
+    setRoundDate(new Date(data.date).toISOString().slice(0, 10));
 
     const loaded = data.ctpWinners.map((w) => ({ player: w.playerName, hole: w.hole, prize: w.prize ?? "" }));
     while (loaded.length < 2) loaded.push({ player: "", hole: 18, prize: "" });
@@ -246,6 +268,18 @@ export default function RoundManagePage({
     })));
 
     setBobPlayer(data.bobTag?.playerName ?? "");
+
+    const befores: Record<number, string> = {};
+    const afters: Record<number, string> = {};
+    const leftEarly: Record<number, boolean> = {};
+    for (const r of data.results) {
+      befores[r.id] = r.tagBefore != null ? String(r.tagBefore) : "";
+      afters[r.id] = r.tagAfter != null ? String(r.tagAfter) : "";
+      leftEarly[r.id] = r.leftEarly;
+    }
+    setTagBefores(befores);
+    setTagAfters(afters);
+    setLeftEarlys(leftEarly);
     setFacebookUrl(data.facebookUrl ?? "");
     setFacebookLabel(data.facebookLabel ?? "");
 
@@ -310,6 +344,19 @@ export default function RoundManagePage({
   useEffect(() => {
     load();
   }, [roundId]);
+
+  // Round date
+  async function handleSaveDate() {
+    if (!roundDate) return;
+    setDateSaving(true);
+    await fetch(`/api/rounds/${roundId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date: roundDate }),
+    });
+    await load();
+    setDateSaving(false);
+  }
 
   // Facebook link
   async function handleSaveFacebook() {
@@ -391,6 +438,70 @@ export default function RoundManagePage({
     }
     await load();
     setBobSaving(false);
+  }
+
+  async function handleSaveTags() {
+    if (!round) return;
+    setTagsSaving(true);
+    await fetch(`/api/rounds/${roundId}/tags`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tags: round.results.map((r) => ({
+          resultId: r.id,
+          tagBefore: normalizeTagInput(tagBefores[r.id] ?? ""),
+          tagAfter: normalizeTagInput(tagAfters[r.id] ?? ""),
+          leftEarly: leftEarlys[r.id] ?? false,
+        })),
+      }),
+    });
+    await load();
+    setTagsSaving(false);
+  }
+
+  async function handleAutoAssignTags() {
+    setAutoAssigning(true);
+    setTagError("");
+    const res = await fetch(`/api/rounds/${roundId}/tags/auto-assign`, { method: "POST" });
+    if (!res.ok) {
+      const err = await res.json();
+      setTagError(err.error ?? "Failed to auto-assign tags");
+    } else {
+      await load();
+    }
+    setAutoAssigning(false);
+  }
+
+  function sortTagResults(results: RoundResult[]): RoundResult[] {
+    const { field, dir } = tagSort;
+    const sign = dir === "asc" ? 1 : -1;
+    return [...results].sort((a, b) => {
+      if (field === "name") return sign * a.player.name.localeCompare(b.player.name);
+      return sign * (a.position - b.position);
+    });
+  }
+
+  function toggleTagSort(field: "position" | "name") {
+    setTagSort((prev) =>
+      prev.field === field ? { field, dir: prev.dir === "asc" ? "desc" : "asc" } : { field, dir: "asc" }
+    );
+  }
+
+  function findDuplicateTags(results: RoundResult[], tagValues: Record<number, string>): Set<number> {
+    // BoB is a shared bucket — any number of players can legitimately hold it —
+    // so it's excluded from duplicate detection.
+    const counts = new Map<string, number>();
+    for (const r of results) {
+      const n = normalizeTagInput(tagValues[r.id] ?? "");
+      if (n != null && n !== BOB_TAG) counts.set(n, (counts.get(n) ?? 0) + 1);
+    }
+    const dupeNumbers = new Set([...counts.entries()].filter(([, c]) => c > 1).map(([n]) => n));
+    const dupeResultIds = new Set<number>();
+    for (const r of results) {
+      const n = normalizeTagInput(tagValues[r.id] ?? "");
+      if (n != null && dupeNumbers.has(n)) dupeResultIds.add(r.id);
+    }
+    return dupeResultIds;
   }
 
   // Pool winners
@@ -597,13 +708,28 @@ export default function RoundManagePage({
           <Link href={`/admin/leagues/${leagueId}`} className="text-sm text-slate-500 hover:text-slate-700">
             ← League Dashboard
           </Link>
-          <h1 className="text-2xl font-bold text-slate-900 mt-1">
+          <h1 className="text-2xl font-bold text-slate-900 mt-1 flex items-center gap-2">
             {round.isChampionship ? "Championship" : `Week ${round.weekNumber}`}
+            {round.isDraft && (
+              <span className="text-xs font-medium uppercase tracking-wide text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+                Draft
+              </span>
+            )}
           </h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            {new Date(round.date).toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" })}
-            {" · "}{round.results.length} players
-          </p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <Input
+              type="date"
+              value={roundDate}
+              onChange={(e) => setRoundDate(e.target.value)}
+              className="h-7 w-40 text-sm"
+            />
+            {roundDate !== new Date(round.date).toISOString().slice(0, 10) && (
+              <Button size="sm" className="h-7" onClick={handleSaveDate} disabled={dateSaving}>
+                {dateSaving ? "Saving..." : "Save"}
+              </Button>
+            )}
+            <span className="text-sm text-slate-500">· {round.results.length} players</span>
+          </div>
         </div>
         <Button asChild variant="outline" size="sm">
           <Link href={`/rounds/${roundId}`}>View Public Page</Link>
@@ -613,6 +739,12 @@ export default function RoundManagePage({
       <Tabs defaultValue="results">
         <TabsList className="mb-2">
           <TabsTrigger value="results">Results, CTP & Aces</TabsTrigger>
+          <TabsTrigger value="tags">
+            Tags
+            {round.results.some((r) => r.tagAfter != null) && (
+              <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+            )}
+          </TabsTrigger>
           <TabsTrigger value="post">
             Facebook Post
             {postDone && <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />}
@@ -1199,6 +1331,158 @@ export default function RoundManagePage({
               Permanently deletes all results for this round.
             </p>
           </div>
+        </TabsContent>
+
+        {/* ── TAGS ── */}
+        <TabsContent value="tags" className="space-y-6 mt-4 max-w-3xl">
+          {(() => {
+            // Tags are only reshuffled within a division/gender pool (see auto-assign),
+            // so the same number can legitimately show up in two different pools —
+            // duplicate detection is scoped per pool, not across the whole round.
+            const tagGroups = [
+              { label: "🔵 Blue Division", results: blueResults.filter((r) => r.player.gender !== "FEMALE") },
+              { label: "🔵 Blue Division — Female", results: blueResults.filter((r) => r.player.gender === "FEMALE") },
+              { label: "🔴 Red Division", results: redResults.filter((r) => r.player.gender !== "FEMALE") },
+              { label: "🔴 Red Division — Female", results: redResults.filter((r) => r.player.gender === "FEMALE") },
+            ]
+              .filter(({ label, results }) => results.length > 0 || !label.includes("Female"))
+              .map(({ label, results }) => {
+                const sorted = sortTagResults(results);
+                return {
+                  label,
+                  results: sorted,
+                  dupeBefore: findDuplicateTags(sorted, tagBefores),
+                  dupeAfter: findDuplicateTags(sorted, tagAfters),
+                };
+              });
+
+            const anyDupes = tagGroups.some((g) => g.dupeBefore.size > 0 || g.dupeAfter.size > 0);
+
+            // Explicit tabIndex so Tab moves down a column (Brought In, then
+            // Tag After) instead of the browser's default left-to-right order.
+            const beforeTabIndex = new Map<number, number>();
+            const afterTabIndex = new Map<number, number>();
+            let tabCursor = 1;
+            for (const { results } of tagGroups) {
+              for (const r of results) beforeTabIndex.set(r.id, tabCursor++);
+              for (const r of results) afterTabIndex.set(r.id, tabCursor++);
+            }
+
+            return (
+              <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">🎫 Tag Ladder</CardTitle>
+                    <p className="text-xs text-slate-500">
+                      Record tags brought in, then auto-assign reshuffles them per division/gender pool by
+                      finish position (ties broken by previous tag). Hover a player&apos;s row to mark them
+                      &quot;left early&quot; and set their next tag manually — they&apos;re skipped by auto-assign.
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {tagGroups.map(({ label, results, dupeBefore, dupeAfter }) => (
+                      <div key={label}>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">{label}</p>
+                        <div className="space-y-1.5">
+                          <div className="grid grid-cols-[1fr_4rem_6rem_6rem_5rem] gap-2 text-[11px] font-medium text-slate-400 px-1">
+                            <button
+                              type="button"
+                              onClick={() => toggleTagSort("name")}
+                              className="text-left flex items-center gap-0.5 hover:text-slate-600"
+                            >
+                              Player{tagSort.field === "name" && (tagSort.dir === "asc" ? " ▲" : " ▼")}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => toggleTagSort("position")}
+                              className="text-left flex items-center gap-0.5 hover:text-slate-600"
+                            >
+                              Score{tagSort.field === "position" && (tagSort.dir === "asc" ? " ▲" : " ▼")}
+                            </button>
+                            <span>Brought In</span>
+                            <span>Tag After</span>
+                            <span />
+                          </div>
+                          {results.map((r) => (
+                            <div
+                              key={r.id}
+                              className="group grid grid-cols-[1fr_4rem_6rem_6rem_5rem] gap-2 items-center"
+                            >
+                              <span className="text-sm text-slate-800 truncate">{r.player.name}</span>
+                              <span className="text-xs font-mono text-slate-500">{r.score}</span>
+                              <Input
+                                type="text"
+                                placeholder={`# or ${BOB_TAG}`}
+                                tabIndex={beforeTabIndex.get(r.id)}
+                                className={`h-8 text-sm ${dupeBefore.has(r.id) ? "border-amber-400" : ""}`}
+                                value={tagBefores[r.id] ?? ""}
+                                onChange={(e) =>
+                                  setTagBefores((prev) => ({ ...prev, [r.id]: e.target.value }))
+                                }
+                              />
+                              <Input
+                                type="text"
+                                placeholder={`# or ${BOB_TAG}`}
+                                tabIndex={afterTabIndex.get(r.id)}
+                                className={`h-8 text-sm ${dupeAfter.has(r.id) ? "border-amber-400" : ""}`}
+                                value={tagAfters[r.id] ?? ""}
+                                onChange={(e) =>
+                                  setTagAfters((prev) => ({ ...prev, [r.id]: e.target.value }))
+                                }
+                              />
+                              <label
+                                className={`flex items-center gap-1.5 text-xs text-slate-500 ${
+                                  leftEarlys[r.id] ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={leftEarlys[r.id] ?? false}
+                                  onChange={(e) =>
+                                    setLeftEarlys((prev) => ({ ...prev, [r.id]: e.target.checked }))
+                                  }
+                                />
+                                Left early
+                              </label>
+                            </div>
+                          ))}
+                          {results.length === 0 && (
+                            <p className="text-xs text-slate-400">No results yet.</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    {anyDupes && (
+                      <p className="text-xs text-amber-600">
+                        ⚠ Duplicate tag numbers highlighted above (within the same division/pool) — fix before
+                        saving if that wasn&apos;t intentional.
+                      </p>
+                    )}
+                    {tagError && <p className="text-sm text-red-600">{tagError}</p>}
+                    <div className="flex items-center gap-3 pt-1 flex-wrap">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleAutoAssignTags}
+                        disabled={autoAssigning || round.isDraft}
+                        title={round.isDraft ? "Finalize the round (re-import without Draft checked) before auto-assigning" : undefined}
+                      >
+                        {autoAssigning ? "Assigning..." : "Auto-Assign New Tags"}
+                      </Button>
+                      <Button size="sm" onClick={handleSaveTags} disabled={tagsSaving}>
+                        {tagsSaving ? "Saving..." : "Save Tags"}
+                      </Button>
+                    </div>
+                    {round.isDraft && (
+                      <p className="text-xs text-slate-400">
+                        This round is still a draft, so auto-assign is disabled. You can still record tags brought in.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              </>
+            );
+          })()}
         </TabsContent>
 
         {/* ── FACEBOOK POST ── */}

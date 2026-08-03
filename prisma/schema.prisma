@@ -12,6 +12,11 @@ enum Division {
   RED
 }
 
+enum Gender {
+  MALE
+  FEMALE
+}
+
 enum MemberStatus {
   MEMBER
   NON_MEMBER
@@ -43,13 +48,13 @@ model CourseLayout {
   description String?
   createdAt   DateTime @default(now())
 
-  holePars    HolePar[]
-  blueRounds  Round[]   @relation("BlueLayout")
-  redRounds   Round[]   @relation("RedLayout")
+  holePars   HolePar[]
+  blueRounds Round[]   @relation("BlueLayout")
+  redRounds  Round[]   @relation("RedLayout")
 }
 
 model HolePar {
-  id             Int          @id @default(autoincrement())
+  id             Int @id @default(autoincrement())
   courseLayoutId Int
   holeNumber     Int
   par            Int
@@ -60,16 +65,18 @@ model HolePar {
 }
 
 model Player {
-  id           Int          @id @default(autoincrement())
-  name         String
-  pdgaNumber   String?
-  username     String?
-  division                Division
-  memberStatus            MemberStatus @default(NON_MEMBER)
+  id                       Int          @id @default(autoincrement())
+  name                     String
+  pdgaNumber               String?
+  username                 String?
+  division                 Division
+  gender                   Gender?
+  memberStatus             MemberStatus @default(NON_MEMBER)
   excludeFromChampionship  Boolean      @default(false)
   championshipPoolOverride String?
-  leagueId                Int
-  createdAt               DateTime     @default(now())
+  currentTag               String?
+  leagueId                 Int
+  createdAt                DateTime     @default(now())
 
   league  League   @relation(fields: [leagueId], references: [id])
   results Result[]
@@ -78,31 +85,32 @@ model Player {
 }
 
 model Round {
-  id            Int      @id @default(autoincrement())
-  leagueId      Int
-  weekNumber    Int
-  date          DateTime
-  blueLayoutId  Int?
-  redLayoutId   Int?
-  notes            String?
-  isChampionship   Boolean  @default(false)
-  facebookUrl      String?
-  facebookLabel    String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id             Int      @id @default(autoincrement())
+  leagueId       Int
+  weekNumber     Int
+  date           DateTime
+  blueLayoutId   Int?
+  redLayoutId    Int?
+  notes          String?
+  isChampionship Boolean  @default(false)
+  isDraft        Boolean  @default(false)
+  facebookUrl    String?
+  facebookLabel  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  league        League         @relation(fields: [leagueId], references: [id])
-  blueLayout    CourseLayout?  @relation("BlueLayout", fields: [blueLayoutId], references: [id])
-  redLayout     CourseLayout?  @relation("RedLayout", fields: [redLayoutId], references: [id])
-  results       Result[]
-  roundWinners  RoundWinner[]
-  ctpWinners    CtpWinner[]
-  aceWinners    AceWinner[]
-  poolWinners   ChampionshipPoolWinner[]
-  post          Post?
+  league         League                   @relation(fields: [leagueId], references: [id])
+  blueLayout     CourseLayout?            @relation("BlueLayout", fields: [blueLayoutId], references: [id])
+  redLayout      CourseLayout?            @relation("RedLayout", fields: [redLayoutId], references: [id])
+  results        Result[]
+  roundWinners   RoundWinner[]
+  ctpWinners     CtpWinner[]
+  aceWinners     AceWinner[]
+  poolWinners    ChampionshipPoolWinner[]
+  post           Post?
   newspaperImage NewspaperImage?
-  bobTag        BobTag?
-  reactions     RoundReaction[]
+  bobTag         BobTag?
+  reactions      RoundReaction[]
 
   @@unique([leagueId, weekNumber])
 }
@@ -116,6 +124,9 @@ model Result {
   score         Int
   relativeScore Int
   holeScores    Json
+  tagBefore     String?
+  tagAfter      String?
+  leftEarly     Boolean  @default(false)
   createdAt     DateTime @default(now())
 
   round  Round  @relation(fields: [roundId], references: [id], onDelete: Cascade)
@@ -146,7 +157,7 @@ model CtpWinner {
 }
 
 model AceWinner {
-  id          Int     @id @default(autoincrement())
+  id          Int    @id @default(autoincrement())
   roundId     Int
   hole        Int
   playerName  String
@@ -211,17 +222,17 @@ model PageView {
 }
 
 model NewspaperImage {
-  id          Int      @id @default(autoincrement())
-  roundId     Int      @unique
+  id          Int       @id @default(autoincrement())
+  roundId     Int       @unique
   headline    String
   dateline    String?
   bodyText    String?
-  photoUrls   Json     @default("[]")
+  photoUrls   Json      @default("[]")
   caption     String?
   closingText String?
   generatedAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
 }

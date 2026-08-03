@@ -42,6 +42,7 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
   const [weekNumber, setWeekNumber] = useState("");
   const [date, setDate] = useState("");
   const [isChampionship, setIsChampionship] = useState(false);
+  const [isDraft, setIsDraft] = useState(false);
   const [blueLayoutId, setBlueLayoutId] = useState("");
   const [redLayoutId, setRedLayoutId] = useState("");
   const [layouts, setLayouts] = useState<Layout[]>([]);
@@ -76,6 +77,7 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
     formData.append("weekNumber", isChampionship ? "99" : weekNumber);
     formData.append("date", date);
     formData.append("isChampionship", String(isChampionship));
+    formData.append("isDraft", String(isDraft));
     if (blueLayoutId) formData.append("blueLayoutId", blueLayoutId);
     if (redLayoutId) formData.append("redLayoutId", redLayoutId);
 
@@ -103,6 +105,11 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
           </Link>
           <h1 className="text-2xl font-bold text-slate-900 mt-1">Import Complete</h1>
           <p className="text-slate-500 mt-0.5">{isChampionship ? "Championship round" : `Week ${preview.weekNumber}`} data has been imported.</p>
+          {isDraft && (
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-2 inline-block">
+              Saved as a draft — hidden from public pages until you re-import with Draft unchecked.
+            </p>
+          )}
         </div>
         <Card>
           <CardContent className="pt-6 space-y-4">
@@ -191,6 +198,21 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
               <div>
                 <span className="text-sm font-medium text-slate-900">Championship round</span>
                 <p className="text-xs text-slate-500">Excluded from qualifying standings</p>
+              </div>
+            </label>
+
+            <label className="flex items-center gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={isDraft}
+                onChange={(e) => setIsDraft(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-300"
+              />
+              <div>
+                <span className="text-sm font-medium text-slate-900">Draft (round not finished yet)</span>
+                <p className="text-xs text-slate-500">
+                  Hidden from public pages until you re-import with this unchecked. Lets you manage tags before the round is final.
+                </p>
               </div>
             </label>
 

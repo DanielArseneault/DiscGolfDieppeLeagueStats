@@ -72,7 +72,7 @@ export default async function RoundPage({
 
   const round = await getRound(Number(id));
 
-  if (!round) notFound();
+  if (!round || round.isDraft) notFound();
 
   const [prevRound, nextRound] = await Promise.all([
     prisma.round.findFirst({

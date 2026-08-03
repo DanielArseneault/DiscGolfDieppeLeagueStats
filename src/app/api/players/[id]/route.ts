@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { auth } from "@/auth";
+import { Gender } from "@/generated/prisma/client";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -9,9 +10,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { id } = await params;
   const body = await req.json();
 
-  const data: { excludeFromChampionship?: boolean; championshipPoolOverride?: string | null } = {};
+  const data: {
+    excludeFromChampionship?: boolean;
+    championshipPoolOverride?: string | null;
+    gender?: Gender | null;
+  } = {};
   if (body.excludeFromChampionship !== undefined) data.excludeFromChampionship = body.excludeFromChampionship;
   if ("championshipPoolOverride" in body) data.championshipPoolOverride = body.championshipPoolOverride;
+  if ("gender" in body) data.gender = body.gender;
 
   const player = await prisma.player.update({
     where: { id: Number(id) },
