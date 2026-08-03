@@ -20,8 +20,6 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
       orderBy: { weekNumber: "desc" },
       include: {
         _count: { select: { results: true } },
-        post: { select: { id: true } },
-        newspaperImage: { select: { id: true, generatedAt: true } },
         ctpWinners: { select: { id: true } },
       },
     }),
@@ -62,8 +60,6 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
         <div className="space-y-3">
           {rounds.map((round) => {
             const ctpDone = round.ctpWinners.length > 0;
-            const postDone = !!round.post;
-            const imageDone = !!round.newspaperImage?.generatedAt;
 
             return (
               <Card key={round.id}>
@@ -82,12 +78,6 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
                       <div className="flex gap-3 mt-1.5 text-xs">
                         <span className={ctpDone ? "text-emerald-600 font-medium" : "text-slate-300"}>
                           ● CTP
-                        </span>
-                        <span className={postDone ? "text-emerald-600 font-medium" : "text-slate-300"}>
-                          ● Post
-                        </span>
-                        <span className={imageDone ? "text-emerald-600 font-medium" : "text-slate-300"}>
-                          ● Image
                         </span>
                       </div>
                     </div>

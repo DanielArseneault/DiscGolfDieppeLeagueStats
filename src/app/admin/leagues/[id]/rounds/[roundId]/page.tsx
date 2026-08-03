@@ -1,15 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef, use, useMemo } from "react";
+import { useState, useEffect, use, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { NewspaperPreview } from "@/components/newspaper/newspaper-preview";
-import { generateFacebookPost, generateChampionshipPost, generateNewspaperBody } from "@/lib/post-generator";
 import { computePoolSummaries } from "@/lib/pool-utils";
 import { normalizeTagInput, BOB_TAG } from "@/lib/tags";
 import { useRouter } from "next/navigation";
@@ -81,19 +78,9 @@ interface Round {
   aceWinners: AceWinner[];
   poolWinners: SavedPoolWinner[];
   roundWinners: RoundWinnerEntry[];
-  post: { content: string } | null;
   bobTag: { playerName: string } | null;
   blueLayout: CourseLayout | null;
   redLayout: CourseLayout | null;
-  newspaperImage: {
-    headline: string;
-    dateline: string | null;
-    bodyText: string | null;
-    photoUrls: string[];
-    caption: string | null;
-    closingText: string | null;
-    generatedAt: string | null;
-  } | null;
 }
 
 interface PlayerStanding {
@@ -107,9 +94,6 @@ interface PoolGroup {
   label: string;
   results: RoundResult[];
 }
-
-const DEFAULT_CLOSING =
-  "Thank you to every player and volunteer who made the DDGMSL Championship Series possible. Same discin' time, same discin' place!";
 
 function computePoolGroups(
   results: RoundResult[],
@@ -155,7 +139,6 @@ export default function RoundManagePage({
 }) {
   const { id: leagueId, roundId } = use(params);
   const router = useRouter();
-  const previewRef = useRef<HTMLDivElement>(null);
 
   const [round, setRound] = useState<Round | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -225,43 +208,6 @@ export default function RoundManagePage({
   const [syncError, setSyncError] = useState("");
   const [syncInfo, setSyncInfo] = useState("");
 
-  // Post state
-  const [postContent, setPostContent] = useState("");
-  const [postSaving, setPostSaving] = useState(false);
-  const [postCopied, setPostCopied] = useState(false);
-
-  // Image state
-  const [headline, setHeadline] = useState("");
-  const [dateline, setDateline] = useState("");
-  const [bodyText, setBodyText] = useState("");
-  const [caption, setCaption] = useState("");
-  const [closingText, setClosingText] = useState(DEFAULT_CLOSING);
-  const [photos, setPhotos] = useState<string[]>([]);
-  const [imageSaving, setImageSaving] = useState(false);
-  const [imageGenerating, setImageGenerating] = useState(false);
-
-  function buildChampionshipPost(
-    data: Round,
-    sData: PlayerStanding[],
-    overrides: Record<string, string>
-  ): string {
-    const summaries = computePoolSummaries(data.results, sData, Object.entries(overrides).map(([key, name]) => {
-      const [pool, placeStr] = key.split("-");
-      return { pool, place: Number(placeStr), playerName: name };
-    }));
-    return generateChampionshipPost({
-      date: new Date(data.date),
-      totalPlayers: data.results.length,
-      poolResults: summaries.map((s) => ({
-        pool: s.pool,
-        first: s.first?.playerName ?? null,
-        second: s.second?.playerName ?? null,
-      })),
-      ctpWinners: data.ctpWinners,
-      aceWinners: data.aceWinners,
-    });
-  }
-
   async function load() {
     const data: Round = await fetch(`/api/rounds/${roundId}`).then((r) => r.json());
     setRound(data);
@@ -320,36 +266,7 @@ export default function RoundManagePage({
       }
       setPoolWinnerOverrides(overrides);
       setPoolWinnerPrizes(prizes);
-
-      setPostContent(data.post?.content ?? buildChampionshipPost(data, sData, overrides));
-    } else {
-      const blueTop3 = data.results.filter((r) => r.division === "BLUE").slice(0, 3).map((r) => ({
-        name: r.player.name, score: r.score, relativeScore: r.relativeScore, position: r.position,
-      }));
-      const redTop3 = data.results.filter((r) => r.division === "RED").slice(0, 3).map((r) => ({
-        name: r.player.name, score: r.score, relativeScore: r.relativeScore, position: r.position,
-      }));
-      setPostContent(
-        data.post?.content ??
-          generateFacebookPost({ weekNumber: data.weekNumber, date: new Date(data.date), totalPlayers: data.results.length, blueTop3, redTop3, ctpWinners: data.ctpWinners, aceWinners: data.aceWinners })
-      );
     }
-
-    setHeadline(data.newspaperImage?.headline ?? (data.isChampionship ? "CHAMPIONSHIP RESULTS" : `WEEK ${data.weekNumber} RESULTS`));
-    setDateline(data.newspaperImage?.dateline ?? "");
-    setCaption(data.newspaperImage?.caption ?? "");
-    setClosingText(data.newspaperImage?.closingText ?? DEFAULT_CLOSING);
-
-    const blueTop3 = data.results.filter((r) => r.division === "BLUE").slice(0, 3).map((r) => ({
-      name: r.player.name, score: r.score, relativeScore: r.relativeScore, position: r.position,
-    }));
-    const redTop3 = data.results.filter((r) => r.division === "RED").slice(0, 3).map((r) => ({
-      name: r.player.name, score: r.score, relativeScore: r.relativeScore, position: r.position,
-    }));
-    setBodyText(
-      data.newspaperImage?.bodyText ??
-        generateNewspaperBody({ weekNumber: data.weekNumber, date: new Date(data.date), totalPlayers: data.results.length, blueTop3, redTop3, ctpWinners: data.ctpWinners, aceWinners: data.aceWinners })
-    );
   }
 
   useEffect(() => {
@@ -596,93 +513,6 @@ export default function RoundManagePage({
     setDraftToggling(false);
   }
 
-  // Post
-  async function handleSavePost() {
-    setPostSaving(true);
-    await fetch(`/api/posts/${roundId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: postContent }),
-    });
-    setPostSaving(false);
-  }
-
-  async function handleCopyPost() {
-    await navigator.clipboard.writeText(postContent);
-    setPostCopied(true);
-    setTimeout(() => setPostCopied(false), 2500);
-  }
-
-  function handleRegeneratePost() {
-    if (!round) return;
-    if (round.isChampionship) {
-      setPostContent(buildChampionshipPost(round, standings, poolWinnerOverrides));
-    } else {
-      const blueTop3 = round.results.filter((r) => r.division === "BLUE").slice(0, 3).map((r) => ({
-        name: r.player.name, score: r.score, relativeScore: r.relativeScore, position: r.position,
-      }));
-      const redTop3 = round.results.filter((r) => r.division === "RED").slice(0, 3).map((r) => ({
-        name: r.player.name, score: r.score, relativeScore: r.relativeScore, position: r.position,
-      }));
-      setPostContent(generateFacebookPost({
-        weekNumber: round.weekNumber,
-        date: new Date(round.date),
-        totalPlayers: round.results.length,
-        blueTop3,
-        redTop3,
-        ctpWinners: round.ctpWinners,
-        aceWinners: round.aceWinners,
-      }));
-    }
-  }
-
-  // Image
-  async function handleSaveImage() {
-    setImageSaving(true);
-    await fetch(`/api/newspaper/${roundId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ headline, dateline, bodyText, caption, closingText, photoUrls: [] }),
-    });
-    setImageSaving(false);
-  }
-
-  async function handleGenerateImage() {
-    if (!previewRef.current) return;
-    setImageGenerating(true);
-    await handleSaveImage();
-    try {
-      const html2canvas = (await import("html2canvas")).default;
-      const canvas = await html2canvas(previewRef.current, {
-        scale: 2, useCORS: true, allowTaint: true, backgroundColor: "#f5f0e8",
-      });
-      const a = document.createElement("a");
-      a.href = canvas.toDataURL("image/png");
-      a.download = round?.isChampionship ? "championship-results.png" : `week-${round?.weekNumber}-results.png`;
-      a.click();
-      await fetch(`/api/newspaper/${roundId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ headline, dateline, bodyText, caption, closingText, photoUrls: [], markGenerated: true }),
-      });
-    } finally {
-      setImageGenerating(false);
-    }
-  }
-
-  function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
-    if (!files.length) return;
-    const slots = Math.min(files.length, 3 - photos.length);
-    setPhotos([...photos, ...files.slice(0, slots).map((f) => URL.createObjectURL(f))]);
-    e.target.value = "";
-  }
-
-  function handlePhotoRemove(index: number) {
-    URL.revokeObjectURL(photos[index]);
-    setPhotos(photos.filter((_, j) => j !== index));
-  }
-
   function openScoreEditor(result: RoundResult) {
     setEditingResult(result);
     const scores: Record<string, number> = {};
@@ -753,16 +583,8 @@ export default function RoundManagePage({
       }))
     : [];
 
-  const postDone = !!round.post;
-  const imageDone = !!round.newspaperImage?.generatedAt;
-
   return (
     <div className="space-y-6">
-      <link
-        href="https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&family=Playfair+Display:wght@700;900&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap"
-        rel="stylesheet"
-      />
-
       <div className="flex items-center justify-between">
         <div>
           <Link href={`/admin/leagues/${leagueId}`} className="text-sm text-slate-500 hover:text-slate-700">
@@ -809,14 +631,6 @@ export default function RoundManagePage({
             {round.results.some((r) => r.tagAfter != null) && (
               <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
             )}
-          </TabsTrigger>
-          <TabsTrigger value="post">
-            Facebook Post
-            {postDone && <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />}
-          </TabsTrigger>
-          <TabsTrigger value="image">
-            Newspaper Image
-            {imageDone && <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />}
           </TabsTrigger>
         </TabsList>
 
@@ -1586,120 +1400,6 @@ export default function RoundManagePage({
               </>
             );
           })()}
-        </TabsContent>
-
-        {/* ── FACEBOOK POST ── */}
-        <TabsContent value="post" className="space-y-6 mt-4 max-w-3xl">
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={handleRegeneratePost}>
-              ↺ Regenerate
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleSavePost} disabled={postSaving}>
-              {postSaving ? "Saving..." : "Save Draft"}
-            </Button>
-            <Button size="sm" onClick={handleCopyPost}>
-              {postCopied ? "✓ Copied!" : "Copy to Clipboard"}
-            </Button>
-          </div>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm text-slate-600">
-                Edit the post below, then copy it to paste into Facebook.
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Textarea
-                value={postContent}
-                onChange={(e) => setPostContent(e.target.value)}
-                rows={28}
-                className="font-sans text-sm leading-relaxed resize-none"
-              />
-            </CardContent>
-          </Card>
-
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wide mb-2">Preview</p>
-            <div className="text-sm whitespace-pre-wrap text-slate-800 leading-relaxed">
-              {postContent}
-            </div>
-          </div>
-        </TabsContent>
-
-        {/* ── NEWSPAPER IMAGE ── */}
-        <TabsContent value="image" className="mt-4">
-          <div className="flex justify-end gap-2 mb-6">
-            <Button variant="outline" size="sm" onClick={handleSaveImage} disabled={imageSaving}>
-              {imageSaving ? "Saving..." : "Save Draft"}
-            </Button>
-            <Button size="sm" onClick={handleGenerateImage} disabled={imageGenerating}>
-              {imageGenerating ? "Generating..." : "Download PNG"}
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-[1fr_420px] gap-6 items-start">
-            <div className="overflow-x-auto">
-              <div className="inline-block">
-                <NewspaperPreview
-                  ref={previewRef}
-                  weekNumber={round.weekNumber}
-                  headline={headline}
-                  dateline={dateline}
-                  bodyText={bodyText}
-                  caption={caption}
-                  closingText={closingText}
-                  photos={photos}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-4 sticky top-4">
-              <Card>
-                <CardHeader className="pb-3"><CardTitle className="text-sm">Headline</CardTitle></CardHeader>
-                <CardContent>
-                  <Input value={headline} onChange={(e) => setHeadline(e.target.value)} />
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-3"><CardTitle className="text-sm">Photos (up to 3)</CardTitle></CardHeader>
-                <CardContent className="space-y-3">
-                  {photos.map((url, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <img src={url} alt="" className="w-16 h-12 object-cover rounded border" />
-                      <Button variant="outline" size="sm" onClick={() => handlePhotoRemove(i)} className="text-red-500 text-xs">Remove</Button>
-                    </div>
-                  ))}
-                  {photos.length < 3 && <Input type="file" accept="image/*" multiple onChange={handlePhotoUpload} />}
-                  <div className="space-y-1">
-                    <Label className="text-xs">Caption</Label>
-                    <Input value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Caption text..." />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-3"><CardTitle className="text-sm">Dateline / Opening</CardTitle></CardHeader>
-                <CardContent>
-                  <Textarea value={dateline} onChange={(e) => setDateline(e.target.value)} rows={3} placeholder="DIEPPE, N.B. — What looked like a washout..." />
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-3"><CardTitle className="text-sm">Body Text</CardTitle></CardHeader>
-                <CardContent>
-                  <Textarea value={bodyText} onChange={(e) => setBodyText(e.target.value)} rows={10} />
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-3"><CardTitle className="text-sm">Closing / Sponsor Line</CardTitle></CardHeader>
-                <CardContent>
-                  <Textarea value={closingText} onChange={(e) => setClosingText(e.target.value)} rows={3} />
-                </CardContent>
-              </Card>
-            </div>
-          </div>
         </TabsContent>
       </Tabs>
 

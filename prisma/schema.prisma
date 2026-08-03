@@ -108,8 +108,6 @@ model Round {
   ctpWinners     CtpWinner[]
   aceWinners     AceWinner[]
   poolWinners    ChampionshipPoolWinner[]
-  post           Post?
-  newspaperImage NewspaperImage?
   bobTag         BobTag?
   reactions      RoundReaction[]
 
@@ -180,16 +178,6 @@ model ChampionshipPoolWinner {
   @@unique([roundId, pool, place])
 }
 
-model Post {
-  id        Int      @id @default(autoincrement())
-  roundId   Int      @unique
-  content   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
-}
-
 model BobTag {
   id         Int    @id @default(autoincrement())
   roundId    Int    @unique
@@ -220,20 +208,4 @@ model PageView {
 
   @@index([createdAt])
   @@index([path])
-}
-
-model NewspaperImage {
-  id          Int       @id @default(autoincrement())
-  roundId     Int       @unique
-  headline    String
-  dateline    String?
-  bodyText    String?
-  photoUrls   Json      @default("[]")
-  caption     String?
-  closingText String?
-  generatedAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
 }

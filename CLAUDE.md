@@ -17,7 +17,7 @@ No test suite exists yet.
 
 ## Architecture
 
-**Stack:** Next.js 16 (App Router) · React 19 · Prisma 7 (PostgreSQL via `@prisma/adapter-pg`) · NextAuth v5 beta · Tailwind CSS v4 · shadcn/ui (Radix primitives) · Supabase Storage (images) · xlsx (score import)
+**Stack:** Next.js 16 (App Router) · React 19 · Prisma 7 (PostgreSQL via `@prisma/adapter-pg`) · NextAuth v5 beta · Tailwind CSS v4 · shadcn/ui (Radix primitives) · xlsx (score import)
 
 **App Router layout tree:**
 ```
@@ -34,8 +34,6 @@ app/
     layouts/page.tsx
     leagues/page.tsx
     rounds/[id]/page.tsx
-    rounds/[id]/image/page.tsx
-    rounds/[id]/post/page.tsx
   api/                  ← all Route Handlers here
 ```
 
@@ -45,7 +43,6 @@ Public pages and admin pages use separate layout trees — the public header nev
 - `League` → `Round[]` → `Result[]` (one result per player per round)
 - `League` → `Player[]` (players belong to a league)
 - `CourseLayout` → `HolePar[]`; rounds reference `blueLayoutId` / `redLayoutId`
-- `Round` has optional `Post` and `NewspaperImage` children (1:1)
 - Prisma client is generated to `src/generated/prisma/` (non-standard output path — always import from `@/generated/prisma/client`, not `@prisma/client`)
 - `src/lib/db.ts` exports a singleton `prisma` instance using `PrismaPg` pool adapter
 
@@ -57,11 +54,8 @@ Public pages and admin pages use separate layout trees — the public header nev
 
 **Import flow** (`/admin/import`): User uploads a UDisc `.xlsx` export. `src/lib/xlsx-parser.ts` parses it into `ParsedImport` (blue + red `ParsedResult[]`). The API creates/upserts players by `username` (or name if no username), then creates `Result` records. Import is tied to the most recent league (`orderBy: { year: "desc" }`).
 
-**Image generation** (`/admin/rounds/[id]/image`): Uses `html2canvas` to screenshot a newspaper-style component (`src/components/newspaper/newspaper-preview.tsx`), then uploads to Supabase Storage via `src/lib/supabase-storage.ts`.
-
 **Environment variables required:**
 - `DATABASE_URL` — PostgreSQL connection string
 - `ADMIN_PASSWORD` — admin login password
 - `AUTH_SECRET` — NextAuth secret
 - `NEXTAUTH_URL` — full URL (e.g. `http://localhost:3000`)
-- `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` — for image storage

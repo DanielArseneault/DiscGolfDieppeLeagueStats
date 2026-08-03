@@ -16,8 +16,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       poolWinners: { orderBy: [{ pool: "asc" }, { place: "asc" }] },
       blueLayout: { include: { holePars: { orderBy: { holeNumber: "asc" } } } },
       redLayout: { include: { holePars: { orderBy: { holeNumber: "asc" } } } },
-      post: true,
-      newspaperImage: true,
       bobTag: true,
     },
   });
