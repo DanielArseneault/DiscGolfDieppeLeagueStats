@@ -75,6 +75,7 @@ interface Round {
   notes: string | null;
   facebookUrl: string | null;
   facebookLabel: string | null;
+  udiscUrl: string | null;
   results: RoundResult[];
   ctpWinners: CtpWinner[];
   aceWinners: AceWinner[];
@@ -159,6 +160,7 @@ export default function RoundManagePage({
   const [round, setRound] = useState<Round | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [resultsExpanded, setResultsExpanded] = useState(false);
+  const [draftToggling, setDraftToggling] = useState(false);
 
   // Championship pool state
   const [standings, setStandings] = useState<PlayerStanding[]>([]);
@@ -214,6 +216,14 @@ export default function RoundManagePage({
   const [facebookUrl, setFacebookUrl] = useState("");
   const [facebookLabel, setFacebookLabel] = useState("");
   const [facebookSaving, setFacebookSaving] = useState(false);
+
+  // UDisc sync state
+  const [udiscUrl, setUdiscUrl] = useState("");
+  const [udiscSaving, setUdiscSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ blueCount: number; redCount: number; syncedAt: string } | null>(null);
+  const [syncError, setSyncError] = useState("");
+  const [syncInfo, setSyncInfo] = useState("");
 
   // Post state
   const [postContent, setPostContent] = useState("");
@@ -282,6 +292,7 @@ export default function RoundManagePage({
     setLeftEarlys(leftEarly);
     setFacebookUrl(data.facebookUrl ?? "");
     setFacebookLabel(data.facebookLabel ?? "");
+    setUdiscUrl(data.udiscUrl ?? "");
 
     const w1st: Record<string, string> = { BLUE: "", RED: "" };
     const w1stPrize: Record<string, string> = { BLUE: "", RED: "" };
@@ -368,6 +379,43 @@ export default function RoundManagePage({
     });
     await load();
     setFacebookSaving(false);
+  }
+
+  // UDisc sync
+  async function handleSaveUdiscUrl() {
+    setUdiscSaving(true);
+    await fetch(`/api/rounds/${roundId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ udiscUrl }),
+    });
+    await load();
+    setUdiscSaving(false);
+  }
+
+  async function handleSyncUdisc() {
+    setSyncing(true);
+    setSyncError("");
+    setSyncInfo("");
+    setSyncResult(null);
+    try {
+      const res = await fetch(`/api/rounds/${roundId}/sync-udisc`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setSyncError(data.error ?? "Sync failed");
+        return;
+      }
+      if (data.message) {
+        setSyncInfo(data.message);
+      } else {
+        setSyncResult({ blueCount: data.blueCount, redCount: data.redCount, syncedAt: data.syncedAt });
+        await load();
+      }
+    } catch {
+      setSyncError("Failed to sync. Try again in a moment.");
+    } finally {
+      setSyncing(false);
+    }
   }
 
   // Round winner overrides
@@ -534,6 +582,18 @@ export default function RoundManagePage({
     setDeleting(true);
     await fetch(`/api/rounds/${roundId}`, { method: "DELETE" });
     router.push(`/admin/leagues/${leagueId}`);
+  }
+
+  async function handleToggleDraft() {
+    if (!round) return;
+    setDraftToggling(true);
+    await fetch(`/api/rounds/${roundId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isDraft: !round.isDraft }),
+    });
+    await load();
+    setDraftToggling(false);
   }
 
   // Post
@@ -731,9 +791,14 @@ export default function RoundManagePage({
             <span className="text-sm text-slate-500">· {round.results.length} players</span>
           </div>
         </div>
-        <Button asChild variant="outline" size="sm">
-          <Link href={`/rounds/${roundId}`}>View Public Page</Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleToggleDraft} disabled={draftToggling}>
+            {draftToggling ? "Saving..." : round.isDraft ? "Remove Draft" : "Mark as Draft"}
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/rounds/${roundId}`}>View Public Page</Link>
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="results">
@@ -757,6 +822,44 @@ export default function RoundManagePage({
 
         {/* ── RESULTS & CTP ── */}
         <TabsContent value="results" className="space-y-6 mt-4 max-w-3xl">
+
+          {/* UDisc Sync */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">🔄 Sync from UDisc</CardTitle>
+              <p className="text-xs text-slate-500">
+                Pull the latest leaderboard from a UDisc event URL. Safe to re-run any time — existing results are updated, not duplicated.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">UDisc Event URL</Label>
+                <Input
+                  type="url"
+                  value={udiscUrl}
+                  onChange={(e) => setUdiscUrl(e.target.value)}
+                  placeholder="https://udisc.com/events/..."
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                {udiscUrl !== (round.udiscUrl ?? "") && (
+                  <Button size="sm" variant="outline" onClick={handleSaveUdiscUrl} disabled={udiscSaving}>
+                    {udiscSaving ? "Saving..." : "Save URL"}
+                  </Button>
+                )}
+                <Button size="sm" onClick={handleSyncUdisc} disabled={syncing || !round.udiscUrl}>
+                  {syncing ? "Syncing..." : "Sync Now"}
+                </Button>
+              </div>
+              {syncResult && (
+                <p className="text-sm text-emerald-600">
+                  Synced {syncResult.blueCount} Blue / {syncResult.redCount} Red — just now
+                </p>
+              )}
+              {syncInfo && <p className="text-sm text-amber-600">{syncInfo}</p>}
+              {syncError && <p className="text-sm text-red-600">{syncError}</p>}
+            </CardContent>
+          </Card>
 
           {/* Results summary */}
           <Card>
