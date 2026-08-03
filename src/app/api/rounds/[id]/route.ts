@@ -37,6 +37,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       notes: body.notes,
       facebookUrl: body.facebookUrl !== undefined ? (body.facebookUrl || null) : undefined,
       facebookLabel: body.facebookLabel !== undefined ? (body.facebookLabel || null) : undefined,
+      isDraft: body.isDraft,
     },
   });
   return NextResponse.json(round);

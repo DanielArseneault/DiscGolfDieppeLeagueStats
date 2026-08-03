@@ -29,11 +29,17 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       // Ties (equal position) are broken by previous tag — whoever held the lower
       // (better) tag before the round keeps priority for the lower tag after. BoB
       // (no numbered tag) always ranks below every numbered tag.
+      //
+      // Players marked leftEarly (left the round before it finished and had their
+      // next tag assigned manually) are excluded from the shuffle entirely — their
+      // tagAfter is left untouched, and the tag number they brought in doesn't get
+      // redistributed to anyone else.
       const pool = round.results
         .filter(
           (r) =>
             r.division === division &&
             r.tagBefore != null &&
+            !r.leftEarly &&
             (r.player.gender === Gender.FEMALE) === isFemalePool
         )
         .sort((a, b) => a.position - b.position || tagRank(a.tagBefore) - tagRank(b.tagBefore));

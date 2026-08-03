@@ -8,6 +8,7 @@ import { formatDate } from "@/lib/utils";
 import { getStandings } from "@/lib/standings";
 import { PoolExclusions } from "@/components/admin/pool-exclusions";
 import { CollapsibleCard } from "@/components/admin/collapsible-card";
+import { RemoveDraftButton } from "@/components/admin/remove-draft-button";
 
 export default async function LeagueDashboard({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -91,6 +92,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
                       </div>
                     </div>
                     <div className="flex gap-2">
+                      {round.isDraft && <RemoveDraftButton roundId={round.id} />}
                       <Button asChild variant="outline" size="sm">
                         <Link href={`/rounds/${round.id}`}>View</Link>
                       </Button>

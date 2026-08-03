@@ -63,6 +63,7 @@ interface RoundResult {
   holeScores: Record<string, number>;
   tagBefore: string | null;
   tagAfter: string | null;
+  leftEarly: boolean;
 }
 
 interface Round {
@@ -184,8 +185,8 @@ export default function RoundManagePage({
   // Tag ladder state — keyed by resultId
   const [tagBefores, setTagBefores] = useState<Record<number, string>>({});
   const [tagAfters, setTagAfters] = useState<Record<number, string>>({});
-  const [tagsBeforeSaving, setTagsBeforeSaving] = useState(false);
-  const [tagsAfterSaving, setTagsAfterSaving] = useState(false);
+  const [leftEarlys, setLeftEarlys] = useState<Record<number, boolean>>({});
+  const [tagsSaving, setTagsSaving] = useState(false);
   const [autoAssigning, setAutoAssigning] = useState(false);
   const [tagError, setTagError] = useState("");
   const [tagSort, setTagSort] = useState<{ field: "position" | "name"; dir: "asc" | "desc" }>({
@@ -204,6 +205,10 @@ export default function RoundManagePage({
   const [editingResult, setEditingResult] = useState<RoundResult | null>(null);
   const [editScores, setEditScores] = useState<Record<string, number>>({});
   const [scoreSaving, setScoreSaving] = useState(false);
+
+  // Round date
+  const [roundDate, setRoundDate] = useState("");
+  const [dateSaving, setDateSaving] = useState(false);
 
   // Facebook link state
   const [facebookUrl, setFacebookUrl] = useState("");
@@ -250,6 +255,7 @@ export default function RoundManagePage({
   async function load() {
     const data: Round = await fetch(`/api/rounds/${roundId}`).then((r) => r.json());
     setRound(data);
+    setRoundDate(new Date(data.date).toISOString().slice(0, 10));
 
     const loaded = data.ctpWinners.map((w) => ({ player: w.playerName, hole: w.hole, prize: w.prize ?? "" }));
     while (loaded.length < 2) loaded.push({ player: "", hole: 18, prize: "" });
@@ -265,12 +271,15 @@ export default function RoundManagePage({
 
     const befores: Record<number, string> = {};
     const afters: Record<number, string> = {};
+    const leftEarly: Record<number, boolean> = {};
     for (const r of data.results) {
       befores[r.id] = r.tagBefore != null ? String(r.tagBefore) : "";
       afters[r.id] = r.tagAfter != null ? String(r.tagAfter) : "";
+      leftEarly[r.id] = r.leftEarly;
     }
     setTagBefores(befores);
     setTagAfters(afters);
+    setLeftEarlys(leftEarly);
     setFacebookUrl(data.facebookUrl ?? "");
     setFacebookLabel(data.facebookLabel ?? "");
 
@@ -335,6 +344,19 @@ export default function RoundManagePage({
   useEffect(() => {
     load();
   }, [roundId]);
+
+  // Round date
+  async function handleSaveDate() {
+    if (!roundDate) return;
+    setDateSaving(true);
+    await fetch(`/api/rounds/${roundId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date: roundDate }),
+    });
+    await load();
+    setDateSaving(false);
+  }
 
   // Facebook link
   async function handleSaveFacebook() {
@@ -418,32 +440,23 @@ export default function RoundManagePage({
     setBobSaving(false);
   }
 
-  async function handleSaveTagsBefore() {
+  async function handleSaveTags() {
     if (!round) return;
-    setTagsBeforeSaving(true);
+    setTagsSaving(true);
     await fetch(`/api/rounds/${roundId}/tags`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        tags: round.results.map((r) => ({ resultId: r.id, tagBefore: normalizeTagInput(tagBefores[r.id] ?? "") })),
+        tags: round.results.map((r) => ({
+          resultId: r.id,
+          tagBefore: normalizeTagInput(tagBefores[r.id] ?? ""),
+          tagAfter: normalizeTagInput(tagAfters[r.id] ?? ""),
+          leftEarly: leftEarlys[r.id] ?? false,
+        })),
       }),
     });
     await load();
-    setTagsBeforeSaving(false);
-  }
-
-  async function handleSaveTagsAfter() {
-    if (!round) return;
-    setTagsAfterSaving(true);
-    await fetch(`/api/rounds/${roundId}/tags`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tags: round.results.map((r) => ({ resultId: r.id, tagAfter: normalizeTagInput(tagAfters[r.id] ?? "") })),
-      }),
-    });
-    await load();
-    setTagsAfterSaving(false);
+    setTagsSaving(false);
   }
 
   async function handleAutoAssignTags() {
@@ -703,10 +716,20 @@ export default function RoundManagePage({
               </span>
             )}
           </h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            {new Date(round.date).toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" })}
-            {" · "}{round.results.length} players
-          </p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <Input
+              type="date"
+              value={roundDate}
+              onChange={(e) => setRoundDate(e.target.value)}
+              className="h-7 w-40 text-sm"
+            />
+            {roundDate !== new Date(round.date).toISOString().slice(0, 10) && (
+              <Button size="sm" className="h-7" onClick={handleSaveDate} disabled={dateSaving}>
+                {dateSaving ? "Saving..." : "Save"}
+              </Button>
+            )}
+            <span className="text-sm text-slate-500">· {round.results.length} players</span>
+          </div>
         </div>
         <Button asChild variant="outline" size="sm">
           <Link href={`/rounds/${roundId}`}>View Public Page</Link>
@@ -1351,15 +1374,9 @@ export default function RoundManagePage({
                   <CardHeader>
                     <CardTitle className="text-base">🎫 Tag Ladder</CardTitle>
                     <p className="text-xs text-slate-500">
-                      Record which tag each player checked in with. Once the round is final, auto-assign
-                      reshuffles tags per division: among players who brought a tag or {BOB_TAG}, the best
-                      finisher gets the lowest tag number in that day&apos;s pool, and so on (ties go to
-                      whoever held the lower tag beforehand). The number of tags in circulation stays fixed —
-                      anyone who falls out of the numbered tags (or never had one) becomes {BOB_TAG}, and
-                      any number of players can hold {BOB_TAG} at once. Female players are shuffled in their
-                      own pool, separate from the rest of the division. Players with nothing recorded
-                      aren&apos;t part of the shuffle — give a player their first tag by typing a number or
-                      &quot;{BOB_TAG}&quot; directly into &quot;Tag After&quot; and saving.
+                      Record tags brought in, then auto-assign reshuffles them per division/gender pool by
+                      finish position (ties broken by previous tag). Hover a player&apos;s row to mark them
+                      &quot;left early&quot; and set their next tag manually — they&apos;re skipped by auto-assign.
                     </p>
                   </CardHeader>
                   <CardContent className="space-y-6">
@@ -1367,7 +1384,7 @@ export default function RoundManagePage({
                       <div key={label}>
                         <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">{label}</p>
                         <div className="space-y-1.5">
-                          <div className="grid grid-cols-[1fr_4rem_6rem_6rem] gap-2 text-[11px] font-medium text-slate-400 px-1">
+                          <div className="grid grid-cols-[1fr_4rem_6rem_6rem_5rem] gap-2 text-[11px] font-medium text-slate-400 px-1">
                             <button
                               type="button"
                               onClick={() => toggleTagSort("name")}
@@ -1384,9 +1401,13 @@ export default function RoundManagePage({
                             </button>
                             <span>Brought In</span>
                             <span>Tag After</span>
+                            <span />
                           </div>
                           {results.map((r) => (
-                            <div key={r.id} className="grid grid-cols-[1fr_4rem_6rem_6rem] gap-2 items-center">
+                            <div
+                              key={r.id}
+                              className="group grid grid-cols-[1fr_4rem_6rem_6rem_5rem] gap-2 items-center"
+                            >
                               <span className="text-sm text-slate-800 truncate">{r.player.name}</span>
                               <span className="text-xs font-mono text-slate-500">{r.score}</span>
                               <Input
@@ -1409,6 +1430,20 @@ export default function RoundManagePage({
                                   setTagAfters((prev) => ({ ...prev, [r.id]: e.target.value }))
                                 }
                               />
+                              <label
+                                className={`flex items-center gap-1.5 text-xs text-slate-500 ${
+                                  leftEarlys[r.id] ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={leftEarlys[r.id] ?? false}
+                                  onChange={(e) =>
+                                    setLeftEarlys((prev) => ({ ...prev, [r.id]: e.target.checked }))
+                                  }
+                                />
+                                Left early
+                              </label>
                             </div>
                           ))}
                           {results.length === 0 && (
@@ -1425,9 +1460,6 @@ export default function RoundManagePage({
                     )}
                     {tagError && <p className="text-sm text-red-600">{tagError}</p>}
                     <div className="flex items-center gap-3 pt-1 flex-wrap">
-                      <Button size="sm" onClick={handleSaveTagsBefore} disabled={tagsBeforeSaving}>
-                        {tagsBeforeSaving ? "Saving..." : "Save Tags Brought In"}
-                      </Button>
                       <Button
                         size="sm"
                         variant="outline"
@@ -1437,8 +1469,8 @@ export default function RoundManagePage({
                       >
                         {autoAssigning ? "Assigning..." : "Auto-Assign New Tags"}
                       </Button>
-                      <Button size="sm" variant="outline" onClick={handleSaveTagsAfter} disabled={tagsAfterSaving}>
-                        {tagsAfterSaving ? "Saving..." : "Save Tag Changes"}
+                      <Button size="sm" onClick={handleSaveTags} disabled={tagsSaving}>
+                        {tagsSaving ? "Saving..." : "Save Tags"}
                       </Button>
                     </div>
                     {round.isDraft && (
