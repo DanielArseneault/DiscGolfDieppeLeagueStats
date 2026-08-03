@@ -34,7 +34,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <Link href="/admin/leagues" className="text-sm text-slate-500 hover:text-slate-700">
+          <Link href="/admin" className="text-sm text-slate-500 hover:text-slate-700">
             ← All Leagues
           </Link>
           <h1 className="text-2xl font-bold text-slate-900 mt-1">{league.name}</h1>
