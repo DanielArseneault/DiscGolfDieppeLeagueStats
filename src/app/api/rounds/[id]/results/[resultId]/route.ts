@@ -64,3 +64,39 @@ export async function PATCH(
 
   return NextResponse.json({ ok: true });
 }
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: Promise<{ id: string; resultId: string }> }
+) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id: roundId, resultId } = await params;
+
+  const result = await prisma.result.findUnique({ where: { id: Number(resultId) } });
+  if (!result || result.roundId !== Number(roundId)) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  await prisma.result.delete({ where: { id: Number(resultId) } });
+
+  // Recalculate positions for the remaining results in this round + division
+  const divResults = await prisma.result.findMany({
+    where: { roundId: Number(roundId), division: result.division },
+    orderBy: { score: "asc" },
+  });
+
+  let pos = 1;
+  for (let i = 0; i < divResults.length; i++) {
+    if (i > 0 && divResults[i].score !== divResults[i - 1].score) {
+      pos = i + 1;
+    }
+    await prisma.result.update({
+      where: { id: divResults[i].id },
+      data: { position: pos },
+    });
+  }
+
+  return NextResponse.json({ ok: true });
+}

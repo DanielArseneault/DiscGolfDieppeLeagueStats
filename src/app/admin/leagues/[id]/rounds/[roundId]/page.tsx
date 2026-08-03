@@ -191,6 +191,10 @@ export default function RoundManagePage({
   const [editScores, setEditScores] = useState<Record<string, number>>({});
   const [scoreSaving, setScoreSaving] = useState(false);
 
+  // Remove player state
+  const [removingResult, setRemovingResult] = useState<RoundResult | null>(null);
+  const [removingPlayer, setRemovingPlayer] = useState(false);
+
   // Round date
   const [roundDate, setRoundDate] = useState("");
   const [dateSaving, setDateSaving] = useState(false);
@@ -534,6 +538,20 @@ export default function RoundManagePage({
     await load();
     setEditingResult(null);
     setScoreSaving(false);
+  }
+
+  function openRemovePlayer(result: RoundResult) {
+    setEditingResult(null);
+    setRemovingResult(result);
+  }
+
+  async function handleRemovePlayer() {
+    if (!removingResult) return;
+    setRemovingPlayer(true);
+    await fetch(`/api/rounds/${roundId}/results/${removingResult.id}`, { method: "DELETE" });
+    await load();
+    setRemovingResult(null);
+    setRemovingPlayer(false);
   }
 
   const blueResults = useMemo(() => round?.results.filter((r) => r.division === "BLUE") ?? [], [round?.results]);
@@ -1480,6 +1498,14 @@ export default function RoundManagePage({
               )}
             </div>
             <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                onClick={() => editingResult && openRemovePlayer(editingResult)}
+              >
+                Remove from Round
+              </Button>
               <Button variant="outline" size="sm" onClick={() => setEditingResult(null)}>
                 Cancel
               </Button>
@@ -1487,6 +1513,29 @@ export default function RoundManagePage({
                 {scoreSaving ? "Saving..." : "Save Scores"}
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Remove Player Confirmation Dialog */}
+      <Dialog open={!!removingResult} onOpenChange={(open) => { if (!open) setRemovingResult(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base">Remove Player</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-[var(--ink-2)]">
+            Remove <span className="font-semibold">{removingResult?.player.name}</span> from this round? Their
+            score and tag data for this round will be permanently deleted and standings will be recalculated.
+            This cannot be undone. If they&apos;re listed as a CTP, ace, or round/pool winner, update that
+            separately.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" size="sm" onClick={() => setRemovingResult(null)} disabled={removingPlayer}>
+              Cancel
+            </Button>
+            <Button variant="destructive" size="sm" onClick={handleRemovePlayer} disabled={removingPlayer}>
+              {removingPlayer ? "Removing..." : "Remove Player"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
