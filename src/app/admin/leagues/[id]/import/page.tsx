@@ -321,7 +321,7 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
               </label>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {!isChampionship && (
                 <div className="space-y-2">
                   <Label htmlFor="week">Week Number</Label>
@@ -349,7 +349,7 @@ export default function ImportPage({ params }: { params: Promise<{ id: string }>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Blue Layout (optional)</Label>
                 <Select value={blueLayoutId} onValueChange={setBlueLayoutId}>

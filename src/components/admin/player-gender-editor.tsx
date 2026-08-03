@@ -76,8 +76,8 @@ function DivisionTable({
       <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)] mb-2">{label}</p>
       <div className="rounded-md border border-[var(--line)] divide-y divide-[var(--line-2)]">
         {players.map((p) => (
-          <div key={p.id} className="flex items-center justify-between px-4 py-2.5">
-            <span className="text-sm font-medium text-[var(--ink)]">{p.name}</span>
+          <div key={p.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+            <span className="text-sm font-medium text-[var(--ink)] truncate min-w-0">{p.name}</span>
             <Select
               value={p.gender ?? "unspecified"}
               onValueChange={(v) => onChange(p, v)}

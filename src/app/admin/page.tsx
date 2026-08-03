@@ -117,7 +117,7 @@ function LeagueForm({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>League Name</Label>
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Dieppe Disc Golf League" />
@@ -161,7 +161,7 @@ function LeagueForm({
         <p className="text-xs text-[var(--ink-muted)]">Shown as a button in the hero banner on the public homepage.</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Start Date</Label>
           <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
@@ -172,7 +172,7 @@ function LeagueForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="space-y-2">
           <Label>Qualifying Weeks</Label>
           <Input type="number" min={1} value={qualifyingWeeks} onChange={(e) => setQualifyingWeeks(Number(e.target.value))} />
@@ -239,7 +239,7 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[var(--ink)]">Leagues</h1>
           <p className="text-[var(--ink-muted)] mt-1">Create and manage league seasons.</p>
@@ -299,7 +299,7 @@ export default function AdminPage() {
           {leagues.map((league) => (
             <Card key={league.id}>
               <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <div className="flex items-center gap-2">
                       <CardTitle className="text-base">{league.name}</CardTitle>
@@ -322,7 +322,7 @@ export default function AdminPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-3 gap-4 text-sm text-[var(--ink-2)]">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm text-[var(--ink-2)]">
                   <div>
                     <span className="text-[var(--ink-muted)] text-xs">Dates</span>
                     <p>{toDateInput(league.startDate)} → {toDateInput(league.endDate)}</p>

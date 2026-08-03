@@ -29,7 +29,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <Link href="/admin" className="text-sm text-[var(--ink-muted)] hover:text-[var(--ink)]">
             ← All Leagues
@@ -60,8 +60,8 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
           {rounds.map((round) => (
             <Card key={round.id}>
               <CardContent className="py-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                     <span className="font-semibold text-[var(--ink)]">
                       {round.isChampionship ? "Championship" : `Week ${round.weekNumber}`}
                     </span>
@@ -70,7 +70,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
                     {round.isDraft && <Badge variant="outline" className="text-[var(--tint-warn-fg)] border-[var(--tint-warn-fg)]">Draft</Badge>}
                     <Badge variant="secondary">{round._count.results} players</Badge>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     {round.isDraft && <DraftToggleButton roundId={round.id} isDraft={round.isDraft} />}
                     <Button asChild variant="outline" size="sm">
                       <Link href={`/rounds/${round.id}`}>View</Link>

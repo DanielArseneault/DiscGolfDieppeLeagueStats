@@ -585,7 +585,7 @@ export default function RoundManagePage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <Link href={`/admin/leagues/${leagueId}`} className="text-sm text-[var(--ink-muted)] hover:text-[var(--ink-2)]">
             ← League Dashboard
@@ -598,7 +598,7 @@ export default function RoundManagePage({
               </span>
             )}
           </h1>
-          <div className="flex items-center gap-2 mt-0.5">
+          <div className="flex flex-wrap items-center gap-2 mt-0.5">
             <Input
               type="date"
               value={roundDate}
@@ -613,7 +613,7 @@ export default function RoundManagePage({
             <span className="text-sm text-[var(--ink-muted)]">· {round.results.length} players</span>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={handleToggleDraft} disabled={draftToggling}>
             {draftToggling ? "Saving..." : round.isDraft ? "Remove Draft" : "Mark as Draft"}
           </Button>
@@ -694,7 +694,7 @@ export default function RoundManagePage({
             <CardContent>
               {round.isChampionship && poolData ? (
                 <div className="space-y-5">
-                  <div className="grid grid-cols-2 gap-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     {poolData.groups.map((g) => {
                       const summary = currentSummaries.find((s) => s.pool === g.pool);
                       const firstName = summary?.first?.playerName;
@@ -729,7 +729,7 @@ export default function RoundManagePage({
                   {(poolData.blueUnqualified.length > 0 || poolData.redUnqualified.length > 0) && (
                     <div className="pt-3 border-t border-[var(--line-2)]">
                       <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)] mb-3">Did Not Qualify</p>
-                      <div className="grid grid-cols-2 gap-5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                         {poolData.blueUnqualified.length > 0 && (
                           <div>
                             <p className="text-xs text-[var(--ink-muted)] mb-1">🔵 Blue</p>
@@ -773,7 +773,7 @@ export default function RoundManagePage({
                   )}
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   {[
                     { label: "🔵 Blue Division", results: blueResults },
                     { label: "🔴 Red Division", results: redResults },
@@ -823,7 +823,7 @@ export default function RoundManagePage({
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
                   {poolData.groups.map((g) => {
                     const summary = currentSummaries.find((s) => s.pool === g.pool);
                     const computedFirst = g.results[0]?.player.name ?? "";
@@ -899,7 +899,7 @@ export default function RoundManagePage({
             <CardContent>
               <div className="space-y-3">
                 {ctpEntries.map((entry, i) => (
-                  <div key={i} className="grid grid-cols-[1fr_80px_1fr_auto] gap-3 items-end">
+                  <div key={i} className="grid grid-cols-1 sm:grid-cols-[1fr_80px_1fr_auto] gap-3 sm:items-end">
                     <div className="space-y-1.5">
                       <Label className="text-xs">CTP {i + 1}</Label>
                       <Select
@@ -981,7 +981,7 @@ export default function RoundManagePage({
                   <p className="text-sm text-[var(--ink-muted)]">No aces recorded for this round.</p>
                 )}
                 {aceEntries.map((entry, i) => (
-                  <div key={i} className="grid grid-cols-[1fr_80px_120px_auto] gap-3 items-end">
+                  <div key={i} className="grid grid-cols-1 sm:grid-cols-[1fr_80px_120px_auto] gap-3 sm:items-end">
                     <div className="space-y-1.5">
                       <Label className="text-xs">Ace {i + 1}</Label>
                       <Select
@@ -1111,7 +1111,7 @@ export default function RoundManagePage({
                       {/* 1st place */}
                       <div className="space-y-1">
                         <Label className="text-xs">🥇 1st Place</Label>
-                        <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+                        <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 sm:items-center">
                           <Input
                             value={roundWinner1st[div] ?? ""}
                             onChange={(e) => setRoundWinner1st((prev) => ({ ...prev, [div]: e.target.value }))}
@@ -1133,7 +1133,7 @@ export default function RoundManagePage({
                       <div className="space-y-2">
                         <Label className="text-xs">🥈 2nd Place</Label>
                         {divSeconds.map((entry, i) => (
-                          <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+                          <div key={i} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 sm:items-center">
                             <Input
                               value={entry.playerName}
                               onChange={(e) => {
@@ -1304,7 +1304,8 @@ export default function RoundManagePage({
                     {tagGroups.map(({ label, results, dupeBefore, dupeAfter }) => (
                       <div key={label}>
                         <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)] mb-2">{label}</p>
-                        <div className="space-y-1.5">
+                        <div className="overflow-x-auto">
+                        <div className="space-y-1.5 min-w-[32rem]">
                           <div className="grid grid-cols-[1fr_4rem_6rem_6rem_5rem] gap-2 text-[11px] font-medium text-[var(--ink-muted)] px-1">
                             <button
                               type="button"
@@ -1353,7 +1354,7 @@ export default function RoundManagePage({
                               />
                               <label
                                 className={`flex items-center gap-1.5 text-xs text-[var(--ink-muted)] ${
-                                  leftEarlys[r.id] ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                                  leftEarlys[r.id] ? "opacity-100" : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                                 }`}
                               >
                                 <input
@@ -1370,6 +1371,7 @@ export default function RoundManagePage({
                           {results.length === 0 && (
                             <p className="text-xs text-[var(--ink-muted)]">No results yet.</p>
                           )}
+                        </div>
                         </div>
                       </div>
                     ))}
@@ -1419,7 +1421,7 @@ export default function RoundManagePage({
             </DialogTitle>
           </DialogHeader>
 
-          <div className="grid grid-cols-2 gap-x-6 mt-2">
+          <div className="grid grid-cols-2 gap-x-4 sm:gap-x-6 mt-2">
             {[editFront, editBack].map((group, gi) => (
               <div key={gi}>
                 <div className="grid grid-cols-[2.5rem_2.5rem_1fr] gap-x-2 mb-1.5">

@@ -133,7 +133,7 @@ export default async function AnalyticsPage({
         />
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatTile label={`Visits (last ${days} days)`} value={summary.sessions.visits} />
         <StatTile label="Pages per visit" value={summary.sessions.pagesPerVisit.toFixed(1)} />
         <StatTile

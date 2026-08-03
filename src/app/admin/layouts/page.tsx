@@ -67,7 +67,7 @@ function LayoutForm({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Layout Name</Label>
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Blue Layout" />
@@ -83,7 +83,7 @@ function LayoutForm({
           <Label>Par per Hole</Label>
           <span className="text-sm text-[var(--ink-muted)]">Total par: <strong>{totalPar}</strong></span>
         </div>
-        <div className="grid grid-cols-9 gap-1.5">
+        <div className="grid grid-cols-6 sm:grid-cols-9 gap-1.5">
           {holePars.map((hp, i) => (
             <div key={hp.holeNumber} className="text-center">
               <div className="text-xs text-[var(--ink-muted)] mb-1">H{hp.holeNumber}</div>
@@ -143,7 +143,7 @@ export default function LayoutsPage() {
 
   return (
     <div className="space-y-6 max-w-4xl">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[var(--ink)]">Course Layouts</h1>
           <p className="text-[var(--ink-muted)] mt-1">Manage tee layouts and par values for each hole.</p>
@@ -183,7 +183,7 @@ export default function LayoutsPage() {
               </CardHeader>
               <CardContent>
                 <Skeleton className="h-4 w-24 mb-2" />
-                <div className="grid grid-cols-9 gap-1">
+                <div className="grid grid-cols-6 sm:grid-cols-9 gap-1">
                   {Array.from({ length: 18 }).map((_, j) => (
                     <Skeleton key={j} className="h-10 w-full rounded" />
                   ))}
@@ -205,7 +205,7 @@ export default function LayoutsPage() {
             return (
               <Card key={layout.id}>
                 <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <CardTitle className="text-base">{layout.name}</CardTitle>
                       {layout.description && (
@@ -233,7 +233,7 @@ export default function LayoutsPage() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-xs text-[var(--ink-muted)] mb-2">Total par: <strong>{totalPar}</strong></p>
-                  <div className="grid grid-cols-9 gap-1 text-center text-xs">
+                  <div className="grid grid-cols-6 sm:grid-cols-9 gap-1 text-center text-xs">
                     {layout.holePars.map((hp) => (
                       <div key={hp.holeNumber} className="bg-[var(--bg-inset)] rounded px-1 py-1.5">
                         <div className="text-[var(--ink-muted)]">H{hp.holeNumber}</div>

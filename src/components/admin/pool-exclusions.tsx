@@ -101,9 +101,9 @@ function DivisionTable({
           const isExcluded = val === "exclude";
           const isOverridden = !isExcluded && p.championshipPoolOverride !== null;
           return (
-            <div key={p.playerId} className={`flex items-center justify-between px-4 py-2.5 ${isExcluded ? "bg-[var(--bg-inset)]" : ""}`}>
-              <div className="flex items-center gap-3">
-                <span className={`text-sm font-medium ${isExcluded ? "text-[var(--ink-muted)] line-through" : "text-[var(--ink)]"}`}>
+            <div key={p.playerId} className={`flex flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between ${isExcluded ? "bg-[var(--bg-inset)]" : ""}`}>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
+                <span className={`text-sm font-medium truncate ${isExcluded ? "text-[var(--ink-muted)] line-through" : "text-[var(--ink)]"}`}>
                   {p.playerName}
                 </span>
                 <span className="text-xs text-[var(--ink-muted)] tabular-nums">{p.qualifyingTotal}</span>
