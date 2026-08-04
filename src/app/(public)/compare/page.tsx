@@ -162,12 +162,15 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
         bScore: br?.score ?? null,
         aRel: ar?.relativeScore ?? null,
         bRel: br?.relativeScore ?? null,
+        // Both players carded this round, but in different divisions — not a
+        // true head-to-head (different layout/par), so it can't be scored.
+        differentDivision: !!ar && !!br && ar.division !== br.division,
       };
     })
     .sort((x, y) => x.weekNumber - y.weekNumber);
 
-  const shared = combined.filter((r) => r.aRel != null && r.bRel != null) as {
-    roundId: number; weekNumber: number; date: Date; aScore: number; bScore: number; aRel: number; bRel: number;
+  const shared = combined.filter((r) => r.aRel != null && r.bRel != null && !r.differentDivision) as {
+    roundId: number; weekNumber: number; date: Date; aScore: number; bScore: number; aRel: number; bRel: number; differentDivision: boolean;
   }[];
 
   const t = tally(shared.map((r) => ({ a: r.aRel, b: r.bRel })));
@@ -306,9 +309,16 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
 
       {combined.length > 0 ? (
         <div>
-          <h2 className="mb-4 text-[20px] font-bold tracking-[-0.02em]" style={{ color: "var(--ink)" }}>
-            Round by round
-          </h2>
+          <div className="mb-4 flex items-baseline justify-between gap-3">
+            <h2 className="text-[20px] font-bold tracking-[-0.02em]" style={{ color: "var(--ink)" }}>
+              Round by round
+            </h2>
+            {shared.length < combined.length && (
+              <p className="text-xs" style={{ color: "var(--ink-muted)" }}>
+                Faded rows aren&apos;t counted head-to-head
+              </p>
+            )}
+          </div>
           <div className="overflow-hidden rounded-[var(--r-card)] border" style={{ borderColor: "var(--line)" }}>
             <div
               className="grid px-6 py-3 font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[.13em]"
@@ -320,18 +330,18 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
               <div className="truncate text-center">{playerB.name}</div>
             </div>
             {combined.map((r) => {
-              const missing = r.aRel == null || r.bRel == null;
+              const missing = r.aRel == null || r.bRel == null || r.differentDivision;
               const tie = !missing && r.aRel === r.bRel;
               const aWon = !missing && !tie && r.aRel! < r.bRel!;
               const bWon = !missing && !tie && r.bRel! < r.aRel!;
               const aInk = missing ? "var(--ink-muted)" : tie ? "var(--ink)" : aWon ? "var(--ink)" : "var(--ink-3)";
               const bInk = missing ? "var(--ink-muted)" : tie ? "var(--ink)" : bWon ? "var(--ink)" : "var(--ink-3)";
-              const mark = missing ? "" : tie ? "=" : aWon ? "←" : "→";
+              const mark = r.differentDivision ? "≠" : missing ? "" : tie ? "=" : aWon ? "←" : "→";
               const markInk = missing ? "var(--ink-muted)" : tie ? "var(--ink-muted)" : aWon ? "var(--a-ink)" : "var(--b-ink)";
               return (
                 <div
                   key={r.roundId}
-                  className="grid items-center px-6 py-3"
+                  className={`grid items-center px-6 py-3 ${missing ? "opacity-50" : ""}`}
                   style={{ gridTemplateColumns: "120px minmax(0,1fr) 56px minmax(0,1fr)", borderTop: "1px solid var(--line-3)" }}
                 >
                   <div>
@@ -341,6 +351,14 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
                     <p className="font-[family-name:var(--font-mono)] text-[11px]" style={{ color: "var(--ink-muted)" }}>
                       {formatDate(r.date)}
                     </p>
+                    {r.differentDivision && (
+                      <p
+                        className="mt-0.5 inline-block rounded px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-[9px] font-semibold uppercase tracking-[.08em]"
+                        style={{ background: "var(--tint-warn-bg)", color: "var(--tint-warn-fg)" }}
+                      >
+                        Diff. divisions
+                      </p>
+                    )}
                   </div>
                   <div className="text-center font-[family-name:var(--font-mono)] text-sm font-semibold" style={{ color: aInk }}>
                     {r.aScore != null ? (
@@ -351,7 +369,13 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
                       <span className="text-xs font-normal" style={{ color: "var(--ink-muted)" }}>— did not card</span>
                     )}
                   </div>
-                  <div className="text-center font-bold" style={{ color: markInk }}>{mark}</div>
+                  <div
+                    className="text-center font-bold"
+                    style={{ color: markInk }}
+                    title={r.differentDivision ? "Played in different divisions — not head-to-head" : undefined}
+                  >
+                    {mark}
+                  </div>
                   <div className="text-center font-[family-name:var(--font-mono)] text-sm font-semibold" style={{ color: bInk }}>
                     {r.bScore != null ? (
                       <>
