@@ -15,6 +15,7 @@ async function getPlayerData(playerId: number) {
     include: {
       league: true,
       results: {
+        where: { round: { isDraft: false } },
         include: { round: { select: { id: true, weekNumber: true, date: true, isChampionship: true } } },
         orderBy: { round: { weekNumber: "asc" } },
       },
@@ -41,7 +42,7 @@ async function PickerPage({ leagueId, preA }: { leagueId: number | null; preA?: 
 
   const players = await prisma.player.findMany({
     where: { leagueId: league.id },
-    include: { results: { select: { division: true }, distinct: ["division"] } },
+    include: { results: { where: { round: { isDraft: false } }, select: { division: true }, distinct: ["division"] } },
     orderBy: { name: "asc" },
   });
   const bluePlayers = players.filter((p) => p.results.some((r) => r.division === Division.BLUE));

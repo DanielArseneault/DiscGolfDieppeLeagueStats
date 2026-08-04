@@ -10,6 +10,11 @@ import Link from "next/link";
 
 export const revalidate = 60;
 
+const DIVISION_DOT: Record<Division, { label: string; dot: string; ink: string }> = {
+  BLUE: { label: "Blue", dot: "var(--blue-dot)", ink: "var(--blue-ink)" },
+  RED: { label: "Red", dot: "var(--red-dot)", ink: "var(--red-ink)" },
+};
+
 // Compute the player's rank within `targetDivision` after each qualifying week, in
 // chronological order. Filters on the result's own division, not the player's — a
 // player's Blue-week results belong to the Blue field regardless of what other
@@ -83,6 +88,7 @@ export default async function PlayerPage({
     include: {
       league: true,
       results: {
+        where: { round: { isDraft: false } },
         include: { round: { select: { id: true, weekNumber: true, date: true, isChampionship: true } } },
         orderBy: { round: { weekNumber: "desc" } },
       },
@@ -94,11 +100,12 @@ export default async function PlayerPage({
   const { league } = player;
 
   const playerDivisions = [...new Set(player.results.map((r) => r.division))].sort((a, b) => (a === Division.BLUE ? -1 : b === Division.BLUE ? 1 : 0));
+  const multiDivision = playerDivisions.length > 1;
 
   const [standings, allLeagueResults, ctpWins, aceWins, layoutRounds, allRounds] = await Promise.all([
     getStandings(player.leagueId),
     prisma.result.findMany({
-      where: { round: { leagueId: player.leagueId, isChampionship: false, weekNumber: { lte: league.qualifyingWeeks } } },
+      where: { round: { leagueId: player.leagueId, isChampionship: false, isDraft: false, weekNumber: { lte: league.qualifyingWeeks } } },
       select: {
         playerId: true,
         division: true,
@@ -109,19 +116,19 @@ export default async function PlayerPage({
       },
     }),
     prisma.ctpWinner.findMany({
-      where: { playerName: player.name, round: { leagueId: player.leagueId } },
+      where: { playerName: player.name, round: { leagueId: player.leagueId, isDraft: false } },
       include: { round: { select: { id: true, weekNumber: true } } },
       orderBy: { round: { weekNumber: "asc" } },
     }),
     prisma.aceWinner.findMany({
-      where: { playerName: player.name, round: { leagueId: player.leagueId } },
+      where: { playerName: player.name, round: { leagueId: player.leagueId, isDraft: false } },
       include: { round: { select: { id: true, weekNumber: true } } },
       orderBy: { round: { weekNumber: "asc" } },
     }),
     Promise.all(
       playerDivisions.map((division) =>
         prisma.round.findFirst({
-          where: { leagueId: player.leagueId, ...(division === Division.BLUE ? { blueLayoutId: { not: null } } : { redLayoutId: { not: null } }) },
+          where: { leagueId: player.leagueId, isDraft: false, ...(division === Division.BLUE ? { blueLayoutId: { not: null } } : { redLayoutId: { not: null } }) },
           orderBy: { weekNumber: "desc" },
           include: {
             blueLayout: { include: { holePars: { orderBy: { holeNumber: "asc" } } } },
@@ -131,7 +138,7 @@ export default async function PlayerPage({
       )
     ),
     prisma.round.findMany({
-      where: { leagueId: player.leagueId },
+      where: { leagueId: player.leagueId, isDraft: false },
       orderBy: { weekNumber: "desc" },
       select: { id: true, weekNumber: true, date: true, isChampionship: true },
     }),
@@ -279,10 +286,15 @@ export default async function PlayerPage({
           <SectionTitle>Round history</SectionTitle>
           <div className="overflow-hidden rounded-[var(--r-card)] border" style={{ borderColor: "var(--line)" }}>
             <div
-              className="grid grid-cols-[1fr_54px_54px_64px] px-4 py-3 font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[.13em] sm:grid-cols-[1fr_100px_90px_90px_120px] sm:px-6"
+              className={`grid px-4 py-3 font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[.13em] sm:px-6 ${
+                multiDivision
+                  ? "grid-cols-[1fr_54px_54px_64px] sm:grid-cols-[1fr_80px_100px_90px_90px_120px]"
+                  : "grid-cols-[1fr_54px_54px_64px] sm:grid-cols-[1fr_100px_90px_90px_120px]"
+              }`}
               style={{ background: "var(--bg-subtle)", color: "var(--ink-muted)" }}
             >
               <div>Round</div>
+              {multiDivision && <div className="hidden text-center sm:block">Division</div>}
               <div className="text-center">Score</div>
               <div className="text-center">+/−</div>
               <div className="text-center">Position</div>
@@ -292,20 +304,38 @@ export default async function PlayerPage({
               const result = resultByRoundId.get(round.id);
               const weekRankMap = result ? rankByWeekByDivision.get(result.division) : undefined;
               const weekStanding = round.isChampionship || !weekRankMap ? null : weekRankMap.get(round.weekNumber) ?? null;
+              const divStyle = result ? DIVISION_DOT[result.division] : null;
               return (
                 <div
                   key={round.id}
-                  className="grid grid-cols-[1fr_54px_54px_64px] items-center px-4 py-2.5 sm:grid-cols-[1fr_100px_90px_90px_120px] sm:px-6 sm:py-3"
+                  className={`grid items-center px-4 py-2.5 sm:px-6 sm:py-3 ${
+                    multiDivision
+                      ? "grid-cols-[1fr_54px_54px_64px] sm:grid-cols-[1fr_80px_100px_90px_90px_120px]"
+                      : "grid-cols-[1fr_54px_54px_64px] sm:grid-cols-[1fr_100px_90px_90px_120px]"
+                  }`}
                   style={{ borderTop: "1px solid var(--line-3)" }}
                 >
                   <div>
-                    <Link href={`/rounds/${round.id}?league=${player.leagueId}`} className="text-sm font-semibold" style={{ color: "var(--ink)" }}>
+                    <Link href={`/rounds/${round.id}?league=${player.leagueId}`} className="flex items-center gap-1.5 text-sm font-semibold" style={{ color: "var(--ink)" }}>
+                      {multiDivision && divStyle && <span className="h-1.5 w-1.5 shrink-0 rounded-full sm:hidden" style={{ background: divStyle.dot }} />}
                       {round.isChampionship ? "Championship" : `Week ${round.weekNumber}`}
                     </Link>
                     <p className="font-[family-name:var(--font-mono)] text-[11px] whitespace-nowrap" style={{ color: "var(--ink-muted)" }}>
                       {formatDate(round.date)}
                     </p>
                   </div>
+                  {multiDivision && (
+                    <div className="hidden text-center sm:block">
+                      {divStyle ? (
+                        <span className="inline-flex items-center gap-1.5 font-[family-name:var(--font-mono)] text-xs" style={{ color: divStyle.ink }}>
+                          <span className="h-2 w-2 rounded-full" style={{ background: divStyle.dot }} />
+                          {divStyle.label}
+                        </span>
+                      ) : (
+                        <span style={{ color: "var(--ink-muted)" }}>—</span>
+                      )}
+                    </div>
+                  )}
                   <div className="text-center font-[family-name:var(--font-mono)] text-sm" style={{ color: "var(--ink-2)" }}>
                     {result ? result.score : <span style={{ color: "var(--ink-muted)" }}>DNS</span>}
                   </div>

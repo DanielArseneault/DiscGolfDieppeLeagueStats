@@ -288,22 +288,29 @@ function Hero({
                 </h1>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   {onSelect ? (
-                    views.map((v) => {
-                      const s = DIVISION_STYLE[v.division];
-                      const active = v.division === activeDivision;
-                      return (
-                        <button
-                          key={v.division}
-                          type="button"
-                          onClick={() => onSelect(v.division)}
-                          className="inline-flex items-center gap-1.5 rounded-[var(--r-pill)] px-2.5 py-1 font-[family-name:var(--font-mono)] text-xs transition-opacity"
-                          style={{ background: s.surface, color: s.ink, opacity: active ? 1 : 0.45 }}
-                        >
-                          <span className="h-2 w-2 rounded-full" style={{ background: s.dot }} />
-                          {s.label}
-                        </button>
-                      );
-                    })
+                    <div className="inline-flex items-center gap-1 rounded-[var(--r-pill)] p-1" style={{ background: "var(--chip-neutral)" }}>
+                      {views.map((v) => {
+                        const s = DIVISION_STYLE[v.division];
+                        const active = v.division === activeDivision;
+                        return (
+                          <button
+                            key={v.division}
+                            type="button"
+                            onClick={() => onSelect(v.division)}
+                            aria-pressed={active}
+                            className="inline-flex cursor-pointer items-center gap-1.5 rounded-[var(--r-pill)] px-2.5 py-1 font-[family-name:var(--font-mono)] text-xs font-medium transition-all hover:opacity-100"
+                            style={
+                              active
+                                ? { background: s.surface, color: s.ink, opacity: 1, boxShadow: `0 0 0 1.5px ${s.ink}` }
+                                : { background: "transparent", color: "var(--ink-muted)", opacity: 0.7 }
+                            }
+                          >
+                            <span className="h-2 w-2 rounded-full" style={{ background: active ? s.dot : "var(--ink-muted)" }} />
+                            {s.label}
+                          </button>
+                        );
+                      })}
+                    </div>
                   ) : (
                     <span
                       className="inline-flex items-center gap-1.5 rounded-[var(--r-pill)] px-2.5 py-1 font-[family-name:var(--font-mono)] text-xs"

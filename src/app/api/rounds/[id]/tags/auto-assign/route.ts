@@ -16,9 +16,6 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     include: { results: { include: { player: true } } },
   });
   if (!round) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (round.isDraft) {
-    return NextResponse.json({ error: "Round is still a draft — finalize it before assigning tags" }, { status: 400 });
-  }
 
   const assignments: { resultId: number; playerId: number; tagAfter: string }[] = [];
 

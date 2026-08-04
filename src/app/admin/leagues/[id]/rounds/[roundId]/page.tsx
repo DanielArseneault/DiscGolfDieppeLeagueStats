@@ -1405,8 +1405,7 @@ export default function RoundManagePage({
                         size="sm"
                         variant="outline"
                         onClick={handleAutoAssignTags}
-                        disabled={autoAssigning || round.isDraft}
-                        title={round.isDraft ? "Finalize the round (re-import without Draft checked) before auto-assigning" : undefined}
+                        disabled={autoAssigning}
                       >
                         {autoAssigning ? "Assigning..." : "Auto-Assign New Tags"}
                       </Button>
@@ -1414,11 +1413,6 @@ export default function RoundManagePage({
                         {tagsSaving ? "Saving..." : "Save Tags"}
                       </Button>
                     </div>
-                    {round.isDraft && (
-                      <p className="text-xs text-[var(--ink-muted)]">
-                        This round is still a draft, so auto-assign is disabled. You can still record tags brought in.
-                      </p>
-                    )}
                   </CardContent>
                 </Card>
               </>
