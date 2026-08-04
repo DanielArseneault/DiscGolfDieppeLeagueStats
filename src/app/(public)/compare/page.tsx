@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { getStandings } from "@/lib/standings";
+import { getStandings, pickPrimaryStanding } from "@/lib/standings";
 import { notFound } from "next/navigation";
 import { Division } from "@/generated/prisma/client";
 import { formatDate } from "@/lib/utils";
@@ -39,9 +39,13 @@ async function PickerPage({ leagueId, preA }: { leagueId: number | null; preA?: 
   const league = leagueId ? await prisma.league.findUnique({ where: { id: leagueId } }) : await prisma.league.findFirst({ orderBy: { year: "desc" } });
   if (!league) notFound();
 
-  const players = await prisma.player.findMany({ where: { leagueId: league.id }, orderBy: [{ division: "asc" }, { name: "asc" }] });
-  const bluePlayers = players.filter((p) => p.division === Division.BLUE);
-  const redPlayers = players.filter((p) => p.division === Division.RED);
+  const players = await prisma.player.findMany({
+    where: { leagueId: league.id },
+    include: { results: { select: { division: true }, distinct: ["division"] } },
+    orderBy: { name: "asc" },
+  });
+  const bluePlayers = players.filter((p) => p.results.some((r) => r.division === Division.BLUE));
+  const redPlayers = players.filter((p) => p.results.some((r) => r.division === Division.RED));
 
   return (
     <div className="space-y-6 pt-4">
@@ -135,8 +139,8 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
 
   const league = playerA.league;
   const standings = await getStandings(league.id);
-  const standingA = standings.find((s) => s.playerId === playerA.id);
-  const standingB = standings.find((s) => s.playerId === playerB.id);
+  const standingA = pickPrimaryStanding(standings, playerA.id);
+  const standingB = pickPrimaryStanding(standings, playerB.id);
   const statsA = computeStats(playerA.results);
   const statsB = computeStats(playerB.results);
 
@@ -170,7 +174,9 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
   const avgDiff = shared.length > 0 ? shared.reduce((s, r) => s + (r.aRel - r.bRel), 0) / shared.length : null;
 
   const leagueUrl = `/?league=${league.id}`;
-  const crossDivision = playerA.division !== playerB.division;
+  const divisionsA = [...new Set(playerA.results.map((r) => r.division))];
+  const divisionsB = [...new Set(playerB.results.map((r) => r.division))];
+  const crossDivision = !divisionsA.some((d) => divisionsB.includes(d));
 
   return (
     <div className="space-y-8">
@@ -396,8 +402,14 @@ function MatchupHeader({
   crossDivision: boolean;
 }) {
   const side = (player: PlayerData, stats: ReturnType<typeof computeStats>, align: "left" | "right") => {
-    const dot = player.division === Division.BLUE ? "var(--blue-dot)" : "var(--red-dot)";
-    const label = player.division === Division.BLUE ? "Blue division" : "Red division";
+    const divisions = [...new Set(player.results.map((r) => r.division))];
+    const dot = divisions.length > 1 ? "var(--ink-muted)" : divisions[0] === Division.RED ? "var(--red-dot)" : "var(--blue-dot)";
+    const label =
+      divisions.length > 1
+        ? "Blue & Red"
+        : divisions[0] === Division.RED
+        ? "Red division"
+        : "Blue division";
     return (
       <div className={align === "right" ? "min-w-0 text-right" : "min-w-0"}>
         <p

@@ -18,6 +18,18 @@ export interface PlayerStanding {
   rankChange: number | null; // null = new player, positive = moved up, negative = moved down
 }
 
+// A player can have a standing entry in each division they've played rounds in.
+// When something needs a single "default" entry for a player (compare page, profile
+// page default tab), pick whichever division they've played the most rounds in.
+export function pickPrimaryStanding(standings: PlayerStanding[], playerId: number): PlayerStanding | undefined {
+  const entries = standings.filter((s) => s.playerId === playerId);
+  if (entries.length <= 1) return entries[0];
+  return [...entries].sort((a, b) => {
+    if (a.roundsPlayed !== b.roundsPlayed) return b.roundsPlayed - a.roundsPlayed;
+    return a.division === Division.BLUE ? -1 : 1;
+  })[0];
+}
+
 type ResultWithPlayer = Awaited<ReturnType<typeof prisma.result.findMany<{ include: { player: true } }>>>[number];
 
 function buildStandings(
@@ -25,11 +37,13 @@ function buildStandings(
   bestScoresCount: number,
   minWeeks: number
 ): PlayerStanding[] {
-  const playerMap = new Map<number, { name: string; division: Division; scores: number[]; excludeFromChampionship: boolean; championshipPoolOverride: string | null }>();
+  const playerMap = new Map<string, { playerId: number; name: string; division: Division; scores: number[]; excludeFromChampionship: boolean; championshipPoolOverride: string | null }>();
 
   for (const result of results) {
-    if (!playerMap.has(result.playerId)) {
-      playerMap.set(result.playerId, {
+    const key = `${result.playerId}:${result.division}`;
+    if (!playerMap.has(key)) {
+      playerMap.set(key, {
+        playerId: result.playerId,
         name: result.player.name,
         division: result.division,
         excludeFromChampionship: result.player.excludeFromChampionship,
@@ -37,12 +51,12 @@ function buildStandings(
         scores: [],
       });
     }
-    playerMap.get(result.playerId)!.scores.push(result.score);
+    playerMap.get(key)!.scores.push(result.score);
   }
 
   const standings: PlayerStanding[] = [];
 
-  for (const [playerId, data] of playerMap.entries()) {
+  for (const { playerId, ...data } of playerMap.values()) {
     const sorted = [...data.scores].sort((a, b) => a - b);
     const bestScores = sorted.slice(0, bestScoresCount);
     const qualifyingTotal = bestScores.reduce((sum, s) => sum + s, 0);
@@ -105,9 +119,9 @@ export const getStandings = cache(async function getStandings(leagueId: number):
     const previousResults = results.filter((r) => r.roundId !== latestRound.id);
     if (previousResults.length > 0) {
       const previous = buildStandings(previousResults, league.bestScoresCount, league.minWeeks);
-      const previousRankMap = new Map(previous.map((s) => [s.playerId, s.rank]));
+      const previousRankMap = new Map(previous.map((s) => [`${s.playerId}:${s.division}`, s.rank]));
       for (const s of current) {
-        const prevRank = previousRankMap.get(s.playerId);
+        const prevRank = previousRankMap.get(`${s.playerId}:${s.division}`);
         s.rankChange = prevRank != null ? prevRank - s.rank : null;
       }
     }

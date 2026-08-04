@@ -12,7 +12,8 @@ export default async function LeaguePlayersPage({ params }: { params: Promise<{ 
     prisma.league.findUnique({ where: { id: leagueId } }),
     prisma.player.findMany({
       where: { leagueId },
-      orderBy: [{ division: "asc" }, { name: "asc" }],
+      include: { results: { select: { division: true }, distinct: ["division"] } },
+      orderBy: { name: "asc" },
     }),
   ]);
 
@@ -40,7 +41,7 @@ export default async function LeaguePlayersPage({ params }: { params: Promise<{ 
             players={players.map((p) => ({
               id: p.id,
               name: p.name,
-              division: p.division,
+              divisions: p.results.map((r) => r.division),
               gender: p.gender,
             }))}
           />

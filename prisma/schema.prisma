@@ -69,7 +69,6 @@ model Player {
   name                     String
   pdgaNumber               String?
   username                 String?
-  division                 Division
   gender                   Gender?
   memberStatus             MemberStatus @default(NON_MEMBER)
   excludeFromChampionship  Boolean      @default(false)

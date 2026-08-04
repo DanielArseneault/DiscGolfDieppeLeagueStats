@@ -23,15 +23,9 @@ export async function upsertResultsForRound(
           name: result.name,
           pdgaNumber: result.pdgaNumber,
           username: result.username,
-          division: result.division,
           memberStatus: MemberStatus.NON_MEMBER,
           league: { connect: { id: leagueId } },
         },
-      });
-    } else if (player.division !== result.division) {
-      await prisma.player.update({
-        where: { id: player.id },
-        data: { division: result.division },
       });
     }
 

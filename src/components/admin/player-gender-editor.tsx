@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 interface Player {
   id: number;
   name: string;
-  division: string;
+  divisions: string[];
   gender: string | null;
 }
 
@@ -31,8 +31,8 @@ export function PlayerGenderEditor({ players }: { players: Player[] }) {
     return [...list].sort((a, b) => sign * a.name.localeCompare(b.name));
   }
 
-  const blue = sortByName(players.filter((p) => p.division === "BLUE"));
-  const red = sortByName(players.filter((p) => p.division === "RED"));
+  const blue = sortByName(players.filter((p) => p.divisions.includes("BLUE")));
+  const red = sortByName(players.filter((p) => p.divisions.includes("RED")));
 
   async function handleChange(player: Player, value: string) {
     setLoadingId(player.id);
