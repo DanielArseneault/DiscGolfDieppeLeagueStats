@@ -6,9 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { computePoolSummaries } from "@/lib/pool-utils";
-import { normalizeTagInput, BOB_TAG } from "@/lib/tags";
+import { normalizeTagInput, BOB_TAG, tagRank } from "@/lib/tags";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -63,6 +63,40 @@ interface RoundResult {
   leftEarly: boolean;
 }
 
+interface CheckInPlayer {
+  id: number;
+  name: string;
+  gender: string | null;
+  currentTag: string | null;
+}
+
+interface CheckIn {
+  id: number;
+  playerId: number;
+  division: "BLUE" | "RED";
+  acePot: boolean;
+  paymentMethod: "CASH" | "TAP" | null;
+  paymentAmount: number | null;
+  player: CheckInPlayer;
+}
+
+interface LeaguePlayer {
+  id: number;
+  name: string;
+  results: { division: string }[];
+}
+
+interface MergedPlayerRow {
+  playerId: number;
+  playerName: string;
+  gender: string | null;
+  division: "BLUE" | "RED";
+  checkInId: number | null;
+  resultId: number | null;
+  currentTag: string | null;
+  score: number | null;
+}
+
 interface Round {
   id: number;
   weekNumber: number;
@@ -81,6 +115,8 @@ interface Round {
   bobTag: { playerName: string } | null;
   blueLayout: CourseLayout | null;
   redLayout: CourseLayout | null;
+  checkIns: CheckIn[];
+  league: { players: LeaguePlayer[] };
 }
 
 interface PlayerStanding {
@@ -167,14 +203,29 @@ export default function RoundManagePage({
   const [bobPlayer, setBobPlayer] = useState("");
   const [bobSaving, setBobSaving] = useState(false);
 
-  // Tag ladder state — keyed by resultId
+  // Players tab state — sign-in/payment + tag ladder, all keyed by playerId
+  // so the two merge into one row per player regardless of which side (a
+  // RoundCheckIn, a Result, or both) actually backs that row.
+  const [checkInAcePot, setCheckInAcePot] = useState<Record<number, boolean>>({});
+  const [checkInPaymentMethods, setCheckInPaymentMethods] = useState<Record<number, "CASH" | "TAP" | "">>({});
+  const [checkInPaymentAmounts, setCheckInPaymentAmounts] = useState<Record<number, string>>({});
+  const [newCheckInSelection, setNewCheckInSelection] = useState("");
+  const [newCheckInName, setNewCheckInName] = useState("");
+  const [newCheckInNameDivision, setNewCheckInNameDivision] = useState<"BLUE" | "RED">("BLUE");
+  const [newCheckInGender, setNewCheckInGender] = useState<"MALE" | "FEMALE">("MALE");
+  const [addingCheckIn, setAddingCheckIn] = useState(false);
+  const [checkInError, setCheckInError] = useState("");
+  const [syncingParticipants, setSyncingParticipants] = useState(false);
+  const [participantsSyncResult, setParticipantsSyncResult] = useState<{ blueCount: number; redCount: number } | null>(null);
+  const [participantsSyncError, setParticipantsSyncError] = useState("");
+
   const [tagBefores, setTagBefores] = useState<Record<number, string>>({});
   const [tagAfters, setTagAfters] = useState<Record<number, string>>({});
   const [leftEarlys, setLeftEarlys] = useState<Record<number, boolean>>({});
-  const [tagsSaving, setTagsSaving] = useState(false);
+  const [playersSaving, setPlayersSaving] = useState(false);
   const [autoAssigning, setAutoAssigning] = useState(false);
   const [tagError, setTagError] = useState("");
-  const [tagSort, setTagSort] = useState<{ field: "position" | "name"; dir: "asc" | "desc" }>({
+  const [tagSort, setTagSort] = useState<{ field: "position" | "name" | "tagAfter"; dir: "asc" | "desc" }>({
     field: "name",
     dir: "asc",
   });
@@ -233,13 +284,26 @@ export default function RoundManagePage({
     const afters: Record<number, string> = {};
     const leftEarly: Record<number, boolean> = {};
     for (const r of data.results) {
-      befores[r.id] = r.tagBefore != null ? String(r.tagBefore) : "";
-      afters[r.id] = r.tagAfter != null ? String(r.tagAfter) : "";
-      leftEarly[r.id] = r.leftEarly;
+      befores[r.playerId] = r.tagBefore != null ? String(r.tagBefore) : "";
+      afters[r.playerId] = r.tagAfter != null ? String(r.tagAfter) : "";
+      leftEarly[r.playerId] = r.leftEarly;
     }
     setTagBefores(befores);
     setTagAfters(afters);
     setLeftEarlys(leftEarly);
+
+    const ciAcePot: Record<number, boolean> = {};
+    const ciMethods: Record<number, "CASH" | "TAP" | ""> = {};
+    const ciAmounts: Record<number, string> = {};
+    for (const c of data.checkIns) {
+      ciAcePot[c.playerId] = c.acePot;
+      ciMethods[c.playerId] = c.paymentMethod ?? "";
+      ciAmounts[c.playerId] = c.paymentAmount != null ? String(c.paymentAmount) : "";
+    }
+    setCheckInAcePot(ciAcePot);
+    setCheckInPaymentMethods(ciMethods);
+    setCheckInPaymentAmounts(ciAmounts);
+
     setFacebookUrl(data.facebookUrl ?? "");
     setFacebookLabel(data.facebookLabel ?? "");
     setUdiscUrl(data.udiscUrl ?? "");
@@ -409,23 +473,107 @@ export default function RoundManagePage({
     setBobSaving(false);
   }
 
-  async function handleSaveTags() {
-    if (!round) return;
-    setTagsSaving(true);
-    await fetch(`/api/rounds/${roundId}/tags`, {
-      method: "PUT",
+  // Check-in / sign-in & payment. `override` lets a row that already has a
+  // Result but no RoundCheckIn (e.g. an older round, or someone scored
+  // without ever being signed in) backfill a check-in for itself directly,
+  // bypassing the picker/name-entry fields below the table.
+  async function handleAddCheckIn(override?: { playerId: number; division: "BLUE" | "RED" }) {
+    let division: "BLUE" | "RED";
+    let playerId: number | undefined;
+    let name: string | undefined;
+
+    if (override) {
+      division = override.division;
+      playerId = override.playerId;
+    } else if (newCheckInSelection) {
+      const [div, id] = newCheckInSelection.split("|");
+      division = div as "BLUE" | "RED";
+      playerId = Number(id);
+    } else if (newCheckInName.trim()) {
+      division = newCheckInNameDivision;
+      name = newCheckInName.trim();
+    } else {
+      return;
+    }
+
+    setAddingCheckIn(true);
+    setCheckInError("");
+    const res = await fetch(`/api/rounds/${roundId}/check-in`, {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tags: round.results.map((r) => ({
-          resultId: r.id,
-          tagBefore: normalizeTagInput(tagBefores[r.id] ?? ""),
-          tagAfter: normalizeTagInput(tagAfters[r.id] ?? ""),
-          leftEarly: leftEarlys[r.id] ?? false,
-        })),
-      }),
+      body: JSON.stringify({ playerId, name, division, gender: name ? newCheckInGender : undefined }),
     });
+    if (!res.ok) {
+      const err = await res.json();
+      setCheckInError(err.error ?? "Failed to add player");
+    } else {
+      setNewCheckInSelection("");
+      setNewCheckInName("");
+      setNewCheckInGender("MALE");
+      await load();
+    }
+    setAddingCheckIn(false);
+  }
+
+  async function handleRemoveCheckIn(checkInId: number) {
+    await fetch(`/api/rounds/${roundId}/check-in/${checkInId}`, { method: "DELETE" });
     await load();
-    setTagsSaving(false);
+  }
+
+  async function handleSyncParticipants() {
+    setSyncingParticipants(true);
+    setParticipantsSyncError("");
+    setParticipantsSyncResult(null);
+    try {
+      const res = await fetch(`/api/rounds/${roundId}/sync-participants`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setParticipantsSyncError(data.error ?? "Sync failed");
+        return;
+      }
+      setParticipantsSyncResult({ blueCount: data.blueCount, redCount: data.redCount });
+      await load();
+    } catch {
+      setParticipantsSyncError("Failed to sync. Try again in a moment.");
+    } finally {
+      setSyncingParticipants(false);
+    }
+  }
+
+  // Saves both the sign-in/payment fields (RoundCheckIn) and the tag ladder
+  // fields (Result) in one action — they're separate models under the hood,
+  // but the merged table shows them as one row per player.
+  async function handleSaveAll() {
+    if (!round) return;
+    setPlayersSaving(true);
+    await Promise.all([
+      fetch(`/api/rounds/${roundId}/check-in`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          checkIns: round.checkIns.map((c) => ({
+            id: c.id,
+            acePot: checkInAcePot[c.playerId] ?? false,
+            paymentMethod: checkInPaymentMethods[c.playerId] === "TAP" ? "TAP" : "CASH",
+            paymentAmount: checkInPaymentAmounts[c.playerId] ? Number(checkInPaymentAmounts[c.playerId]) : null,
+          })),
+        }),
+      }),
+      fetch(`/api/rounds/${roundId}/tags`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tags: round.results.map((r) => ({
+            resultId: r.id,
+            tagBefore: normalizeTagInput(tagBefores[r.playerId] ?? ""),
+            tagAfter: normalizeTagInput(tagAfters[r.playerId] ?? ""),
+            leftEarly: leftEarlys[r.playerId] ?? false,
+          })),
+        }),
+      }),
+    ]);
+    await load();
+    setPlayersSaving(false);
   }
 
   async function handleAutoAssignTags() {
@@ -441,36 +589,43 @@ export default function RoundManagePage({
     setAutoAssigning(false);
   }
 
-  function sortTagResults(results: RoundResult[]): RoundResult[] {
+  function sortPlayerRows(rows: MergedPlayerRow[]): MergedPlayerRow[] {
     const { field, dir } = tagSort;
     const sign = dir === "asc" ? 1 : -1;
-    return [...results].sort((a, b) => {
-      if (field === "name") return sign * a.player.name.localeCompare(b.player.name);
-      return sign * (a.position - b.position);
+    return [...rows].sort((a, b) => {
+      if (field === "name") return sign * a.playerName.localeCompare(b.playerName);
+      if (field === "tagAfter") {
+        return sign * (tagRank(tagAfters[a.playerId] ?? null) - tagRank(tagAfters[b.playerId] ?? null));
+      }
+      // Rows without a score yet (no Result synced) sort to the end either way.
+      if (a.score == null && b.score == null) return 0;
+      if (a.score == null) return 1;
+      if (b.score == null) return -1;
+      return sign * (a.score - b.score);
     });
   }
 
-  function toggleTagSort(field: "position" | "name") {
+  function toggleTagSort(field: "position" | "name" | "tagAfter") {
     setTagSort((prev) =>
       prev.field === field ? { field, dir: prev.dir === "asc" ? "desc" : "asc" } : { field, dir: "asc" }
     );
   }
 
-  function findDuplicateTags(results: RoundResult[], tagValues: Record<number, string>): Set<number> {
+  function findDuplicateTags(rows: MergedPlayerRow[], tagValues: Record<number, string>): Set<number> {
     // BoB is a shared bucket — any number of players can legitimately hold it —
     // so it's excluded from duplicate detection.
     const counts = new Map<string, number>();
-    for (const r of results) {
-      const n = normalizeTagInput(tagValues[r.id] ?? "");
+    for (const r of rows) {
+      const n = normalizeTagInput(tagValues[r.playerId] ?? "");
       if (n != null && n !== BOB_TAG) counts.set(n, (counts.get(n) ?? 0) + 1);
     }
     const dupeNumbers = new Set([...counts.entries()].filter(([, c]) => c > 1).map(([n]) => n));
-    const dupeResultIds = new Set<number>();
-    for (const r of results) {
-      const n = normalizeTagInput(tagValues[r.id] ?? "");
-      if (n != null && dupeNumbers.has(n)) dupeResultIds.add(r.id);
+    const dupePlayerIds = new Set<number>();
+    for (const r of rows) {
+      const n = normalizeTagInput(tagValues[r.playerId] ?? "");
+      if (n != null && dupeNumbers.has(n)) dupePlayerIds.add(r.playerId);
     }
-    return dupeResultIds;
+    return dupePlayerIds;
   }
 
   // Pool winners
@@ -556,6 +711,67 @@ export default function RoundManagePage({
 
   const blueResults = useMemo(() => round?.results.filter((r) => r.division === "BLUE") ?? [], [round?.results]);
   const redResults = useMemo(() => round?.results.filter((r) => r.division === "RED") ?? [], [round?.results]);
+
+  // One row per player, merging their RoundCheckIn (sign-in/payment, exists
+  // pre-round) and Result (score/tags, exists once results are synced) —
+  // a player can have either or both.
+  const mergedPlayerRows = useMemo(() => {
+    const byPlayer = new Map<number, MergedPlayerRow>();
+    for (const c of round?.checkIns ?? []) {
+      byPlayer.set(c.playerId, {
+        playerId: c.playerId,
+        playerName: c.player.name,
+        gender: c.player.gender,
+        division: c.division,
+        checkInId: c.id,
+        resultId: null,
+        currentTag: c.player.currentTag,
+        score: null,
+      });
+    }
+    for (const r of round?.results ?? []) {
+      const existing = byPlayer.get(r.playerId);
+      if (existing) {
+        existing.resultId = r.id;
+        existing.score = r.score;
+        existing.division = r.division as "BLUE" | "RED";
+      } else {
+        byPlayer.set(r.playerId, {
+          playerId: r.playerId,
+          playerName: r.player.name,
+          gender: r.player.gender,
+          division: r.division as "BLUE" | "RED",
+          checkInId: null,
+          resultId: r.id,
+          currentTag: null,
+          score: r.score,
+        });
+      }
+    }
+    return [...byPlayer.values()];
+  }, [round?.checkIns, round?.results]);
+
+  const rosteredPlayerIds = useMemo(() => new Set(mergedPlayerRows.map((r) => r.playerId)), [mergedPlayerRows]);
+  const availableLeaguePlayers = useMemo(
+    () => (round?.league.players ?? []).filter((p) => !rosteredPlayerIds.has(p.id)),
+    [round?.league.players, rosteredPlayerIds]
+  );
+  const availableBluePlayers = availableLeaguePlayers.filter((p) => p.results.some((r) => r.division === "BLUE"));
+  const availableRedPlayers = availableLeaguePlayers.filter((p) => p.results.some((r) => r.division === "RED"));
+  const checkInTotals = useMemo(() => {
+    const checkIns = round?.checkIns ?? [];
+    let cash = 0;
+    let tap = 0;
+    let acePot = 0;
+    for (const c of checkIns) {
+      const isTap = (checkInPaymentMethods[c.playerId] ?? c.paymentMethod ?? "") === "TAP";
+      const amount = Number(checkInPaymentAmounts[c.playerId] ?? c.paymentAmount ?? 0) || 0;
+      if (isTap) tap += amount;
+      else cash += amount;
+      if (checkInAcePot[c.playerId] ?? c.acePot) acePot++;
+    }
+    return { count: checkIns.length, cash, tap, acePot };
+  }, [round?.checkIns, checkInPaymentMethods, checkInPaymentAmounts, checkInAcePot]);
   const poolData = useMemo(
     () => round?.isChampionship ? computePoolGroups(round.results, standings) : null,
     [round?.isChampionship, round?.results, standings]
@@ -646,7 +862,7 @@ export default function RoundManagePage({
           <TabsTrigger value="results">Results</TabsTrigger>
           <TabsTrigger value="prizes">Prizes & Awards</TabsTrigger>
           <TabsTrigger value="tags">
-            Tags
+            Players
             {round.results.some((r) => r.tagAfter != null) && (
               <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-[var(--positive)] inline-block" />
             )}
@@ -1272,150 +1488,352 @@ export default function RoundManagePage({
           </Card>
         </TabsContent>
 
-        {/* ── TAGS ── */}
+        {/* ── PLAYERS ── */}
         <TabsContent value="tags" className="space-y-6 mt-4 max-w-3xl">
+          {/* Sync registered players from UDisc */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">🔄 Sync Registered Players</CardTitle>
+              <p className="text-xs text-[var(--ink-muted)]">
+                Pulls the current sign-up list from the UDisc event&apos;s Participants page and checks
+                everyone in below (division only — existing payment info is left alone). Safe to re-run
+                any time before the round.
+                {!round.udiscUrl && " Set the UDisc Event URL in the Results tab first."}
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Button size="sm" onClick={handleSyncParticipants} disabled={syncingParticipants || !round.udiscUrl}>
+                {syncingParticipants ? "Syncing..." : "Sync Now"}
+              </Button>
+              {participantsSyncResult && (
+                <p className="text-sm text-[var(--positive)]">
+                  Synced {participantsSyncResult.blueCount} Blue / {participantsSyncResult.redCount} Red — just now
+                </p>
+              )}
+              {participantsSyncError && <p className="text-sm text-red-600">{participantsSyncError}</p>}
+            </CardContent>
+          </Card>
+
+          {/* Sign-in, payment & tag ladder — one row per player */}
           {(() => {
             // Tags are only reshuffled within a division/gender pool (see auto-assign),
             // so the same number can legitimately show up in two different pools —
             // duplicate detection is scoped per pool, not across the whole round.
-            const tagGroups = [
-              { label: "🔵 Blue Division", results: blueResults.filter((r) => r.player.gender !== "FEMALE") },
-              { label: "🔵 Blue Division — Female", results: blueResults.filter((r) => r.player.gender === "FEMALE") },
-              { label: "🔴 Red Division", results: redResults.filter((r) => r.player.gender !== "FEMALE") },
-              { label: "🔴 Red Division — Female", results: redResults.filter((r) => r.player.gender === "FEMALE") },
+            const groups = [
+              { label: "🔵 Blue Division", rows: mergedPlayerRows.filter((r) => r.division === "BLUE" && r.gender !== "FEMALE") },
+              { label: "🔵 Blue Division — Female", rows: mergedPlayerRows.filter((r) => r.division === "BLUE" && r.gender === "FEMALE") },
+              { label: "🔴 Red Division", rows: mergedPlayerRows.filter((r) => r.division === "RED" && r.gender !== "FEMALE") },
+              { label: "🔴 Red Division — Female", rows: mergedPlayerRows.filter((r) => r.division === "RED" && r.gender === "FEMALE") },
             ]
-              .filter(({ label, results }) => results.length > 0 || !label.includes("Female"))
-              .map(({ label, results }) => {
-                const sorted = sortTagResults(results);
+              .filter(({ label, rows }) => rows.length > 0 || !label.includes("Female"))
+              .map(({ label, rows }) => {
+                const sorted = sortPlayerRows(rows);
                 return {
                   label,
-                  results: sorted,
+                  rows: sorted,
                   dupeBefore: findDuplicateTags(sorted, tagBefores),
                   dupeAfter: findDuplicateTags(sorted, tagAfters),
                 };
               });
 
-            const anyDupes = tagGroups.some((g) => g.dupeBefore.size > 0 || g.dupeAfter.size > 0);
+            const anyDupes = groups.some((g) => g.dupeBefore.size > 0 || g.dupeAfter.size > 0);
 
             // Explicit tabIndex so Tab moves down a column (Brought In, then
             // Tag After) instead of the browser's default left-to-right order.
+            // Only rows with a synced Result have anything to tab through.
             const beforeTabIndex = new Map<number, number>();
             const afterTabIndex = new Map<number, number>();
             let tabCursor = 1;
-            for (const { results } of tagGroups) {
-              for (const r of results) beforeTabIndex.set(r.id, tabCursor++);
-              for (const r of results) afterTabIndex.set(r.id, tabCursor++);
+            for (const { rows } of groups) {
+              for (const r of rows) if (r.resultId) beforeTabIndex.set(r.playerId, tabCursor++);
+              for (const r of rows) if (r.resultId) afterTabIndex.set(r.playerId, tabCursor++);
             }
 
+            // Player name is frozen (plain flow, outside the scroll area) so it
+            // stays visible while scrolling right to edit tags/scores.
+            const PLAYER_COL_WIDTH = 168;
+            const SIGNIN_HEADER_H = 36;
+            const SIGNIN_ROW_H = 52;
+            const signinCols =
+              "2.5rem minmax(4.5rem,1fr) minmax(3.5rem,0.6fr) minmax(3.5rem,1fr) minmax(3.5rem,1fr) minmax(3rem,0.6fr) 2.5rem 2rem";
+
             return (
-              <>
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">🎫 Tag Ladder</CardTitle>
-                    <p className="text-xs text-[var(--ink-muted)]">
-                      Record tags brought in, then auto-assign reshuffles them per division/gender pool by
-                      finish position (ties broken by previous tag). Hover a player&apos;s row to mark them
-                      &quot;left early&quot; and set their next tag manually — they&apos;re skipped by auto-assign.
-                    </p>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    {tagGroups.map(({ label, results, dupeBefore, dupeAfter }) => (
-                      <div key={label}>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)] mb-2">{label}</p>
-                        <div className="overflow-x-auto">
-                        <div className="space-y-1.5 min-w-[32rem]">
-                          <div className="grid grid-cols-[1fr_4rem_6rem_6rem_5rem] gap-2 text-[11px] font-medium text-[var(--ink-muted)] px-1">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">✅ Sign-In, Payment & Tags</CardTitle>
+                  <p className="text-xs text-[var(--ink-muted)]">
+                    Division/Ace/Paid/Amount come from sign-in and are editable any time; Score/Tag After
+                    only exist once results are synced. Removing a player here only edits the sign-in
+                    list — it never touches their score.
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {groups.map(({ label, rows, dupeBefore, dupeAfter }) => (
+                    <div key={label}>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)] mb-2">{label}</p>
+                      <div
+                        className="flex overflow-hidden rounded-[var(--r-card)] border"
+                        style={{ borderColor: "var(--line)", background: "var(--bg-card)" }}
+                      >
+                        {/* Frozen: player name — plain flow, never scrolls. */}
+                        <div className="shrink-0" style={{ width: PLAYER_COL_WIDTH, borderRight: "1px solid var(--line)" }}>
+                          <div
+                            className="flex items-center px-3"
+                            style={{ height: SIGNIN_HEADER_H, background: "var(--bg-subtle)" }}
+                          >
                             <button
                               type="button"
                               onClick={() => toggleTagSort("name")}
-                              className="text-left flex items-center gap-0.5 hover:text-[var(--ink)]"
+                              className="text-left flex items-center gap-0.5 text-[11px] font-medium text-[var(--ink-muted)] hover:text-[var(--ink)]"
                             >
                               Player{tagSort.field === "name" && (tagSort.dir === "asc" ? " ▲" : " ▼")}
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => toggleTagSort("position")}
-                              className="text-left flex items-center gap-0.5 hover:text-[var(--ink)]"
-                            >
-                              Score{tagSort.field === "position" && (tagSort.dir === "asc" ? " ▲" : " ▼")}
-                            </button>
-                            <span>Brought In</span>
-                            <span>Tag After</span>
-                            <span />
                           </div>
-                          {results.map((r) => (
+                          {rows.map((r, idx) => (
                             <div
-                              key={r.id}
-                              className="group grid grid-cols-[1fr_4rem_6rem_6rem_5rem] gap-2 items-center"
+                              key={r.playerId}
+                              className="flex items-center px-3"
+                              style={{
+                                height: SIGNIN_ROW_H,
+                                background: idx % 2 === 1 ? "var(--row-tint)" : "var(--bg-card)",
+                                borderTop: "1px solid var(--line-3)",
+                              }}
                             >
-                              <span className="text-sm text-[var(--ink)] truncate">{r.player.name}</span>
-                              <span className="text-xs font-mono text-[var(--ink-muted)]">{r.score}</span>
-                              <Input
-                                type="text"
-                                placeholder={`# or ${BOB_TAG}`}
-                                tabIndex={beforeTabIndex.get(r.id)}
-                                className={`h-8 text-sm ${dupeBefore.has(r.id) ? "border-[var(--tint-warn-fg)]" : ""}`}
-                                value={tagBefores[r.id] ?? ""}
-                                onChange={(e) =>
-                                  setTagBefores((prev) => ({ ...prev, [r.id]: e.target.value }))
-                                }
-                              />
-                              <Input
-                                type="text"
-                                placeholder={`# or ${BOB_TAG}`}
-                                tabIndex={afterTabIndex.get(r.id)}
-                                className={`h-8 text-sm ${dupeAfter.has(r.id) ? "border-[var(--tint-warn-fg)]" : ""}`}
-                                value={tagAfters[r.id] ?? ""}
-                                onChange={(e) =>
-                                  setTagAfters((prev) => ({ ...prev, [r.id]: e.target.value }))
-                                }
-                              />
-                              <label
-                                className={`flex items-center gap-1.5 text-xs text-[var(--ink-muted)] ${
-                                  leftEarlys[r.id] ? "opacity-100" : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-                                }`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={leftEarlys[r.id] ?? false}
-                                  onChange={(e) =>
-                                    setLeftEarlys((prev) => ({ ...prev, [r.id]: e.target.checked }))
-                                  }
-                                />
-                                Left early
-                              </label>
+                              <span className="text-sm text-[var(--ink)] truncate">{r.playerName}</span>
                             </div>
                           ))}
-                          {results.length === 0 && (
-                            <p className="text-xs text-[var(--ink-muted)]">No results yet.</p>
+                          {rows.length === 0 && (
+                            <div className="flex items-center px-3" style={{ height: SIGNIN_ROW_H }}>
+                              <span className="text-xs text-[var(--ink-muted)]">No players yet.</span>
+                            </div>
                           )}
                         </div>
+
+                        {/* Scrollable: everything editable. */}
+                        <div className="min-w-0 flex-1 overflow-x-auto">
+                          <div>
+                            <div
+                              className="grid gap-2 px-3 items-center text-[11px] font-medium text-[var(--ink-muted)]"
+                              style={{ gridTemplateColumns: signinCols, height: SIGNIN_HEADER_H, background: "var(--bg-subtle)" }}
+                            >
+                              <span className="text-center">Ace</span>
+                              <span>Amount</span>
+                              <span>Paid via</span>
+                              <span>Tag</span>
+                              <button
+                                type="button"
+                                onClick={() => toggleTagSort("tagAfter")}
+                                className="text-left flex items-center gap-0.5 hover:text-[var(--ink)]"
+                              >
+                                Tag After{tagSort.field === "tagAfter" && (tagSort.dir === "asc" ? " ▲" : " ▼")}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => toggleTagSort("position")}
+                                className="text-left flex items-center gap-0.5 hover:text-[var(--ink)]"
+                              >
+                                Score{tagSort.field === "position" && (tagSort.dir === "asc" ? " ▲" : " ▼")}
+                              </button>
+                              <span className="text-center" title="Left early">Left</span>
+                              <span />
+                            </div>
+                            {rows.map((r, idx) => (
+                            <div
+                              key={r.playerId}
+                              className="grid gap-2 items-center px-3"
+                              style={{
+                                gridTemplateColumns: signinCols,
+                                height: SIGNIN_ROW_H,
+                                background: idx % 2 === 1 ? "var(--row-tint)" : "var(--bg-card)",
+                                borderTop: "1px solid var(--line-3)",
+                              }}
+                            >
+                              {r.checkInId ? (
+                                <input
+                                  type="checkbox"
+                                  className="justify-self-center"
+                                  checked={checkInAcePot[r.playerId] ?? false}
+                                  onChange={(e) => setCheckInAcePot((prev) => ({ ...prev, [r.playerId]: e.target.checked }))}
+                                />
+                              ) : (
+                                <span />
+                              )}
+
+                              {r.checkInId ? (
+                                <>
+                                  <Input
+                                    type="number"
+                                    step="1"
+                                    inputMode="numeric"
+                                    className="h-8 text-sm"
+                                    placeholder="$"
+                                    value={checkInPaymentAmounts[r.playerId] ?? ""}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      setCheckInPaymentAmounts((prev) => ({
+                                        ...prev,
+                                        [r.playerId]: v === "" ? "" : String(Math.round(Number(v))),
+                                      }));
+                                    }}
+                                  />
+                                  <label className="flex items-center gap-1.5 text-xs text-[var(--ink-muted)]">
+                                    <input
+                                      type="checkbox"
+                                      checked={checkInPaymentMethods[r.playerId] === "TAP"}
+                                      onChange={(e) =>
+                                        setCheckInPaymentMethods((prev) => ({ ...prev, [r.playerId]: e.target.checked ? "TAP" : "" }))
+                                      }
+                                    />
+                                    Tap
+                                  </label>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddCheckIn({ playerId: r.playerId, division: r.division })}
+                                  className="text-xs text-[var(--ink-muted)] hover:text-[var(--ink)] underline text-left"
+                                  style={{ gridColumn: "span 2" }}
+                                >
+                                  + Sign in
+                                </button>
+                              )}
+
+                              {r.resultId ? (
+                                <Input
+                                  type="text"
+                                  placeholder={`# or ${BOB_TAG}`}
+                                  tabIndex={beforeTabIndex.get(r.playerId)}
+                                  className={`h-8 text-sm ${dupeBefore.has(r.playerId) ? "border-[var(--tint-warn-fg)]" : ""}`}
+                                  value={tagBefores[r.playerId] ?? ""}
+                                  onChange={(e) => setTagBefores((prev) => ({ ...prev, [r.playerId]: e.target.value }))}
+                                />
+                              ) : (
+                                <span className="text-xs font-mono text-[var(--ink-muted)]">{r.currentTag ?? "—"}</span>
+                              )}
+
+                              {r.resultId ? (
+                                <Input
+                                  type="text"
+                                  placeholder={`# or ${BOB_TAG}`}
+                                  tabIndex={afterTabIndex.get(r.playerId)}
+                                  className={`h-8 text-sm ${dupeAfter.has(r.playerId) ? "border-[var(--tint-warn-fg)]" : ""}`}
+                                  value={tagAfters[r.playerId] ?? ""}
+                                  onChange={(e) => setTagAfters((prev) => ({ ...prev, [r.playerId]: e.target.value }))}
+                                />
+                              ) : (
+                                <span className="text-xs text-[var(--ink-muted)]">—</span>
+                              )}
+
+                              <span className="text-xs font-mono text-[var(--ink-muted)]">{r.score ?? "—"}</span>
+
+                              {r.resultId ? (
+                                <input
+                                  type="checkbox"
+                                  title="Left early"
+                                  className="justify-self-center"
+                                  checked={leftEarlys[r.playerId] ?? false}
+                                  onChange={(e) => setLeftEarlys((prev) => ({ ...prev, [r.playerId]: e.target.checked }))}
+                                />
+                              ) : (
+                                <span />
+                              )}
+
+                              {r.checkInId ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveCheckIn(r.checkInId!)}
+                                  className="text-[var(--ink-muted)] hover:text-red-500 text-sm"
+                                  aria-label={`Remove ${r.playerName}`}
+                                >
+                                  ✕
+                                </button>
+                              ) : (
+                                <span />
+                              )}
+                            </div>
+                            ))}
+                            {rows.length === 0 && <div style={{ height: SIGNIN_ROW_H }} />}
+                          </div>
                         </div>
                       </div>
-                    ))}
-                    {anyDupes && (
-                      <p className="text-xs text-[var(--tint-warn-fg)]">
-                        ⚠ Duplicate tag numbers highlighted above (within the same division/pool) — fix before
-                        saving if that wasn&apos;t intentional.
-                      </p>
-                    )}
-                    {tagError && <p className="text-sm text-red-600">{tagError}</p>}
-                    <div className="flex items-center gap-3 pt-1 flex-wrap">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={handleAutoAssignTags}
-                        disabled={autoAssigning}
-                      >
-                        {autoAssigning ? "Assigning..." : "Auto-Assign New Tags"}
-                      </Button>
-                      <Button size="sm" onClick={handleSaveTags} disabled={tagsSaving}>
-                        {tagsSaving ? "Saving..." : "Save Tags"}
+                    </div>
+                  ))}
+                  {anyDupes && (
+                    <p className="text-xs text-[var(--tint-warn-fg)]">
+                      ⚠ Duplicate tag numbers highlighted above (within the same division/pool) — fix before
+                      saving if that wasn&apos;t intentional.
+                    </p>
+                  )}
+
+                  <div className="flex flex-col gap-2 pt-2 border-t border-[var(--line)]">
+                    <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                      <Select value={newCheckInSelection} onValueChange={setNewCheckInSelection}>
+                        <SelectTrigger className="w-full sm:w-56">
+                          <SelectValue placeholder="Add registered player..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            <SelectLabel>🔵 Blue Division</SelectLabel>
+                            {availableBluePlayers.map((p) => (
+                              <SelectItem key={`BLUE|${p.id}`} value={`BLUE|${p.id}`}>{p.name}</SelectItem>
+                            ))}
+                          </SelectGroup>
+                          <SelectGroup>
+                            <SelectLabel>🔴 Red Division</SelectLabel>
+                            {availableRedPlayers.map((p) => (
+                              <SelectItem key={`RED|${p.id}`} value={`RED|${p.id}`}>{p.name}</SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                      <Button size="sm" variant="outline" onClick={() => handleAddCheckIn()} disabled={addingCheckIn || !newCheckInSelection}>
+                        Add
                       </Button>
                     </div>
-                  </CardContent>
-                </Card>
-              </>
+                    <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                      <Input
+                        placeholder="New player name"
+                        value={newCheckInName}
+                        onChange={(e) => setNewCheckInName(e.target.value)}
+                        className="w-full sm:w-56"
+                      />
+                      <Select value={newCheckInNameDivision} onValueChange={(v) => setNewCheckInNameDivision(v as "BLUE" | "RED")}>
+                        <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="BLUE">Blue</SelectItem>
+                          <SelectItem value="RED">Red</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select value={newCheckInGender} onValueChange={(v) => setNewCheckInGender(v as "MALE" | "FEMALE")}>
+                        <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="MALE">Male</SelectItem>
+                          <SelectItem value="FEMALE">Female</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button size="sm" variant="outline" onClick={() => handleAddCheckIn()} disabled={addingCheckIn || !newCheckInName.trim()}>
+                        Add new
+                      </Button>
+                    </div>
+                    {checkInError && <p className="text-sm text-red-600">{checkInError}</p>}
+                  </div>
+
+                  <p className="text-sm text-[var(--ink-muted)]">
+                    {checkInTotals.count} checked in · ${checkInTotals.cash} cash · $
+                    {checkInTotals.tap} tap · {checkInTotals.acePot} ace pot
+                  </p>
+
+                  {tagError && <p className="text-sm text-red-600">{tagError}</p>}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <Button size="sm" variant="outline" onClick={handleAutoAssignTags} disabled={autoAssigning}>
+                      {autoAssigning ? "Assigning..." : "Auto-Assign New Tags"}
+                    </Button>
+                    <Button size="sm" onClick={handleSaveAll} disabled={playersSaving}>
+                      {playersSaving ? "Saving..." : "Save"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             );
           })()}
         </TabsContent>

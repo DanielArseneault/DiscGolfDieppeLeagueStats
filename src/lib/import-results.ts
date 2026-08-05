@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
-import { Division, MemberStatus } from "@/generated/prisma/client";
+import { Division } from "@/generated/prisma/client";
 import type { ParsedImport } from "@/lib/xlsx-parser";
+import { findOrCreatePlayer } from "@/lib/players";
 
 export async function upsertResultsForRound(
   roundId: number,
@@ -13,21 +14,7 @@ export async function upsertResultsForRound(
   ];
 
   for (const result of allResults) {
-    let player = result.username
-      ? await prisma.player.findFirst({ where: { username: result.username, leagueId } })
-      : await prisma.player.findFirst({ where: { name: result.name, leagueId } });
-
-    if (!player) {
-      player = await prisma.player.create({
-        data: {
-          name: result.name,
-          pdgaNumber: result.pdgaNumber,
-          username: result.username,
-          memberStatus: MemberStatus.NON_MEMBER,
-          league: { connect: { id: leagueId } },
-        },
-      });
-    }
+    const player = await findOrCreatePlayer(leagueId, result);
 
     await prisma.result.upsert({
       where: { roundId_playerId: { roundId, playerId: player.id } },

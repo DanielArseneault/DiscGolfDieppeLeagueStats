@@ -22,6 +22,11 @@ enum MemberStatus {
   NON_MEMBER
 }
 
+enum PaymentMethod {
+  CASH
+  TAP
+}
+
 model League {
   id              Int      @id @default(autoincrement())
   name            String
@@ -77,8 +82,9 @@ model Player {
   leagueId                 Int
   createdAt                DateTime     @default(now())
 
-  league  League   @relation(fields: [leagueId], references: [id])
-  results Result[]
+  league   League         @relation(fields: [leagueId], references: [id])
+  results  Result[]
+  checkIns RoundCheckIn[]
 
   @@unique([username, leagueId])
 }
@@ -109,6 +115,7 @@ model Round {
   poolWinners    ChampionshipPoolWinner[]
   bobTag         BobTag?
   reactions      RoundReaction[]
+  checkIns       RoundCheckIn[]
 
   @@unique([leagueId, weekNumber])
 }
@@ -126,6 +133,23 @@ model Result {
   tagAfter      String?
   leftEarly     Boolean  @default(false)
   createdAt     DateTime @default(now())
+
+  round  Round  @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  player Player @relation(fields: [playerId], references: [id])
+
+  @@unique([roundId, playerId])
+}
+
+model RoundCheckIn {
+  id            Int            @id @default(autoincrement())
+  roundId       Int
+  playerId      Int
+  division      Division
+  acePot        Boolean        @default(false)
+  paymentMethod PaymentMethod?
+  paymentAmount Float?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
   round  Round  @relation(fields: [roundId], references: [id], onDelete: Cascade)
   player Player @relation(fields: [playerId], references: [id])
