@@ -21,14 +21,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         include: { player: true },
         orderBy: [{ division: "asc" }, { player: { name: "asc" } }],
       },
-      league: {
-        include: {
-          players: {
-            include: { results: { select: { division: true }, distinct: ["division"] } },
-            orderBy: { name: "asc" },
-          },
-        },
-      },
+      league: true,
     },
   });
   if (!round) return NextResponse.json({ error: "Not found" }, { status: 404 });

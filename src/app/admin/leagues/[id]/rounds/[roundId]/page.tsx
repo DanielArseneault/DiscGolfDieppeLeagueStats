@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { computePoolSummaries } from "@/lib/pool-utils";
 import { normalizeTagInput, BOB_TAG, tagRank } from "@/lib/tags";
 import { useRouter } from "next/navigation";
@@ -75,15 +75,10 @@ interface CheckIn {
   playerId: number;
   division: "BLUE" | "RED";
   acePot: boolean;
+  paid: boolean;
   paymentMethod: "CASH" | "TAP" | null;
   paymentAmount: number | null;
   player: CheckInPlayer;
-}
-
-interface LeaguePlayer {
-  id: number;
-  name: string;
-  results: { division: string }[];
 }
 
 interface MergedPlayerRow {
@@ -116,7 +111,7 @@ interface Round {
   blueLayout: CourseLayout | null;
   redLayout: CourseLayout | null;
   checkIns: CheckIn[];
-  league: { players: LeaguePlayer[] };
+  league: { acePotPrice: number; priceWithTag: number; priceWithoutTag: number };
 }
 
 interface PlayerStanding {
@@ -168,6 +163,15 @@ function computePoolGroups(
   };
 }
 
+function checkInAmount(
+  currentTag: string | null,
+  acePot: boolean,
+  league: { priceWithTag: number; priceWithoutTag: number; acePotPrice: number }
+) {
+  const base = currentTag ? league.priceWithTag : league.priceWithoutTag;
+  return Math.round(base + (acePot ? league.acePotPrice : 0));
+}
+
 export default function RoundManagePage({
   params,
 }: {
@@ -178,8 +182,6 @@ export default function RoundManagePage({
 
   const [round, setRound] = useState<Round | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [resultsExpanded, setResultsExpanded] = useState(false);
-  const [draftToggling, setDraftToggling] = useState(false);
 
   // Championship pool state
   const [standings, setStandings] = useState<PlayerStanding[]>([]);
@@ -207,22 +209,16 @@ export default function RoundManagePage({
   // so the two merge into one row per player regardless of which side (a
   // RoundCheckIn, a Result, or both) actually backs that row.
   const [checkInAcePot, setCheckInAcePot] = useState<Record<number, boolean>>({});
+  const [checkInPaid, setCheckInPaid] = useState<Record<number, boolean>>({});
   const [checkInPaymentMethods, setCheckInPaymentMethods] = useState<Record<number, "CASH" | "TAP" | "">>({});
-  const [checkInPaymentAmounts, setCheckInPaymentAmounts] = useState<Record<number, string>>({});
-  const [newCheckInSelection, setNewCheckInSelection] = useState("");
-  const [newCheckInName, setNewCheckInName] = useState("");
-  const [newCheckInNameDivision, setNewCheckInNameDivision] = useState<"BLUE" | "RED">("BLUE");
-  const [newCheckInGender, setNewCheckInGender] = useState<"MALE" | "FEMALE">("MALE");
   const [addingCheckIn, setAddingCheckIn] = useState(false);
   const [checkInError, setCheckInError] = useState("");
-  const [syncingParticipants, setSyncingParticipants] = useState(false);
-  const [participantsSyncResult, setParticipantsSyncResult] = useState<{ blueCount: number; redCount: number } | null>(null);
-  const [participantsSyncError, setParticipantsSyncError] = useState("");
 
   const [tagBefores, setTagBefores] = useState<Record<number, string>>({});
   const [tagAfters, setTagAfters] = useState<Record<number, string>>({});
   const [leftEarlys, setLeftEarlys] = useState<Record<number, boolean>>({});
-  const [playersSaving, setPlayersSaving] = useState(false);
+  const [checkInSaving, setCheckInSaving] = useState(false);
+  const [resultsSaving, setResultsSaving] = useState(false);
   const [autoAssigning, setAutoAssigning] = useState(false);
   const [tagError, setTagError] = useState("");
   const [tagSort, setTagSort] = useState<{ field: "position" | "name" | "tagAfter"; dir: "asc" | "desc" }>({
@@ -248,7 +244,11 @@ export default function RoundManagePage({
 
   // Round date
   const [roundDate, setRoundDate] = useState("");
-  const [dateSaving, setDateSaving] = useState(false);
+
+  // Edit Round dialog — date, draft status, UDisc URL, all in one place
+  const [editRoundOpen, setEditRoundOpen] = useState(false);
+  const [editIsDraft, setEditIsDraft] = useState(false);
+  const [editRoundSaving, setEditRoundSaving] = useState(false);
 
   // Facebook link state
   const [facebookUrl, setFacebookUrl] = useState("");
@@ -257,7 +257,6 @@ export default function RoundManagePage({
 
   // UDisc sync state
   const [udiscUrl, setUdiscUrl] = useState("");
-  const [udiscSaving, setUdiscSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{ blueCount: number; redCount: number; syncedAt: string } | null>(null);
   const [syncError, setSyncError] = useState("");
@@ -267,6 +266,7 @@ export default function RoundManagePage({
     const data: Round = await fetch(`/api/rounds/${roundId}`).then((r) => r.json());
     setRound(data);
     setRoundDate(new Date(data.date).toISOString().slice(0, 10));
+    setEditIsDraft(data.isDraft);
 
     const loaded = data.ctpWinners.map((w) => ({ player: w.playerName, hole: w.hole, prize: w.prize ?? "" }));
     while (loaded.length < 2) loaded.push({ player: "", hole: 18, prize: "" });
@@ -293,16 +293,16 @@ export default function RoundManagePage({
     setLeftEarlys(leftEarly);
 
     const ciAcePot: Record<number, boolean> = {};
+    const ciPaid: Record<number, boolean> = {};
     const ciMethods: Record<number, "CASH" | "TAP" | ""> = {};
-    const ciAmounts: Record<number, string> = {};
     for (const c of data.checkIns) {
       ciAcePot[c.playerId] = c.acePot;
+      ciPaid[c.playerId] = c.paid;
       ciMethods[c.playerId] = c.paymentMethod ?? "";
-      ciAmounts[c.playerId] = c.paymentAmount != null ? String(c.paymentAmount) : "";
     }
     setCheckInAcePot(ciAcePot);
+    setCheckInPaid(ciPaid);
     setCheckInPaymentMethods(ciMethods);
-    setCheckInPaymentAmounts(ciAmounts);
 
     setFacebookUrl(data.facebookUrl ?? "");
     setFacebookLabel(data.facebookLabel ?? "");
@@ -341,17 +341,26 @@ export default function RoundManagePage({
     load();
   }, [roundId]);
 
-  // Round date
-  async function handleSaveDate() {
+  // Edit Round dialog — date, draft status, UDisc URL, all in one PATCH
+  async function handleSaveRoundEdit() {
     if (!roundDate) return;
-    setDateSaving(true);
+    setEditRoundSaving(true);
     await fetch(`/api/rounds/${roundId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date: roundDate }),
+      body: JSON.stringify({ date: roundDate, isDraft: editIsDraft, udiscUrl }),
     });
     await load();
-    setDateSaving(false);
+    setEditRoundSaving(false);
+    setEditRoundOpen(false);
+  }
+
+  function handleCancelEditRound() {
+    if (!round) return;
+    setRoundDate(new Date(round.date).toISOString().slice(0, 10));
+    setUdiscUrl(round.udiscUrl ?? "");
+    setEditIsDraft(round.isDraft);
+    setEditRoundOpen(false);
   }
 
   // Facebook link
@@ -364,18 +373,6 @@ export default function RoundManagePage({
     });
     await load();
     setFacebookSaving(false);
-  }
-
-  // UDisc sync
-  async function handleSaveUdiscUrl() {
-    setUdiscSaving(true);
-    await fetch(`/api/rounds/${roundId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ udiscUrl }),
-    });
-    await load();
-    setUdiscSaving(false);
   }
 
   async function handleSyncUdisc() {
@@ -473,43 +470,22 @@ export default function RoundManagePage({
     setBobSaving(false);
   }
 
-  // Check-in / sign-in & payment. `override` lets a row that already has a
-  // Result but no RoundCheckIn (e.g. an older round, or someone scored
-  // without ever being signed in) backfill a check-in for itself directly,
-  // bypassing the picker/name-entry fields below the table.
-  async function handleAddCheckIn(override?: { playerId: number; division: "BLUE" | "RED" }) {
-    let division: "BLUE" | "RED";
-    let playerId: number | undefined;
-    let name: string | undefined;
-
-    if (override) {
-      division = override.division;
-      playerId = override.playerId;
-    } else if (newCheckInSelection) {
-      const [div, id] = newCheckInSelection.split("|");
-      division = div as "BLUE" | "RED";
-      playerId = Number(id);
-    } else if (newCheckInName.trim()) {
-      division = newCheckInNameDivision;
-      name = newCheckInName.trim();
-    } else {
-      return;
-    }
-
+  // Backfills a RoundCheckIn for a row that already has a Result but no
+  // check-in (e.g. an older round, or someone scored without ever being
+  // signed in) — players themselves are brought in by the UDisc sync, not
+  // added manually here.
+  async function handleAddCheckIn(override: { playerId: number; division: "BLUE" | "RED" }) {
     setAddingCheckIn(true);
     setCheckInError("");
     const res = await fetch(`/api/rounds/${roundId}/check-in`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ playerId, name, division, gender: name ? newCheckInGender : undefined }),
+      body: JSON.stringify({ playerId: override.playerId, division: override.division }),
     });
     if (!res.ok) {
       const err = await res.json();
-      setCheckInError(err.error ?? "Failed to add player");
+      setCheckInError(err.error ?? "Failed to sign in player");
     } else {
-      setNewCheckInSelection("");
-      setNewCheckInName("");
-      setNewCheckInGender("MALE");
       await load();
     }
     setAddingCheckIn(false);
@@ -520,43 +496,30 @@ export default function RoundManagePage({
     await load();
   }
 
-  async function handleSyncParticipants() {
-    setSyncingParticipants(true);
-    setParticipantsSyncError("");
-    setParticipantsSyncResult(null);
-    try {
-      const res = await fetch(`/api/rounds/${roundId}/sync-participants`, { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) {
-        setParticipantsSyncError(data.error ?? "Sync failed");
-        return;
-      }
-      setParticipantsSyncResult({ blueCount: data.blueCount, redCount: data.redCount });
-      await load();
-    } catch {
-      setParticipantsSyncError("Failed to sync. Try again in a moment.");
-    } finally {
-      setSyncingParticipants(false);
-    }
-  }
-
   // Saves both the sign-in/payment fields (RoundCheckIn) and the tag ladder
   // fields (Result) in one action — they're separate models under the hood,
   // but the merged table shows them as one row per player.
-  async function handleSaveAll() {
+  // Check-in tab: sign-in/payment (RoundCheckIn) + the tag a player brought in
+  // (Result.tagBefore, recorded at check-in time).
+  async function handleSaveCheckIn() {
     if (!round) return;
-    setPlayersSaving(true);
+    setCheckInSaving(true);
     await Promise.all([
       fetch(`/api/rounds/${roundId}/check-in`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          checkIns: round.checkIns.map((c) => ({
-            id: c.id,
-            acePot: checkInAcePot[c.playerId] ?? false,
-            paymentMethod: checkInPaymentMethods[c.playerId] === "TAP" ? "TAP" : "CASH",
-            paymentAmount: checkInPaymentAmounts[c.playerId] ? Number(checkInPaymentAmounts[c.playerId]) : null,
-          })),
+          checkIns: round.checkIns.map((c) => {
+            const acePot = checkInAcePot[c.playerId] ?? false;
+            const paid = checkInPaid[c.playerId] ?? false;
+            return {
+              id: c.id,
+              acePot,
+              paid,
+              paymentMethod: checkInPaymentMethods[c.playerId] === "TAP" ? "TAP" : "CASH",
+              paymentAmount: paid ? checkInAmount(c.player.currentTag, acePot, round.league) : null,
+            };
+          }),
         }),
       }),
       fetch(`/api/rounds/${roundId}/tags`, {
@@ -566,14 +529,33 @@ export default function RoundManagePage({
           tags: round.results.map((r) => ({
             resultId: r.id,
             tagBefore: normalizeTagInput(tagBefores[r.playerId] ?? ""),
-            tagAfter: normalizeTagInput(tagAfters[r.playerId] ?? ""),
-            leftEarly: leftEarlys[r.playerId] ?? false,
           })),
         }),
       }),
     ]);
     await load();
-    setPlayersSaving(false);
+    setCheckInSaving(false);
+  }
+
+  // Results tab: the tag a player leaves with (Result.tagAfter) and whether
+  // they left early — both only make sense once a Result has been synced.
+  async function handleSaveResults() {
+    if (!round) return;
+    setResultsSaving(true);
+    await fetch(`/api/rounds/${roundId}/tags`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tags: round.results.map((r) => ({
+          resultId: r.id,
+          tagBefore: normalizeTagInput(tagBefores[r.playerId] ?? ""),
+          tagAfter: normalizeTagInput(tagAfters[r.playerId] ?? ""),
+          leftEarly: leftEarlys[r.playerId] ?? false,
+        })),
+      }),
+    });
+    await load();
+    setResultsSaving(false);
   }
 
   async function handleAutoAssignTags() {
@@ -660,18 +642,6 @@ export default function RoundManagePage({
     router.push(`/admin/leagues/${leagueId}`);
   }
 
-  async function handleToggleDraft() {
-    if (!round) return;
-    setDraftToggling(true);
-    await fetch(`/api/rounds/${roundId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isDraft: !round.isDraft }),
-    });
-    await load();
-    setDraftToggling(false);
-  }
-
   function openScoreEditor(result: RoundResult) {
     setEditingResult(result);
     const scores: Record<string, number> = {};
@@ -708,9 +678,6 @@ export default function RoundManagePage({
     setRemovingResult(null);
     setRemovingPlayer(false);
   }
-
-  const blueResults = useMemo(() => round?.results.filter((r) => r.division === "BLUE") ?? [], [round?.results]);
-  const redResults = useMemo(() => round?.results.filter((r) => r.division === "RED") ?? [], [round?.results]);
 
   // One row per player, merging their RoundCheckIn (sign-in/payment, exists
   // pre-round) and Result (score/tags, exists once results are synced) —
@@ -751,13 +718,34 @@ export default function RoundManagePage({
     return [...byPlayer.values()];
   }, [round?.checkIns, round?.results]);
 
-  const rosteredPlayerIds = useMemo(() => new Set(mergedPlayerRows.map((r) => r.playerId)), [mergedPlayerRows]);
-  const availableLeaguePlayers = useMemo(
-    () => (round?.league.players ?? []).filter((p) => !rosteredPlayerIds.has(p.id)),
-    [round?.league.players, rosteredPlayerIds]
-  );
-  const availableBluePlayers = availableLeaguePlayers.filter((p) => p.results.some((r) => r.division === "BLUE"));
-  const availableRedPlayers = availableLeaguePlayers.filter((p) => p.results.some((r) => r.division === "RED"));
+  // Shared by the Check-In and Results tabs: both render the same
+  // division/gender-grouped player rows, just with different editable
+  // columns (Check-In edits sign-in/payment/tagBefore, Results edits
+  // tagAfter/score/leftEarly). Tags are only reshuffled within a
+  // division/gender pool (see auto-assign), so the same number can
+  // legitimately show up in two different pools — duplicate detection is
+  // scoped per pool, not across the whole round.
+  const playerGroups = useMemo(() => {
+    return [
+      { label: "🔵 Blue Division", rows: mergedPlayerRows.filter((r) => r.division === "BLUE" && r.gender !== "FEMALE") },
+      { label: "🔵 Blue Division — Female", rows: mergedPlayerRows.filter((r) => r.division === "BLUE" && r.gender === "FEMALE") },
+      { label: "🔴 Red Division", rows: mergedPlayerRows.filter((r) => r.division === "RED" && r.gender !== "FEMALE") },
+      { label: "🔴 Red Division — Female", rows: mergedPlayerRows.filter((r) => r.division === "RED" && r.gender === "FEMALE") },
+    ]
+      .filter(({ label, rows }) => rows.length > 0 || !label.includes("Female"))
+      .map(({ label, rows }) => {
+        const sorted = sortPlayerRows(rows);
+        return {
+          label,
+          rows: sorted,
+          dupeBefore: findDuplicateTags(sorted, tagBefores),
+          dupeAfter: findDuplicateTags(sorted, tagAfters),
+        };
+      });
+  }, [mergedPlayerRows, tagSort, tagBefores, tagAfters]);
+
+  const resultsById = useMemo(() => new Map((round?.results ?? []).map((r) => [r.id, r])), [round?.results]);
+
   const checkInTotals = useMemo(() => {
     const checkIns = round?.checkIns ?? [];
     let cash = 0;
@@ -765,13 +753,15 @@ export default function RoundManagePage({
     let acePot = 0;
     for (const c of checkIns) {
       const isTap = (checkInPaymentMethods[c.playerId] ?? c.paymentMethod ?? "") === "TAP";
-      const amount = Number(checkInPaymentAmounts[c.playerId] ?? c.paymentAmount ?? 0) || 0;
+      const acePotChecked = checkInAcePot[c.playerId] ?? c.acePot;
+      const paid = checkInPaid[c.playerId] ?? c.paid;
+      const amount = paid && round ? checkInAmount(c.player.currentTag, acePotChecked, round.league) : 0;
       if (isTap) tap += amount;
       else cash += amount;
-      if (checkInAcePot[c.playerId] ?? c.acePot) acePot++;
+      if (acePotChecked) acePot++;
     }
     return { count: checkIns.length, cash, tap, acePot };
-  }, [round?.checkIns, checkInPaymentMethods, checkInPaymentAmounts, checkInAcePot]);
+  }, [round, checkInPaymentMethods, checkInAcePot, checkInPaid]);
   const poolData = useMemo(
     () => round?.isChampionship ? computePoolGroups(round.results, standings) : null,
     [round?.isChampionship, round?.results, standings]
@@ -833,73 +823,23 @@ export default function RoundManagePage({
             )}
           </h1>
           <div className="flex flex-wrap items-center gap-2 mt-0.5">
-            <Input
-              type="date"
-              value={roundDate}
-              onChange={(e) => setRoundDate(e.target.value)}
-              className="h-7 w-40 text-sm"
-            />
-            {roundDate !== new Date(round.date).toISOString().slice(0, 10) && (
-              <Button size="sm" className="h-7" onClick={handleSaveDate} disabled={dateSaving}>
-                {dateSaving ? "Saving..." : "Save"}
-              </Button>
-            )}
-            <span className="text-sm text-[var(--ink-muted)]">· {round.results.length} players</span>
+            <span className="text-sm text-[var(--ink-muted)]">
+              {new Date(round.date).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
+              {" "}· {round.results.length} players
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7"
+              onClick={handleSyncUdisc}
+              disabled={syncing || !round.udiscUrl}
+              title={!round.udiscUrl ? "Set the UDisc Event URL via Edit first" : undefined}
+            >
+              {syncing ? "Syncing..." : "🔄 Sync from UDisc"}
+            </Button>
           </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={handleToggleDraft} disabled={draftToggling}>
-            {draftToggling ? "Saving..." : round.isDraft ? "Remove Draft" : "Mark as Draft"}
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/rounds/${roundId}`}>View Public Page</Link>
-          </Button>
-        </div>
-      </div>
-
-      <Tabs defaultValue="results">
-        <TabsList className="mb-2">
-          <TabsTrigger value="results">Results</TabsTrigger>
-          <TabsTrigger value="prizes">Prizes & Awards</TabsTrigger>
-          <TabsTrigger value="tags">
-            Players
-            {round.results.some((r) => r.tagAfter != null) && (
-              <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-[var(--positive)] inline-block" />
-            )}
-          </TabsTrigger>
-        </TabsList>
-
-        {/* ── RESULTS & CTP ── */}
-        <TabsContent value="results" className="space-y-6 mt-4 max-w-3xl">
-
-          {/* UDisc Sync */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">🔄 Sync from UDisc</CardTitle>
-              <p className="text-xs text-[var(--ink-muted)]">
-                Pull the latest leaderboard from a UDisc event URL. Safe to re-run any time — existing results are updated, not duplicated.
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">UDisc Event URL</Label>
-                <Input
-                  type="url"
-                  value={udiscUrl}
-                  onChange={(e) => setUdiscUrl(e.target.value)}
-                  placeholder="https://udisc.com/events/..."
-                />
-              </div>
-              <div className="flex items-center gap-3">
-                {udiscUrl !== (round.udiscUrl ?? "") && (
-                  <Button size="sm" variant="outline" onClick={handleSaveUdiscUrl} disabled={udiscSaving}>
-                    {udiscSaving ? "Saving..." : "Save URL"}
-                  </Button>
-                )}
-                <Button size="sm" onClick={handleSyncUdisc} disabled={syncing || !round.udiscUrl}>
-                  {syncing ? "Syncing..." : "Sync Now"}
-                </Button>
-              </div>
+          {(syncResult || syncInfo || syncError) && (
+            <div className="mt-1">
               {syncResult && (
                 <p className="text-sm text-[var(--positive)]">
                   Synced {syncResult.blueCount} Blue / {syncResult.redCount} Red — just now
@@ -907,145 +847,221 @@ export default function RoundManagePage({
               )}
               {syncInfo && <p className="text-sm text-[var(--tint-warn-fg)]">{syncInfo}</p>}
               {syncError && <p className="text-sm text-red-600">{syncError}</p>}
-            </CardContent>
-          </Card>
+            </div>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => setEditRoundOpen(true)}>
+            Edit
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/rounds/${roundId}`}>View Public Page</Link>
+          </Button>
+        </div>
+      </div>
 
-          {/* Results summary */}
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Results Summary</CardTitle>
-                {!round.isChampionship && (blueResults.length > 5 || redResults.length > 5) && (
-                  <button
-                    onClick={() => setResultsExpanded((v) => !v)}
-                    className="text-xs text-[var(--ink-muted)] hover:text-[var(--ink)] transition-colors"
-                  >
-                    {resultsExpanded ? "Show less ↑" : "Show all ↓"}
-                  </button>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              {round.isChampionship && poolData ? (
-                <div className="space-y-5">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    {poolData.groups.map((g) => {
-                      const summary = currentSummaries.find((s) => s.pool === g.pool);
-                      const firstName = summary?.first?.playerName;
-                      const secondName = summary?.second?.playerName;
-                      return (
-                        <div key={g.pool}>
-                          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--tint-warn-fg)] mb-2">{g.label}</p>
-                          <ol className="space-y-1">
-                            {g.results.map((r) => {
-                              const isFirst = r.player.name === firstName;
-                              const isSecond = r.player.name === secondName;
-                              return (
-                                <li key={r.id} className={`text-sm flex items-center gap-2 ${isFirst || isSecond ? "font-semibold" : ""}`}>
-                                  <span className="w-5 text-center">
-                                    {isFirst ? "🥇" : isSecond ? "🥈" : <span className="text-[var(--ink-muted)]">·</span>}
-                                  </span>
-                                  <button
-                                    onClick={() => openScoreEditor(r)}
-                                    className="text-[var(--ink)] hover:text-blue-600 hover:underline text-left"
-                                  >
-                                    {r.player.name}
-                                  </button>
-                                  <span className="ml-auto font-mono text-xs text-[var(--ink-muted)]">{r.score}</span>
-                                </li>
-                              );
-                            })}
-                          </ol>
+      <Tabs defaultValue="tags">
+        <TabsList className="mb-2">
+          <TabsTrigger value="tags">
+            Check-In
+            {round.results.some((r) => r.tagAfter != null) && (
+              <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-[var(--positive)] inline-block" />
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="results">Results</TabsTrigger>
+          <TabsTrigger value="prizes">Prizes & Awards</TabsTrigger>
+        </TabsList>
+
+        {/* ── RESULTS & CTP ── */}
+        <TabsContent value="results" className="space-y-6 mt-4 max-w-3xl">
+
+          {/* Scores, Tag After & Left Early */}
+          {(() => {
+            const PLAYER_COL_WIDTH = 168;
+            const HEADER_H = 36;
+            const ROW_H = 52;
+            const HEADER_STICKY_TOP = 56;
+            const resultsCols = "minmax(3.5rem,1fr) minmax(3.5rem,1fr) minmax(3rem,0.6fr) 2.5rem";
+            const anyDupes = playerGroups.some((g) => g.dupeBefore.size > 0 || g.dupeAfter.size > 0);
+
+            // Explicit tabIndex so Tab moves down a column (Tag, then Tag
+            // After) instead of the browser's default left-to-right order.
+            const tagBeforeTabIndex = new Map<number, number>();
+            const tagAfterTabIndex = new Map<number, number>();
+            let tabCursor = 1;
+            for (const { rows } of playerGroups) {
+              for (const r of rows) if (r.resultId) tagBeforeTabIndex.set(r.playerId, tabCursor++);
+              for (const r of rows) if (r.resultId) tagAfterTabIndex.set(r.playerId, tabCursor++);
+            }
+
+            return (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">📊 Scores & Tag Ladder</CardTitle>
+                  <p className="text-xs text-[var(--ink-muted)]">
+                    Tag is the number a player brought in — also editable on the Check-In tab, and kept in
+                    sync since both tabs share the same data. Tag After and Left Early only exist once a
+                    player&apos;s Result is synced. Auto-Assign fills Tag After for everyone from score and
+                    the tag they brought in — review before saving.
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {playerGroups.map(({ label, rows, dupeBefore, dupeAfter }) => (
+                    <div key={label}>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)] mb-2">{label}</p>
+                      <div
+                        className="flex overflow-clip rounded-[var(--r-card)] border"
+                        style={{ borderColor: "var(--line)", background: "var(--bg-card)" }}
+                      >
+                        {/* Frozen: player name — plain flow, never scrolls. */}
+                        <div className="shrink-0" style={{ width: PLAYER_COL_WIDTH, borderRight: "1px solid var(--line)" }}>
+                          <div
+                            className="flex items-center px-3 sticky z-10"
+                            style={{ height: HEADER_H, top: HEADER_STICKY_TOP, background: "var(--bg-subtle)" }}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => toggleTagSort("name")}
+                              className="text-left flex items-center gap-0.5 text-[11px] font-medium text-[var(--ink-muted)] hover:text-[var(--ink)]"
+                            >
+                              Player{tagSort.field === "name" && (tagSort.dir === "asc" ? " ▲" : " ▼")}
+                            </button>
+                          </div>
+                          {rows.map((r, idx) => (
+                            <div
+                              key={r.playerId}
+                              className="flex items-center px-3"
+                              style={{
+                                height: ROW_H,
+                                background: idx % 2 === 1 ? "var(--row-tint)" : "var(--bg-card)",
+                                borderTop: "1px solid var(--line-3)",
+                              }}
+                            >
+                              {r.resultId ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const res = resultsById.get(r.resultId!);
+                                    if (res) openScoreEditor(res);
+                                  }}
+                                  className="text-sm text-[var(--ink)] truncate hover:text-blue-600 hover:underline text-left"
+                                >
+                                  {r.playerName}
+                                </button>
+                              ) : (
+                                <span className="text-sm text-[var(--ink-muted)] truncate">{r.playerName}</span>
+                              )}
+                            </div>
+                          ))}
+                          {rows.length === 0 && (
+                            <div className="flex items-center px-3" style={{ height: ROW_H }}>
+                              <span className="text-xs text-[var(--ink-muted)]">No players yet.</span>
+                            </div>
+                          )}
                         </div>
-                      );
-                    })}
-                  </div>
-                  {(poolData.blueUnqualified.length > 0 || poolData.redUnqualified.length > 0) && (
-                    <div className="pt-3 border-t border-[var(--line-2)]">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)] mb-3">Did Not Qualify</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                        {poolData.blueUnqualified.length > 0 && (
+
+                        {/* Scrollable: editable columns. */}
+                        <div className="min-w-0 flex-1">
                           <div>
-                            <p className="text-xs text-[var(--ink-muted)] mb-1">🔵 Blue</p>
-                            <ol className="space-y-1">
-                              {poolData.blueUnqualified.map((r, i) => (
-                                <li key={r.id} className="text-sm flex items-center gap-2">
-                                  <span className="text-[var(--ink-muted)] w-4">{i + 1}.</span>
-                                  <button
-                                    onClick={() => openScoreEditor(r)}
-                                    className="text-[var(--ink-muted)] hover:text-blue-600 hover:underline text-left"
-                                  >
-                                    {r.player.name}
-                                  </button>
-                                  <span className="ml-auto font-mono text-xs text-[var(--ink-muted)]">{r.score}</span>
-                                </li>
-                              ))}
-                            </ol>
+                            <div
+                              className="grid gap-2 px-3 items-center text-[11px] font-medium text-[var(--ink-muted)] sticky z-10"
+                              style={{ gridTemplateColumns: resultsCols, height: HEADER_H, top: HEADER_STICKY_TOP, background: "var(--bg-subtle)" }}
+                            >
+                              <span>Tag</span>
+                              <button
+                                type="button"
+                                onClick={() => toggleTagSort("tagAfter")}
+                                className="text-left flex items-center gap-0.5 hover:text-[var(--ink)]"
+                              >
+                                Tag After{tagSort.field === "tagAfter" && (tagSort.dir === "asc" ? " ▲" : " ▼")}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => toggleTagSort("position")}
+                                className="text-left flex items-center gap-0.5 hover:text-[var(--ink)]"
+                              >
+                                Score{tagSort.field === "position" && (tagSort.dir === "asc" ? " ▲" : " ▼")}
+                              </button>
+                              <span className="text-center" title="Left early">Left</span>
+                            </div>
+                            {rows.map((r, idx) => (
+                            <div
+                              key={r.playerId}
+                              className="grid gap-2 items-center px-3"
+                              style={{
+                                gridTemplateColumns: resultsCols,
+                                height: ROW_H,
+                                background: idx % 2 === 1 ? "var(--row-tint)" : "var(--bg-card)",
+                                borderTop: "1px solid var(--line-3)",
+                              }}
+                            >
+                              {r.resultId ? (
+                                <Input
+                                  type="text"
+                                  placeholder={`# or ${BOB_TAG}`}
+                                  tabIndex={tagBeforeTabIndex.get(r.playerId)}
+                                  className={`h-8 max-w-14 text-sm ${dupeBefore.has(r.playerId) ? "border-[var(--tint-warn-fg)]" : ""}`}
+                                  value={tagBefores[r.playerId] ?? ""}
+                                  onChange={(e) => setTagBefores((prev) => ({ ...prev, [r.playerId]: e.target.value }))}
+                                />
+                              ) : (
+                                <span className="text-xs font-mono text-[var(--ink-muted)]">{r.currentTag ?? "—"}</span>
+                              )}
+
+                              {r.resultId ? (
+                                <Input
+                                  type="text"
+                                  placeholder={`# or ${BOB_TAG}`}
+                                  tabIndex={tagAfterTabIndex.get(r.playerId)}
+                                  className={`h-8 max-w-14 text-sm ${dupeAfter.has(r.playerId) ? "border-[var(--tint-warn-fg)]" : ""}`}
+                                  value={tagAfters[r.playerId] ?? ""}
+                                  onChange={(e) => setTagAfters((prev) => ({ ...prev, [r.playerId]: e.target.value }))}
+                                />
+                              ) : (
+                                <span className="text-xs text-[var(--ink-muted)]">—</span>
+                              )}
+
+                              <span className="text-xs font-mono text-[var(--ink-muted)]">{r.score ?? "—"}</span>
+
+                              {r.resultId ? (
+                                <input
+                                  type="checkbox"
+                                  title="Left early"
+                                  className="justify-self-center"
+                                  checked={leftEarlys[r.playerId] ?? false}
+                                  onChange={(e) => setLeftEarlys((prev) => ({ ...prev, [r.playerId]: e.target.checked }))}
+                                />
+                              ) : (
+                                <span />
+                              )}
+                            </div>
+                            ))}
+                            {rows.length === 0 && <div style={{ height: ROW_H }} />}
                           </div>
-                        )}
-                        {poolData.redUnqualified.length > 0 && (
-                          <div>
-                            <p className="text-xs text-[var(--ink-muted)] mb-1">🔴 Red</p>
-                            <ol className="space-y-1">
-                              {poolData.redUnqualified.map((r, i) => (
-                                <li key={r.id} className="text-sm flex items-center gap-2">
-                                  <span className="text-[var(--ink-muted)] w-4">{i + 1}.</span>
-                                  <button
-                                    onClick={() => openScoreEditor(r)}
-                                    className="text-[var(--ink-muted)] hover:text-blue-600 hover:underline text-left"
-                                  >
-                                    {r.player.name}
-                                  </button>
-                                  <span className="ml-auto font-mono text-xs text-[var(--ink-muted)]">{r.score}</span>
-                                </li>
-                              ))}
-                            </ol>
-                          </div>
-                        )}
+                        </div>
                       </div>
                     </div>
+                  ))}
+                  {anyDupes && (
+                    <p className="text-xs text-[var(--tint-warn-fg)]">
+                      ⚠ Duplicate tag numbers highlighted above (within the same division/pool) — fix before
+                      saving if that wasn&apos;t intentional.
+                    </p>
                   )}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  {[
-                    { label: "🔵 Blue Division", results: blueResults },
-                    { label: "🔴 Red Division", results: redResults },
-                  ].map(({ label, results }) => {
-                    const visible = resultsExpanded ? results : results.slice(0, 5);
-                    const posCounts = results.reduce<Record<number, number>>((acc, r) => {
-                      acc[r.position] = (acc[r.position] ?? 0) + 1;
-                      return acc;
-                    }, {});
-                    return (
-                      <div key={label}>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)] mb-2">{label}</p>
-                        <ol className="space-y-1">
-                          {visible.map((r) => (
-                            <li key={r.id} className="text-sm flex items-center gap-2">
-                              <span className="text-[var(--ink-muted)] w-7 shrink-0 tabular-nums">
-                                {posCounts[r.position] > 1 ? `T${r.position}` : `${r.position}.`}
-                              </span>
-                              <button
-                                onClick={() => openScoreEditor(r)}
-                                className="text-[var(--ink)] hover:text-blue-600 hover:underline text-left"
-                              >
-                                {r.player.name}
-                              </button>
-                              <span className="ml-auto font-mono text-xs text-[var(--ink-muted)]">{r.score}</span>
-                            </li>
-                          ))}
-                          {!resultsExpanded && results.length > 5 && (
-                            <li className="text-xs text-[var(--ink-muted)]">+{results.length - 5} more</li>
-                          )}
-                        </ol>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+
+                  {tagError && <p className="text-sm text-red-600">{tagError}</p>}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <Button size="sm" variant="outline" onClick={handleAutoAssignTags} disabled={autoAssigning}>
+                      {autoAssigning ? "Assigning..." : "Auto-Assign New Tags"}
+                    </Button>
+                    <Button size="sm" onClick={handleSaveResults} disabled={resultsSaving}>
+                      {resultsSaving ? "Saving..." : "Save"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* Pool Champions override (championship only) */}
           {round.isChampionship && poolData && poolData.groups.length > 0 && (
@@ -1112,15 +1128,6 @@ export default function RoundManagePage({
               </CardContent>
             </Card>
           )}
-
-          <div className="pt-4 border-t border-[var(--line)]">
-            <Button variant="destructive" onClick={handleDelete} disabled={deleting} size="sm">
-              {deleting ? "Deleting..." : "Delete Round"}
-            </Button>
-            <p className="text-xs text-[var(--ink-muted)] mt-1">
-              Permanently deletes all results for this round.
-            </p>
-          </div>
         </TabsContent>
 
         {/* ── PRIZES & AWARDS ── */}
@@ -1488,98 +1495,49 @@ export default function RoundManagePage({
           </Card>
         </TabsContent>
 
-        {/* ── PLAYERS ── */}
+        {/* ── CHECK-IN ── */}
         <TabsContent value="tags" className="space-y-6 mt-4 max-w-3xl">
-          {/* Sync registered players from UDisc */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">🔄 Sync Registered Players</CardTitle>
-              <p className="text-xs text-[var(--ink-muted)]">
-                Pulls the current sign-up list from the UDisc event&apos;s Participants page and checks
-                everyone in below (division only — existing payment info is left alone). Safe to re-run
-                any time before the round.
-                {!round.udiscUrl && " Set the UDisc Event URL in the Results tab first."}
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <Button size="sm" onClick={handleSyncParticipants} disabled={syncingParticipants || !round.udiscUrl}>
-                {syncingParticipants ? "Syncing..." : "Sync Now"}
-              </Button>
-              {participantsSyncResult && (
-                <p className="text-sm text-[var(--positive)]">
-                  Synced {participantsSyncResult.blueCount} Blue / {participantsSyncResult.redCount} Red — just now
-                </p>
-              )}
-              {participantsSyncError && <p className="text-sm text-red-600">{participantsSyncError}</p>}
-            </CardContent>
-          </Card>
-
-          {/* Sign-in, payment & tag ladder — one row per player */}
+          {/* Sign-in & payment — one row per player */}
           {(() => {
-            // Tags are only reshuffled within a division/gender pool (see auto-assign),
-            // so the same number can legitimately show up in two different pools —
-            // duplicate detection is scoped per pool, not across the whole round.
-            const groups = [
-              { label: "🔵 Blue Division", rows: mergedPlayerRows.filter((r) => r.division === "BLUE" && r.gender !== "FEMALE") },
-              { label: "🔵 Blue Division — Female", rows: mergedPlayerRows.filter((r) => r.division === "BLUE" && r.gender === "FEMALE") },
-              { label: "🔴 Red Division", rows: mergedPlayerRows.filter((r) => r.division === "RED" && r.gender !== "FEMALE") },
-              { label: "🔴 Red Division — Female", rows: mergedPlayerRows.filter((r) => r.division === "RED" && r.gender === "FEMALE") },
-            ]
-              .filter(({ label, rows }) => rows.length > 0 || !label.includes("Female"))
-              .map(({ label, rows }) => {
-                const sorted = sortPlayerRows(rows);
-                return {
-                  label,
-                  rows: sorted,
-                  dupeBefore: findDuplicateTags(sorted, tagBefores),
-                  dupeAfter: findDuplicateTags(sorted, tagAfters),
-                };
-              });
+            const anyDupes = playerGroups.some((g) => g.dupeBefore.size > 0);
 
-            const anyDupes = groups.some((g) => g.dupeBefore.size > 0 || g.dupeAfter.size > 0);
-
-            // Explicit tabIndex so Tab moves down a column (Brought In, then
-            // Tag After) instead of the browser's default left-to-right order.
-            // Only rows with a synced Result have anything to tab through.
-            const beforeTabIndex = new Map<number, number>();
-            const afterTabIndex = new Map<number, number>();
+            // Explicit tabIndex so Tab moves straight down the Tag column
+            // instead of the browser's default left-to-right row order. Only
+            // rows with a synced Result have anything to tab through.
+            const tagTabIndex = new Map<number, number>();
             let tabCursor = 1;
-            for (const { rows } of groups) {
-              for (const r of rows) if (r.resultId) beforeTabIndex.set(r.playerId, tabCursor++);
-              for (const r of rows) if (r.resultId) afterTabIndex.set(r.playerId, tabCursor++);
+            for (const { rows } of playerGroups) {
+              for (const r of rows) if (r.resultId) tagTabIndex.set(r.playerId, tabCursor++);
             }
 
             // Player name is frozen (plain flow, outside the scroll area) so it
-            // stays visible while scrolling right to edit tags/scores.
+            // stays visible while scrolling right to edit payment/tag.
             const PLAYER_COL_WIDTH = 168;
             const SIGNIN_HEADER_H = 36;
             const SIGNIN_ROW_H = 52;
-            const signinCols =
-              "2.5rem minmax(4.5rem,1fr) minmax(3.5rem,0.6fr) minmax(3.5rem,1fr) minmax(3.5rem,1fr) minmax(3rem,0.6fr) 2.5rem 2rem";
+            // Matches AdminNav's sticky height (h-14) so the table header docks
+            // just below the nav bar instead of under it.
+            const SIGNIN_HEADER_STICKY_TOP = 56;
+            const signinCols = "2.5rem 2.5rem 2.5rem minmax(3.5rem,1fr) minmax(4.5rem,1fr) 2rem";
 
             return (
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">✅ Sign-In, Payment & Tags</CardTitle>
-                  <p className="text-xs text-[var(--ink-muted)]">
-                    Division/Ace/Paid/Amount come from sign-in and are editable any time; Score/Tag After
-                    only exist once results are synced. Removing a player here only edits the sign-in
-                    list — it never touches their score.
-                  </p>
+                  <CardTitle className="text-base">✅ Sign-In & Payment</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {groups.map(({ label, rows, dupeBefore, dupeAfter }) => (
+                  {playerGroups.map(({ label, rows, dupeBefore }) => (
                     <div key={label}>
                       <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)] mb-2">{label}</p>
                       <div
-                        className="flex overflow-hidden rounded-[var(--r-card)] border"
+                        className="flex overflow-clip rounded-[var(--r-card)] border"
                         style={{ borderColor: "var(--line)", background: "var(--bg-card)" }}
                       >
                         {/* Frozen: player name — plain flow, never scrolls. */}
                         <div className="shrink-0" style={{ width: PLAYER_COL_WIDTH, borderRight: "1px solid var(--line)" }}>
                           <div
-                            className="flex items-center px-3"
-                            style={{ height: SIGNIN_HEADER_H, background: "var(--bg-subtle)" }}
+                            className="flex items-center px-3 sticky z-10"
+                            style={{ height: SIGNIN_HEADER_H, top: SIGNIN_HEADER_STICKY_TOP, background: "var(--bg-subtle)" }}
                           >
                             <button
                               type="button"
@@ -1610,31 +1568,17 @@ export default function RoundManagePage({
                         </div>
 
                         {/* Scrollable: everything editable. */}
-                        <div className="min-w-0 flex-1 overflow-x-auto">
+                        <div className="min-w-0 flex-1">
                           <div>
                             <div
-                              className="grid gap-2 px-3 items-center text-[11px] font-medium text-[var(--ink-muted)]"
-                              style={{ gridTemplateColumns: signinCols, height: SIGNIN_HEADER_H, background: "var(--bg-subtle)" }}
+                              className="grid gap-2 px-3 items-center text-[11px] font-medium text-[var(--ink-muted)] sticky z-10"
+                              style={{ gridTemplateColumns: signinCols, height: SIGNIN_HEADER_H, top: SIGNIN_HEADER_STICKY_TOP, background: "var(--bg-subtle)" }}
                             >
+                              <span className="text-center" title="Paid">Paid</span>
                               <span className="text-center">Ace</span>
-                              <span>Amount</span>
-                              <span>Paid via</span>
+                              <span className="text-center" title="Paid via Tap">Tap</span>
                               <span>Tag</span>
-                              <button
-                                type="button"
-                                onClick={() => toggleTagSort("tagAfter")}
-                                className="text-left flex items-center gap-0.5 hover:text-[var(--ink)]"
-                              >
-                                Tag After{tagSort.field === "tagAfter" && (tagSort.dir === "asc" ? " ▲" : " ▼")}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => toggleTagSort("position")}
-                                className="text-left flex items-center gap-0.5 hover:text-[var(--ink)]"
-                              >
-                                Score{tagSort.field === "position" && (tagSort.dir === "asc" ? " ▲" : " ▼")}
-                              </button>
-                              <span className="text-center" title="Left early">Left</span>
+                              <span>Amount</span>
                               <span />
                             </div>
                             {rows.map((r, idx) => (
@@ -1652,6 +1596,17 @@ export default function RoundManagePage({
                                 <input
                                   type="checkbox"
                                   className="justify-self-center"
+                                  checked={checkInPaid[r.playerId] ?? false}
+                                  onChange={(e) => setCheckInPaid((prev) => ({ ...prev, [r.playerId]: e.target.checked }))}
+                                />
+                              ) : (
+                                <span />
+                              )}
+
+                              {r.checkInId ? (
+                                <input
+                                  type="checkbox"
+                                  className="justify-self-center"
                                   checked={checkInAcePot[r.playerId] ?? false}
                                   onChange={(e) => setCheckInAcePot((prev) => ({ ...prev, [r.playerId]: e.target.checked }))}
                                 />
@@ -1660,39 +1615,20 @@ export default function RoundManagePage({
                               )}
 
                               {r.checkInId ? (
-                                <>
-                                  <Input
-                                    type="number"
-                                    step="1"
-                                    inputMode="numeric"
-                                    className="h-8 text-sm"
-                                    placeholder="$"
-                                    value={checkInPaymentAmounts[r.playerId] ?? ""}
-                                    onChange={(e) => {
-                                      const v = e.target.value;
-                                      setCheckInPaymentAmounts((prev) => ({
-                                        ...prev,
-                                        [r.playerId]: v === "" ? "" : String(Math.round(Number(v))),
-                                      }));
-                                    }}
-                                  />
-                                  <label className="flex items-center gap-1.5 text-xs text-[var(--ink-muted)]">
-                                    <input
-                                      type="checkbox"
-                                      checked={checkInPaymentMethods[r.playerId] === "TAP"}
-                                      onChange={(e) =>
-                                        setCheckInPaymentMethods((prev) => ({ ...prev, [r.playerId]: e.target.checked ? "TAP" : "" }))
-                                      }
-                                    />
-                                    Tap
-                                  </label>
-                                </>
+                                <input
+                                  type="checkbox"
+                                  className="justify-self-center"
+                                  checked={checkInPaymentMethods[r.playerId] === "TAP"}
+                                  onChange={(e) =>
+                                    setCheckInPaymentMethods((prev) => ({ ...prev, [r.playerId]: e.target.checked ? "TAP" : "" }))
+                                  }
+                                />
                               ) : (
                                 <button
                                   type="button"
                                   onClick={() => handleAddCheckIn({ playerId: r.playerId, division: r.division })}
-                                  className="text-xs text-[var(--ink-muted)] hover:text-[var(--ink)] underline text-left"
-                                  style={{ gridColumn: "span 2" }}
+                                  disabled={addingCheckIn}
+                                  className="text-xs text-[var(--ink-muted)] hover:text-[var(--ink)] underline text-left disabled:opacity-50"
                                 >
                                   + Sign in
                                 </button>
@@ -1702,8 +1638,8 @@ export default function RoundManagePage({
                                 <Input
                                   type="text"
                                   placeholder={`# or ${BOB_TAG}`}
-                                  tabIndex={beforeTabIndex.get(r.playerId)}
-                                  className={`h-8 text-sm ${dupeBefore.has(r.playerId) ? "border-[var(--tint-warn-fg)]" : ""}`}
+                                  tabIndex={tagTabIndex.get(r.playerId)}
+                                  className={`h-8 max-w-14 text-sm ${dupeBefore.has(r.playerId) ? "border-[var(--tint-warn-fg)]" : ""}`}
                                   value={tagBefores[r.playerId] ?? ""}
                                   onChange={(e) => setTagBefores((prev) => ({ ...prev, [r.playerId]: e.target.value }))}
                                 />
@@ -1711,31 +1647,14 @@ export default function RoundManagePage({
                                 <span className="text-xs font-mono text-[var(--ink-muted)]">{r.currentTag ?? "—"}</span>
                               )}
 
-                              {r.resultId ? (
-                                <Input
-                                  type="text"
-                                  placeholder={`# or ${BOB_TAG}`}
-                                  tabIndex={afterTabIndex.get(r.playerId)}
-                                  className={`h-8 text-sm ${dupeAfter.has(r.playerId) ? "border-[var(--tint-warn-fg)]" : ""}`}
-                                  value={tagAfters[r.playerId] ?? ""}
-                                  onChange={(e) => setTagAfters((prev) => ({ ...prev, [r.playerId]: e.target.value }))}
-                                />
+                              {r.checkInId ? (
+                                <span className="text-sm tabular-nums">
+                                  {checkInPaid[r.playerId]
+                                    ? `$${checkInAmount(r.currentTag, checkInAcePot[r.playerId] ?? false, round!.league)}`
+                                    : "—"}
+                                </span>
                               ) : (
                                 <span className="text-xs text-[var(--ink-muted)]">—</span>
-                              )}
-
-                              <span className="text-xs font-mono text-[var(--ink-muted)]">{r.score ?? "—"}</span>
-
-                              {r.resultId ? (
-                                <input
-                                  type="checkbox"
-                                  title="Left early"
-                                  className="justify-self-center"
-                                  checked={leftEarlys[r.playerId] ?? false}
-                                  onChange={(e) => setLeftEarlys((prev) => ({ ...prev, [r.playerId]: e.target.checked }))}
-                                />
-                              ) : (
-                                <span />
                               )}
 
                               {r.checkInId ? (
@@ -1765,71 +1684,16 @@ export default function RoundManagePage({
                     </p>
                   )}
 
-                  <div className="flex flex-col gap-2 pt-2 border-t border-[var(--line)]">
-                    <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-                      <Select value={newCheckInSelection} onValueChange={setNewCheckInSelection}>
-                        <SelectTrigger className="w-full sm:w-56">
-                          <SelectValue placeholder="Add registered player..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            <SelectLabel>🔵 Blue Division</SelectLabel>
-                            {availableBluePlayers.map((p) => (
-                              <SelectItem key={`BLUE|${p.id}`} value={`BLUE|${p.id}`}>{p.name}</SelectItem>
-                            ))}
-                          </SelectGroup>
-                          <SelectGroup>
-                            <SelectLabel>🔴 Red Division</SelectLabel>
-                            {availableRedPlayers.map((p) => (
-                              <SelectItem key={`RED|${p.id}`} value={`RED|${p.id}`}>{p.name}</SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                      <Button size="sm" variant="outline" onClick={() => handleAddCheckIn()} disabled={addingCheckIn || !newCheckInSelection}>
-                        Add
-                      </Button>
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-                      <Input
-                        placeholder="New player name"
-                        value={newCheckInName}
-                        onChange={(e) => setNewCheckInName(e.target.value)}
-                        className="w-full sm:w-56"
-                      />
-                      <Select value={newCheckInNameDivision} onValueChange={(v) => setNewCheckInNameDivision(v as "BLUE" | "RED")}>
-                        <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="BLUE">Blue</SelectItem>
-                          <SelectItem value="RED">Red</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Select value={newCheckInGender} onValueChange={(v) => setNewCheckInGender(v as "MALE" | "FEMALE")}>
-                        <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="MALE">Male</SelectItem>
-                          <SelectItem value="FEMALE">Female</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Button size="sm" variant="outline" onClick={() => handleAddCheckIn()} disabled={addingCheckIn || !newCheckInName.trim()}>
-                        Add new
-                      </Button>
-                    </div>
-                    {checkInError && <p className="text-sm text-red-600">{checkInError}</p>}
-                  </div>
+                  {checkInError && <p className="text-sm text-red-600">{checkInError}</p>}
 
                   <p className="text-sm text-[var(--ink-muted)]">
                     {checkInTotals.count} checked in · ${checkInTotals.cash} cash · $
                     {checkInTotals.tap} tap · {checkInTotals.acePot} ace pot
                   </p>
 
-                  {tagError && <p className="text-sm text-red-600">{tagError}</p>}
                   <div className="flex items-center gap-3 flex-wrap">
-                    <Button size="sm" variant="outline" onClick={handleAutoAssignTags} disabled={autoAssigning}>
-                      {autoAssigning ? "Assigning..." : "Auto-Assign New Tags"}
-                    </Button>
-                    <Button size="sm" onClick={handleSaveAll} disabled={playersSaving}>
-                      {playersSaving ? "Saving..." : "Save"}
+                    <Button size="sm" onClick={handleSaveCheckIn} disabled={checkInSaving}>
+                      {checkInSaving ? "Saving..." : "Save"}
                     </Button>
                   </div>
                 </CardContent>
@@ -1838,6 +1702,54 @@ export default function RoundManagePage({
           })()}
         </TabsContent>
       </Tabs>
+
+      {/* Edit Round Dialog */}
+      <Dialog open={editRoundOpen} onOpenChange={(open) => { if (!open) handleCancelEditRound(); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base">Edit Round</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Date</Label>
+              <Input type="date" value={roundDate} onChange={(e) => setRoundDate(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">UDisc Event URL</Label>
+              <Input
+                type="url"
+                value={udiscUrl}
+                onChange={(e) => setUdiscUrl(e.target.value)}
+                placeholder="https://udisc.com/events/..."
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm text-[var(--ink-2)]">
+              <input
+                type="checkbox"
+                checked={editIsDraft}
+                onChange={(e) => setEditIsDraft(e.target.checked)}
+              />
+              Mark as draft
+            </label>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" size="sm" onClick={handleCancelEditRound} disabled={editRoundSaving}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleSaveRoundEdit} disabled={editRoundSaving || !roundDate}>
+              {editRoundSaving ? "Saving..." : "Save"}
+            </Button>
+          </div>
+          <div className="pt-4 mt-2 border-t border-[var(--line)]">
+            <Button variant="destructive" onClick={handleDelete} disabled={deleting} size="sm">
+              {deleting ? "Deleting..." : "Delete Round"}
+            </Button>
+            <p className="text-xs text-[var(--ink-muted)] mt-1">
+              Permanently deletes all results for this round.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Score Editor Dialog */}
       <Dialog open={!!editingResult} onOpenChange={(open) => { if (!open) setEditingResult(null); }}>

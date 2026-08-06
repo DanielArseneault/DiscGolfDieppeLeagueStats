@@ -8,6 +8,7 @@ interface CheckInUpdate {
   id: number;
   division?: Division;
   acePot?: boolean;
+  paid?: boolean;
   paymentMethod?: PaymentMethod | null;
   paymentAmount?: number | null;
 }
@@ -54,12 +55,13 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const { checkIns } = (await req.json()) as { checkIns: CheckInUpdate[] };
 
   await prisma.$transaction(
-    checkIns.map(({ id: checkInId, division, acePot, paymentMethod, paymentAmount }) =>
+    checkIns.map(({ id: checkInId, division, acePot, paid, paymentMethod, paymentAmount }) =>
       prisma.roundCheckIn.update({
         where: { id: checkInId, roundId: Number(id) },
         data: {
           ...(division !== undefined ? { division } : {}),
           ...(acePot !== undefined ? { acePot } : {}),
+          ...(paid !== undefined ? { paid } : {}),
           ...(paymentMethod !== undefined ? { paymentMethod } : {}),
           ...(paymentAmount !== undefined ? { paymentAmount } : {}),
         },

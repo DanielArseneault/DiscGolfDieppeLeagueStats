@@ -38,6 +38,9 @@ model League {
   qualifyingWeeks Int      @default(9)
   bestScoresCount Int      @default(5)
   minWeeks        Int      @default(5)
+  acePotPrice     Float    @default(0)
+  priceWithTag    Float    @default(0)
+  priceWithoutTag Float    @default(0)
   facebookUrl     String?
   facebookLabel   String?
   createdAt       DateTime @default(now())
@@ -146,6 +149,7 @@ model RoundCheckIn {
   playerId      Int
   division      Division
   acePot        Boolean        @default(false)
+  paid          Boolean        @default(false)
   paymentMethod PaymentMethod?
   paymentAmount Float?
   createdAt     DateTime       @default(now())
