@@ -40,17 +40,25 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
   if (parsed.blueResults.length === 0 && parsed.redResults.length === 0) {
     return NextResponse.json({
-      blueCount: 0,
-      redCount: 0,
-      message: "No scores posted yet on UDisc.",
+      blueCheckIns: 0,
+      redCheckIns: 0,
+      blueScores: 0,
+      redScores: 0,
+      message: "No players checked in yet on UDisc.",
     });
   }
 
   try {
-    const { blueCount, redCount } = await upsertResultsForRound(round.id, round.leagueId, parsed);
+    const { blueCheckIns, redCheckIns, blueScores, redScores } = await upsertResultsForRound(
+      round.id,
+      round.leagueId,
+      parsed
+    );
     return NextResponse.json({
-      blueCount,
-      redCount,
+      blueCheckIns,
+      redCheckIns,
+      blueScores,
+      redScores,
       inferredBluePar: parsed.inferredBluePar,
       inferredRedPar: parsed.inferredRedPar,
       syncedAt: new Date().toISOString(),

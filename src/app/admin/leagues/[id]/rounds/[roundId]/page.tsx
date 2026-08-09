@@ -258,7 +258,13 @@ export default function RoundManagePage({
   // UDisc sync state
   const [udiscUrl, setUdiscUrl] = useState("");
   const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<{ blueCount: number; redCount: number; syncedAt: string } | null>(null);
+  const [syncResult, setSyncResult] = useState<{
+    blueCheckIns: number;
+    redCheckIns: number;
+    blueScores: number;
+    redScores: number;
+    syncedAt: string;
+  } | null>(null);
   const [syncError, setSyncError] = useState("");
   const [syncInfo, setSyncInfo] = useState("");
 
@@ -390,7 +396,13 @@ export default function RoundManagePage({
       if (data.message) {
         setSyncInfo(data.message);
       } else {
-        setSyncResult({ blueCount: data.blueCount, redCount: data.redCount, syncedAt: data.syncedAt });
+        setSyncResult({
+          blueCheckIns: data.blueCheckIns,
+          redCheckIns: data.redCheckIns,
+          blueScores: data.blueScores,
+          redScores: data.redScores,
+          syncedAt: data.syncedAt,
+        });
         await load();
       }
     } catch {
@@ -842,7 +854,10 @@ export default function RoundManagePage({
             <div className="mt-1">
               {syncResult && (
                 <p className="text-sm text-[var(--positive)]">
-                  Synced {syncResult.blueCount} Blue / {syncResult.redCount} Red — just now
+                  {syncResult.blueCheckIns + syncResult.redCheckIns} checked in (
+                  {syncResult.blueCheckIns} Blue / {syncResult.redCheckIns} Red) ·{" "}
+                  {syncResult.blueScores + syncResult.redScores} scores (
+                  {syncResult.blueScores} Blue / {syncResult.redScores} Red) — just now
                 </p>
               )}
               {syncInfo && <p className="text-sm text-[var(--tint-warn-fg)]">{syncInfo}</p>}
