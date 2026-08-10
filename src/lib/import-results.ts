@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { Division } from "@/generated/prisma/client";
 import type { ParsedImport } from "@/lib/xlsx-parser";
+import type { ParsedParticipant } from "@/lib/udisc-participants-parser";
 import { findOrCreatePlayer } from "@/lib/players";
 
 export async function upsertResultsForRound(
@@ -60,4 +61,29 @@ export async function upsertResultsForRound(
   }
 
   return { blueCheckIns, redCheckIns, blueScores, redScores };
+}
+
+/** Check-ins from UDisc's /participants page, used before a round starts and
+ *  the leaderboard export has no rows yet. No scores exist at this point. */
+export async function upsertCheckInsFromParticipants(
+  roundId: number,
+  leagueId: number,
+  participants: ParsedParticipant[]
+): Promise<{ blueCheckIns: number; redCheckIns: number }> {
+  let blueCheckIns = 0;
+  let redCheckIns = 0;
+
+  for (const participant of participants) {
+    const player = await findOrCreatePlayer(leagueId, participant);
+
+    await prisma.roundCheckIn.upsert({
+      where: { roundId_playerId: { roundId, playerId: player.id } },
+      create: { roundId, playerId: player.id, division: participant.division },
+      update: { division: participant.division },
+    });
+    if (participant.division === Division.BLUE) blueCheckIns++;
+    else redCheckIns++;
+  }
+
+  return { blueCheckIns, redCheckIns };
 }
