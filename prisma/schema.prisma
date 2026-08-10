@@ -152,6 +152,8 @@ model RoundCheckIn {
   paid          Boolean        @default(false)
   paymentMethod PaymentMethod?
   paymentAmount Float?
+  tagBefore     String?
+  tagAfter      String?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 

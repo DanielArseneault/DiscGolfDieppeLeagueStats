@@ -78,6 +78,8 @@ interface CheckIn {
   paid: boolean;
   paymentMethod: "CASH" | "TAP" | null;
   paymentAmount: number | null;
+  tagBefore: string | null;
+  tagAfter: string | null;
   player: CheckInPlayer;
 }
 
@@ -289,6 +291,13 @@ export default function RoundManagePage({
     const befores: Record<number, string> = {};
     const afters: Record<number, string> = {};
     const leftEarly: Record<number, boolean> = {};
+    // Check-ins seed the tag fields first — for a player without a synced
+    // Result yet, RoundCheckIn.tagBefore/tagAfter is the only place these
+    // edits live. Once a Result exists it takes over as the source of truth.
+    for (const c of data.checkIns) {
+      befores[c.playerId] = c.tagBefore != null ? String(c.tagBefore) : "";
+      afters[c.playerId] = c.tagAfter != null ? String(c.tagAfter) : "";
+    }
     for (const r of data.results) {
       befores[r.playerId] = r.tagBefore != null ? String(r.tagBefore) : "";
       afters[r.playerId] = r.tagAfter != null ? String(r.tagAfter) : "";
@@ -508,11 +517,51 @@ export default function RoundManagePage({
     await load();
   }
 
+  // One row per player, merging their RoundCheckIn (sign-in/payment, exists
+  // pre-round) and Result (score/tags, exists once results are synced) —
+  // a player can have either or both.
+  const mergedPlayerRows = useMemo(() => {
+    const byPlayer = new Map<number, MergedPlayerRow>();
+    for (const c of round?.checkIns ?? []) {
+      byPlayer.set(c.playerId, {
+        playerId: c.playerId,
+        playerName: c.player.name,
+        gender: c.player.gender,
+        division: c.division,
+        checkInId: c.id,
+        resultId: null,
+        currentTag: c.player.currentTag,
+        score: null,
+      });
+    }
+    for (const r of round?.results ?? []) {
+      const existing = byPlayer.get(r.playerId);
+      if (existing) {
+        existing.resultId = r.id;
+        existing.score = r.score;
+        existing.division = r.division as "BLUE" | "RED";
+      } else {
+        byPlayer.set(r.playerId, {
+          playerId: r.playerId,
+          playerName: r.player.name,
+          gender: r.player.gender,
+          division: r.division as "BLUE" | "RED",
+          checkInId: null,
+          resultId: r.id,
+          currentTag: null,
+          score: r.score,
+        });
+      }
+    }
+    return [...byPlayer.values()];
+  }, [round?.checkIns, round?.results]);
+
   // Saves both the sign-in/payment fields (RoundCheckIn) and the tag ladder
-  // fields (Result) in one action — they're separate models under the hood,
-  // but the merged table shows them as one row per player.
-  // Check-in tab: sign-in/payment (RoundCheckIn) + the tag a player brought in
-  // (Result.tagBefore, recorded at check-in time).
+  // fields in one action — they're separate models under the hood, but the
+  // merged table shows them as one row per player. Every row has a
+  // checkInId and/or a resultId; the tags endpoint writes to whichever
+  // exists (preferring the Result once one's been synced).
+  // Check-in tab: sign-in/payment (RoundCheckIn) + the tag a player brought in.
   async function handleSaveCheckIn() {
     if (!round) return;
     setCheckInSaving(true);
@@ -538,8 +587,9 @@ export default function RoundManagePage({
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tags: round.results.map((r) => ({
-            resultId: r.id,
+          tags: mergedPlayerRows.map((r) => ({
+            resultId: r.resultId,
+            checkInId: r.checkInId,
             tagBefore: normalizeTagInput(tagBefores[r.playerId] ?? ""),
           })),
         }),
@@ -549,8 +599,8 @@ export default function RoundManagePage({
     setCheckInSaving(false);
   }
 
-  // Results tab: the tag a player leaves with (Result.tagAfter) and whether
-  // they left early — both only make sense once a Result has been synced.
+  // Results tab: the tag a player leaves with and whether they left early —
+  // leftEarly is only ever applied once a Result exists (see tags route).
   async function handleSaveResults() {
     if (!round) return;
     setResultsSaving(true);
@@ -558,8 +608,9 @@ export default function RoundManagePage({
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        tags: round.results.map((r) => ({
-          resultId: r.id,
+        tags: mergedPlayerRows.map((r) => ({
+          resultId: r.resultId,
+          checkInId: r.checkInId,
           tagBefore: normalizeTagInput(tagBefores[r.playerId] ?? ""),
           tagAfter: normalizeTagInput(tagAfters[r.playerId] ?? ""),
           leftEarly: leftEarlys[r.playerId] ?? false,
@@ -690,45 +741,6 @@ export default function RoundManagePage({
     setRemovingResult(null);
     setRemovingPlayer(false);
   }
-
-  // One row per player, merging their RoundCheckIn (sign-in/payment, exists
-  // pre-round) and Result (score/tags, exists once results are synced) —
-  // a player can have either or both.
-  const mergedPlayerRows = useMemo(() => {
-    const byPlayer = new Map<number, MergedPlayerRow>();
-    for (const c of round?.checkIns ?? []) {
-      byPlayer.set(c.playerId, {
-        playerId: c.playerId,
-        playerName: c.player.name,
-        gender: c.player.gender,
-        division: c.division,
-        checkInId: c.id,
-        resultId: null,
-        currentTag: c.player.currentTag,
-        score: null,
-      });
-    }
-    for (const r of round?.results ?? []) {
-      const existing = byPlayer.get(r.playerId);
-      if (existing) {
-        existing.resultId = r.id;
-        existing.score = r.score;
-        existing.division = r.division as "BLUE" | "RED";
-      } else {
-        byPlayer.set(r.playerId, {
-          playerId: r.playerId,
-          playerName: r.player.name,
-          gender: r.player.gender,
-          division: r.division as "BLUE" | "RED",
-          checkInId: null,
-          resultId: r.id,
-          currentTag: null,
-          score: r.score,
-        });
-      }
-    }
-    return [...byPlayer.values()];
-  }, [round?.checkIns, round?.results]);
 
   // Shared by the Check-In and Results tabs: both render the same
   // division/gender-grouped player rows, just with different editable
@@ -879,7 +891,7 @@ export default function RoundManagePage({
         <TabsList className="mb-2">
           <TabsTrigger value="tags">
             Check-In
-            {round.results.some((r) => r.tagAfter != null) && (
+            {(round.results.some((r) => r.tagAfter != null) || round.checkIns.some((c) => c.tagAfter != null)) && (
               <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-[var(--positive)] inline-block" />
             )}
           </TabsTrigger>
@@ -905,8 +917,8 @@ export default function RoundManagePage({
             const tagAfterTabIndex = new Map<number, number>();
             let tabCursor = 1;
             for (const { rows } of playerGroups) {
-              for (const r of rows) if (r.resultId) tagBeforeTabIndex.set(r.playerId, tabCursor++);
-              for (const r of rows) if (r.resultId) tagAfterTabIndex.set(r.playerId, tabCursor++);
+              for (const r of rows) tagBeforeTabIndex.set(r.playerId, tabCursor++);
+              for (const r of rows) tagAfterTabIndex.set(r.playerId, tabCursor++);
             }
 
             return (
@@ -915,9 +927,9 @@ export default function RoundManagePage({
                   <CardTitle className="text-base">📊 Scores & Tag Ladder</CardTitle>
                   <p className="text-xs text-[var(--ink-muted)]">
                     Tag is the number a player brought in — also editable on the Check-In tab, and kept in
-                    sync since both tabs share the same data. Tag After and Left Early only exist once a
-                    player&apos;s Result is synced. Auto-Assign fills Tag After for everyone from score and
-                    the tag they brought in — review before saving.
+                    sync since both tabs share the same data. Tag and Tag After can be set before a
+                    player&apos;s Result is synced; Left Early only applies once it is. Auto-Assign fills Tag
+                    After for everyone from score and the tag they brought in — review before saving.
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -1010,31 +1022,23 @@ export default function RoundManagePage({
                                 borderTop: "1px solid var(--line-3)",
                               }}
                             >
-                              {r.resultId ? (
-                                <Input
-                                  type="text"
-                                  placeholder={`# or ${BOB_TAG}`}
-                                  tabIndex={tagBeforeTabIndex.get(r.playerId)}
-                                  className={`h-8 max-w-14 text-sm ${dupeBefore.has(r.playerId) ? "border-[var(--tint-warn-fg)]" : ""}`}
-                                  value={tagBefores[r.playerId] ?? ""}
-                                  onChange={(e) => setTagBefores((prev) => ({ ...prev, [r.playerId]: e.target.value }))}
-                                />
-                              ) : (
-                                <span className="text-xs font-mono text-[var(--ink-muted)]">{r.currentTag ?? "—"}</span>
-                              )}
+                              <Input
+                                type="text"
+                                placeholder={`# or ${BOB_TAG}`}
+                                tabIndex={tagBeforeTabIndex.get(r.playerId)}
+                                className={`h-8 max-w-14 text-sm ${dupeBefore.has(r.playerId) ? "border-[var(--tint-warn-fg)]" : ""}`}
+                                value={tagBefores[r.playerId] ?? ""}
+                                onChange={(e) => setTagBefores((prev) => ({ ...prev, [r.playerId]: e.target.value }))}
+                              />
 
-                              {r.resultId ? (
-                                <Input
-                                  type="text"
-                                  placeholder={`# or ${BOB_TAG}`}
-                                  tabIndex={tagAfterTabIndex.get(r.playerId)}
-                                  className={`h-8 max-w-14 text-sm ${dupeAfter.has(r.playerId) ? "border-[var(--tint-warn-fg)]" : ""}`}
-                                  value={tagAfters[r.playerId] ?? ""}
-                                  onChange={(e) => setTagAfters((prev) => ({ ...prev, [r.playerId]: e.target.value }))}
-                                />
-                              ) : (
-                                <span className="text-xs text-[var(--ink-muted)]">—</span>
-                              )}
+                              <Input
+                                type="text"
+                                placeholder={`# or ${BOB_TAG}`}
+                                tabIndex={tagAfterTabIndex.get(r.playerId)}
+                                className={`h-8 max-w-14 text-sm ${dupeAfter.has(r.playerId) ? "border-[var(--tint-warn-fg)]" : ""}`}
+                                value={tagAfters[r.playerId] ?? ""}
+                                onChange={(e) => setTagAfters((prev) => ({ ...prev, [r.playerId]: e.target.value }))}
+                              />
 
                               <span className="text-xs font-mono text-[var(--ink-muted)]">{r.score ?? "—"}</span>
 
@@ -1517,12 +1521,11 @@ export default function RoundManagePage({
             const anyDupes = playerGroups.some((g) => g.dupeBefore.size > 0);
 
             // Explicit tabIndex so Tab moves straight down the Tag column
-            // instead of the browser's default left-to-right row order. Only
-            // rows with a synced Result have anything to tab through.
+            // instead of the browser's default left-to-right row order.
             const tagTabIndex = new Map<number, number>();
             let tabCursor = 1;
             for (const { rows } of playerGroups) {
-              for (const r of rows) if (r.resultId) tagTabIndex.set(r.playerId, tabCursor++);
+              for (const r of rows) tagTabIndex.set(r.playerId, tabCursor++);
             }
 
             // Player name is frozen (plain flow, outside the scroll area) so it
@@ -1649,18 +1652,14 @@ export default function RoundManagePage({
                                 </button>
                               )}
 
-                              {r.resultId ? (
-                                <Input
-                                  type="text"
-                                  placeholder={`# or ${BOB_TAG}`}
-                                  tabIndex={tagTabIndex.get(r.playerId)}
-                                  className={`h-8 max-w-14 text-sm ${dupeBefore.has(r.playerId) ? "border-[var(--tint-warn-fg)]" : ""}`}
-                                  value={tagBefores[r.playerId] ?? ""}
-                                  onChange={(e) => setTagBefores((prev) => ({ ...prev, [r.playerId]: e.target.value }))}
-                                />
-                              ) : (
-                                <span className="text-xs font-mono text-[var(--ink-muted)]">{r.currentTag ?? "—"}</span>
-                              )}
+                              <Input
+                                type="text"
+                                placeholder={`# or ${BOB_TAG}`}
+                                tabIndex={tagTabIndex.get(r.playerId)}
+                                className={`h-8 max-w-14 text-sm ${dupeBefore.has(r.playerId) ? "border-[var(--tint-warn-fg)]" : ""}`}
+                                value={tagBefores[r.playerId] ?? ""}
+                                onChange={(e) => setTagBefores((prev) => ({ ...prev, [r.playerId]: e.target.value }))}
+                              />
 
                               {r.checkInId ? (
                                 <span className="text-sm tabular-nums">

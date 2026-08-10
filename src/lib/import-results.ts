@@ -25,7 +25,7 @@ export async function upsertResultsForRound(
     // Every player UDisc knows about is a participant — check them in (or
     // refresh their division) so they show up for sign-in/payment tracking
     // as soon as they join the event, even before they've posted a score.
-    await prisma.roundCheckIn.upsert({
+    const checkIn = await prisma.roundCheckIn.upsert({
       where: { roundId_playerId: { roundId, playerId: player.id } },
       create: { roundId, playerId: player.id, division: result.division },
       update: { division: result.division },
@@ -46,7 +46,10 @@ export async function upsertResultsForRound(
         score: result.roundTotalScore,
         relativeScore: result.roundRelativeScore,
         holeScores: result.holeScores,
-        tagBefore: player.currentTag,
+        // Prefer whatever was entered on the check-in tab before the round
+        // started — it's more current than the player's general currentTag.
+        tagBefore: checkIn.tagBefore ?? player.currentTag,
+        tagAfter: checkIn.tagAfter,
       },
       update: {
         division: result.division,
