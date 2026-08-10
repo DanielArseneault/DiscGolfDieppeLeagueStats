@@ -4,6 +4,31 @@ import type { ParsedImport } from "@/lib/xlsx-parser";
 import type { ParsedParticipant } from "@/lib/udisc-participants-parser";
 import { findOrCreatePlayer } from "@/lib/players";
 
+/** Upserts a check-in, seeding tagBefore from the player's last known tag
+ *  (i.e. last week's tagAfter) so the check-in tab starts pre-filled. Never
+ *  overwrites a tagBefore that's already saved on the check-in, whether from
+ *  a manual edit or an earlier sync. */
+async function upsertCheckIn(
+  roundId: number,
+  player: { id: number; currentTag: string | null },
+  division: Division
+) {
+  const existing = await prisma.roundCheckIn.findUnique({
+    where: { roundId_playerId: { roundId, playerId: player.id } },
+  });
+
+  if (!existing) {
+    return prisma.roundCheckIn.create({
+      data: { roundId, playerId: player.id, division, tagBefore: player.currentTag },
+    });
+  }
+
+  return prisma.roundCheckIn.update({
+    where: { id: existing.id },
+    data: { division, tagBefore: existing.tagBefore ?? player.currentTag },
+  });
+}
+
 export async function upsertResultsForRound(
   roundId: number,
   leagueId: number,
@@ -25,11 +50,7 @@ export async function upsertResultsForRound(
     // Every player UDisc knows about is a participant — check them in (or
     // refresh their division) so they show up for sign-in/payment tracking
     // as soon as they join the event, even before they've posted a score.
-    const checkIn = await prisma.roundCheckIn.upsert({
-      where: { roundId_playerId: { roundId, playerId: player.id } },
-      create: { roundId, playerId: player.id, division: result.division },
-      update: { division: result.division },
-    });
+    const checkIn = await upsertCheckIn(roundId, player, result.division);
     if (result.division === Division.BLUE) blueCheckIns++;
     else redCheckIns++;
 
@@ -79,11 +100,7 @@ export async function upsertCheckInsFromParticipants(
   for (const participant of participants) {
     const player = await findOrCreatePlayer(leagueId, participant);
 
-    await prisma.roundCheckIn.upsert({
-      where: { roundId_playerId: { roundId, playerId: player.id } },
-      create: { roundId, playerId: player.id, division: participant.division },
-      update: { division: participant.division },
-    });
+    await upsertCheckIn(roundId, player, participant.division);
     if (participant.division === Division.BLUE) blueCheckIns++;
     else redCheckIns++;
   }

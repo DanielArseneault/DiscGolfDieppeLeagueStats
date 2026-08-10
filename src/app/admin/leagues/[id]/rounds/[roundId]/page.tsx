@@ -67,7 +67,6 @@ interface CheckInPlayer {
   id: number;
   name: string;
   gender: string | null;
-  currentTag: string | null;
 }
 
 interface CheckIn {
@@ -90,7 +89,6 @@ interface MergedPlayerRow {
   division: "BLUE" | "RED";
   checkInId: number | null;
   resultId: number | null;
-  currentTag: string | null;
   score: number | null;
 }
 
@@ -166,11 +164,11 @@ function computePoolGroups(
 }
 
 function checkInAmount(
-  currentTag: string | null,
+  tag: string | null,
   acePot: boolean,
   league: { priceWithTag: number; priceWithoutTag: number; acePotPrice: number }
 ) {
-  const base = currentTag ? league.priceWithTag : league.priceWithoutTag;
+  const base = tag ? league.priceWithTag : league.priceWithoutTag;
   return Math.round(base + (acePot ? league.acePotPrice : 0));
 }
 
@@ -530,7 +528,6 @@ export default function RoundManagePage({
         division: c.division,
         checkInId: c.id,
         resultId: null,
-        currentTag: c.player.currentTag,
         score: null,
       });
     }
@@ -548,7 +545,6 @@ export default function RoundManagePage({
           division: r.division as "BLUE" | "RED",
           checkInId: null,
           resultId: r.id,
-          currentTag: null,
           score: r.score,
         });
       }
@@ -578,7 +574,9 @@ export default function RoundManagePage({
               acePot,
               paid,
               paymentMethod: checkInPaymentMethods[c.playerId] === "TAP" ? "TAP" : "CASH",
-              paymentAmount: paid ? checkInAmount(c.player.currentTag, acePot, round.league) : null,
+              paymentAmount: paid
+                ? checkInAmount(normalizeTagInput(tagBefores[c.playerId] ?? ""), acePot, round.league)
+                : null,
             };
           }),
         }),
@@ -779,13 +777,14 @@ export default function RoundManagePage({
       const isTap = (checkInPaymentMethods[c.playerId] ?? c.paymentMethod ?? "") === "TAP";
       const acePotChecked = checkInAcePot[c.playerId] ?? c.acePot;
       const paid = checkInPaid[c.playerId] ?? c.paid;
-      const amount = paid && round ? checkInAmount(c.player.currentTag, acePotChecked, round.league) : 0;
+      const tag = normalizeTagInput(tagBefores[c.playerId] ?? "");
+      const amount = paid && round ? checkInAmount(tag, acePotChecked, round.league) : 0;
       if (isTap) tap += amount;
       else cash += amount;
       if (acePotChecked) acePot++;
     }
     return { count: checkIns.length, cash, tap, acePot };
-  }, [round, checkInPaymentMethods, checkInAcePot, checkInPaid]);
+  }, [round, checkInPaymentMethods, checkInAcePot, checkInPaid, tagBefores]);
   const poolData = useMemo(
     () => round?.isChampionship ? computePoolGroups(round.results, standings) : null,
     [round?.isChampionship, round?.results, standings]
@@ -1664,7 +1663,7 @@ export default function RoundManagePage({
                               {r.checkInId ? (
                                 <span className="text-sm tabular-nums">
                                   {checkInPaid[r.playerId]
-                                    ? `$${checkInAmount(r.currentTag, checkInAcePot[r.playerId] ?? false, round!.league)}`
+                                    ? `$${checkInAmount(normalizeTagInput(tagBefores[r.playerId] ?? ""), checkInAcePot[r.playerId] ?? false, round!.league)}`
                                     : "—"}
                                 </span>
                               ) : (
