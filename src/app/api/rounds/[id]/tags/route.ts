@@ -43,12 +43,13 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
   if (checkInUpdates.length > 0) {
     await prisma.$transaction(
-      checkInUpdates.map(({ checkInId, tagBefore, tagAfter }) =>
+      checkInUpdates.map(({ checkInId, tagBefore, tagAfter, leftEarly }) =>
         prisma.roundCheckIn.update({
           where: { id: checkInId!, roundId },
           data: {
             ...(tagBefore !== undefined ? { tagBefore: tagBefore == null ? null : normalizeTagInput(tagBefore) } : {}),
             ...(tagAfter !== undefined ? { tagAfter: tagAfter == null ? null : normalizeTagInput(tagAfter) } : {}),
+            ...(leftEarly !== undefined ? { leftEarly } : {}),
           },
         })
       )

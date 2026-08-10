@@ -79,6 +79,7 @@ interface CheckIn {
   paymentAmount: number | null;
   tagBefore: string | null;
   tagAfter: string | null;
+  leftEarly: boolean;
   player: CheckInPlayer;
 }
 
@@ -295,6 +296,7 @@ export default function RoundManagePage({
     for (const c of data.checkIns) {
       befores[c.playerId] = c.tagBefore != null ? String(c.tagBefore) : "";
       afters[c.playerId] = c.tagAfter != null ? String(c.tagAfter) : "";
+      leftEarly[c.playerId] = c.leftEarly;
     }
     for (const r of data.results) {
       befores[r.playerId] = r.tagBefore != null ? String(r.tagBefore) : "";
@@ -598,7 +600,8 @@ export default function RoundManagePage({
   }
 
   // Results tab: the tag a player leaves with and whether they left early —
-  // leftEarly is only ever applied once a Result exists (see tags route).
+  // leftEarly can be set as soon as a check-in exists, so it can be flagged
+  // mid-round before a Result is ever synced (see tags route).
   async function handleSaveResults() {
     if (!round) return;
     setResultsSaving(true);
@@ -926,9 +929,11 @@ export default function RoundManagePage({
                   <CardTitle className="text-base">📊 Scores & Tag Ladder</CardTitle>
                   <p className="text-xs text-[var(--ink-muted)]">
                     Tag is the number a player brought in — also editable on the Check-In tab, and kept in
-                    sync since both tabs share the same data. Tag and Tag After can be set before a
-                    player&apos;s Result is synced; Left Early only applies once it is. Auto-Assign fills Tag
-                    After for everyone from score and the tag they brought in — review before saving.
+                    sync since both tabs share the same data. Tag, Tag After, and Left Early can all be set
+                    before a player&apos;s Result is synced. Check Left Early for a player who leaves before
+                    the round ends so they&apos;re excluded from Auto-Assign and can be given a tag manually.
+                    Auto-Assign fills Tag After for everyone else from score and the tag they brought in —
+                    review before saving.
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -1041,7 +1046,7 @@ export default function RoundManagePage({
 
                               <span className="text-xs font-mono text-[var(--ink-muted)]">{r.score ?? "—"}</span>
 
-                              {r.resultId ? (
+                              {r.resultId || r.checkInId ? (
                                 <input
                                   type="checkbox"
                                   title="Left early"

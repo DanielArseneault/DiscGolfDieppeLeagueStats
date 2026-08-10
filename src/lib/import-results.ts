@@ -71,6 +71,7 @@ export async function upsertResultsForRound(
         // started — it's more current than the player's general currentTag.
         tagBefore: checkIn.tagBefore ?? player.currentTag,
         tagAfter: checkIn.tagAfter,
+        leftEarly: checkIn.leftEarly,
       },
       update: {
         division: result.division,
