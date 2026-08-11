@@ -62,9 +62,11 @@ export function parseUDiscFile(buffer: ArrayBuffer): ParsedImport {
       };
 
       if (!result.name) continue;
-      if (isDnf) continue;
-      if (Object.keys(holeScores).length === 0) continue;
 
+      // Rows without hole scores yet (or DNF/DNS/WD/DQ) are still kept —
+      // they represent players UDisc knows checked in to the event, even
+      // before they've posted a score. Callers decide whether a row is
+      // score-worthy via `isDnf` / `holeScores`.
       if (division === Division.BLUE) {
         blueResults.push(result);
       } else {
@@ -73,12 +75,14 @@ export function parseUDiscFile(buffer: ArrayBuffer): ParsedImport {
     }
   }
 
-  const inferredBluePar = blueResults.length > 0
-    ? blueResults[0].roundTotalScore - blueResults[0].roundRelativeScore
+  const blueScored = blueResults.find((r) => !r.isDnf && Object.keys(r.holeScores).length > 0);
+  const inferredBluePar = blueScored
+    ? blueScored.roundTotalScore - blueScored.roundRelativeScore
     : 60;
 
-  const inferredRedPar = redResults.length > 0
-    ? redResults[0].roundTotalScore - redResults[0].roundRelativeScore
+  const redScored = redResults.find((r) => !r.isDnf && Object.keys(r.holeScores).length > 0);
+  const inferredRedPar = redScored
+    ? redScored.roundTotalScore - redScored.roundRelativeScore
     : 60;
 
   return { blueResults, redResults, inferredBluePar, inferredRedPar };

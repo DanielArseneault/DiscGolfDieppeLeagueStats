@@ -40,13 +40,13 @@ export async function POST(req: Request) {
       update: { date: new Date(date), blueLayoutId, redLayoutId, isChampionship, isDraft },
     });
 
-    await upsertResultsForRound(round.id, leagueId, parsed);
+    const { blueScores, redScores } = await upsertResultsForRound(round.id, leagueId, parsed);
 
     return NextResponse.json({
       roundId: round.id,
       weekNumber,
-      blueCount: parsed.blueResults.length,
-      redCount: parsed.redResults.length,
+      blueCount: blueScores,
+      redCount: redScores,
       inferredBluePar: parsed.inferredBluePar,
       inferredRedPar: parsed.inferredRedPar,
     });

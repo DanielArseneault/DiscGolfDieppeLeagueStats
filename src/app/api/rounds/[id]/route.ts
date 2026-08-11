@@ -17,6 +17,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       blueLayout: { include: { holePars: { orderBy: { holeNumber: "asc" } } } },
       redLayout: { include: { holePars: { orderBy: { holeNumber: "asc" } } } },
       bobTag: true,
+      checkIns: {
+        include: { player: true },
+        orderBy: [{ division: "asc" }, { player: { name: "asc" } }],
+      },
+      league: true,
     },
   });
   if (!round) return NextResponse.json({ error: "Not found" }, { status: 404 });

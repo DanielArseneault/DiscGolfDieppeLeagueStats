@@ -21,6 +21,9 @@ interface League {
   qualifyingWeeks: number;
   bestScoresCount: number;
   minWeeks: number;
+  acePotPrice: number;
+  priceWithTag: number;
+  priceWithoutTag: number;
   facebookUrl: string | null;
   facebookLabel: string | null;
 }
@@ -49,6 +52,9 @@ function LeagueForm({
   const [qualifyingWeeks, setQualifyingWeeks] = useState(initial?.qualifyingWeeks ?? 9);
   const [bestScoresCount, setBestScoresCount] = useState(initial?.bestScoresCount ?? 5);
   const [minWeeks, setMinWeeks] = useState(initial?.minWeeks ?? 5);
+  const [acePotPrice, setAcePotPrice] = useState(initial?.acePotPrice ?? 0);
+  const [priceWithTag, setPriceWithTag] = useState(initial?.priceWithTag ?? 0);
+  const [priceWithoutTag, setPriceWithoutTag] = useState(initial?.priceWithoutTag ?? 0);
   const [facebookUrl, setFacebookUrl] = useState(initial?.facebookUrl ?? "");
   const [facebookLabel, setFacebookLabel] = useState(initial?.facebookLabel ?? "");
   const [saving, setSaving] = useState(false);
@@ -67,7 +73,7 @@ function LeagueForm({
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, shortName, year, location, startDate, endDate, qualifyingWeeks, bestScoresCount, minWeeks, facebookUrl, facebookLabel }),
+        body: JSON.stringify({ name, shortName, year, location, startDate, endDate, qualifyingWeeks, bestScoresCount, minWeeks, acePotPrice, priceWithTag, priceWithoutTag, facebookUrl, facebookLabel }),
       });
       if (!res.ok) throw new Error("Save failed");
       onSave();
@@ -185,6 +191,25 @@ function LeagueForm({
           <Label>Min Weeks</Label>
           <Input type="number" min={1} value={minWeeks} onChange={(e) => setMinWeeks(Number(e.target.value))} />
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Round Pricing</Label>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <Label className="text-xs text-[var(--ink-muted)] font-normal">Ace Pot</Label>
+            <Input type="number" min={0} step="0.01" value={acePotPrice} onChange={(e) => setAcePotPrice(Number(e.target.value))} />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs text-[var(--ink-muted)] font-normal">With Tag</Label>
+            <Input type="number" min={0} step="0.01" value={priceWithTag} onChange={(e) => setPriceWithTag(Number(e.target.value))} />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs text-[var(--ink-muted)] font-normal">Without Tag</Label>
+            <Input type="number" min={0} step="0.01" value={priceWithoutTag} onChange={(e) => setPriceWithoutTag(Number(e.target.value))} />
+          </div>
+        </div>
+        <p className="text-xs text-[var(--ink-muted)]">Per-round check-in prices, used to prefill payment amounts.</p>
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
