@@ -168,14 +168,16 @@ function rankAndAssignPools(
 
   const qualified = divisionStandings.filter((s) => s.qualified && !s.excludeFromChampionship);
   const cutoff = Math.ceil(qualified.length / 2);
-  const cutoffScore = qualified[cutoff - 1]?.qualifyingTotal;
+  // Index within the already tie-broken order, not raw score, so ties at the
+  // cutoff still split the pools as evenly as possible instead of all landing in topPool.
+  const qualifiedRank = new Map(qualified.map((s, i) => [s.playerId, i]));
 
   divisionStandings.forEach((s, i) => {
     s.rank = i + 1;
     if (!s.qualified || s.excludeFromChampionship) return;
 
-    // Auto-assign based on score; override replaces the result afterward
-    const autoPool = s.qualifyingTotal <= cutoffScore ? topPool : bottomPool;
+    // Auto-assign based on rank position; override replaces the result afterward
+    const autoPool = qualifiedRank.get(s.playerId)! < cutoff ? topPool : bottomPool;
     s.championshipPool = s.championshipPoolOverride ?? autoPool;
   });
 }
