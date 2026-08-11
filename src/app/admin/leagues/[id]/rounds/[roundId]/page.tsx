@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { computePoolSummaries } from "@/lib/pool-utils";
-import { normalizeTagInput, BOB_TAG } from "@/lib/tags";
+import { normalizeTagInput, BOB_TAG, tagRank } from "@/lib/tags";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -63,6 +63,36 @@ interface RoundResult {
   leftEarly: boolean;
 }
 
+interface CheckInPlayer {
+  id: number;
+  name: string;
+  gender: string | null;
+}
+
+interface CheckIn {
+  id: number;
+  playerId: number;
+  division: "BLUE" | "RED";
+  acePot: boolean;
+  paid: boolean;
+  paymentMethod: "CASH" | "TAP" | null;
+  paymentAmount: number | null;
+  tagBefore: string | null;
+  tagAfter: string | null;
+  leftEarly: boolean;
+  player: CheckInPlayer;
+}
+
+interface MergedPlayerRow {
+  playerId: number;
+  playerName: string;
+  gender: string | null;
+  division: "BLUE" | "RED";
+  checkInId: number | null;
+  resultId: number | null;
+  score: number | null;
+}
+
 interface Round {
   id: number;
   weekNumber: number;
@@ -81,6 +111,8 @@ interface Round {
   bobTag: { playerName: string } | null;
   blueLayout: CourseLayout | null;
   redLayout: CourseLayout | null;
+  checkIns: CheckIn[];
+  league: { acePotPrice: number; priceWithTag: number; priceWithoutTag: number };
 }
 
 interface PlayerStanding {
@@ -132,6 +164,15 @@ function computePoolGroups(
   };
 }
 
+function checkInAmount(
+  tag: string | null,
+  acePot: boolean,
+  league: { priceWithTag: number; priceWithoutTag: number; acePotPrice: number }
+) {
+  const base = tag ? league.priceWithTag : league.priceWithoutTag;
+  return Math.round(base + (acePot ? league.acePotPrice : 0));
+}
+
 export default function RoundManagePage({
   params,
 }: {
@@ -142,8 +183,6 @@ export default function RoundManagePage({
 
   const [round, setRound] = useState<Round | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [resultsExpanded, setResultsExpanded] = useState(false);
-  const [draftToggling, setDraftToggling] = useState(false);
 
   // Championship pool state
   const [standings, setStandings] = useState<PlayerStanding[]>([]);
@@ -167,14 +206,23 @@ export default function RoundManagePage({
   const [bobPlayer, setBobPlayer] = useState("");
   const [bobSaving, setBobSaving] = useState(false);
 
-  // Tag ladder state — keyed by resultId
+  // Players tab state — sign-in/payment + tag ladder, all keyed by playerId
+  // so the two merge into one row per player regardless of which side (a
+  // RoundCheckIn, a Result, or both) actually backs that row.
+  const [checkInAcePot, setCheckInAcePot] = useState<Record<number, boolean>>({});
+  const [checkInPaid, setCheckInPaid] = useState<Record<number, boolean>>({});
+  const [checkInPaymentMethods, setCheckInPaymentMethods] = useState<Record<number, "CASH" | "TAP" | "">>({});
+  const [addingCheckIn, setAddingCheckIn] = useState(false);
+  const [checkInError, setCheckInError] = useState("");
+
   const [tagBefores, setTagBefores] = useState<Record<number, string>>({});
   const [tagAfters, setTagAfters] = useState<Record<number, string>>({});
   const [leftEarlys, setLeftEarlys] = useState<Record<number, boolean>>({});
-  const [tagsSaving, setTagsSaving] = useState(false);
+  const [checkInSaving, setCheckInSaving] = useState(false);
+  const [resultsSaving, setResultsSaving] = useState(false);
   const [autoAssigning, setAutoAssigning] = useState(false);
   const [tagError, setTagError] = useState("");
-  const [tagSort, setTagSort] = useState<{ field: "position" | "name"; dir: "asc" | "desc" }>({
+  const [tagSort, setTagSort] = useState<{ field: "position" | "name" | "tagAfter"; dir: "asc" | "desc" }>({
     field: "name",
     dir: "asc",
   });
@@ -197,7 +245,11 @@ export default function RoundManagePage({
 
   // Round date
   const [roundDate, setRoundDate] = useState("");
-  const [dateSaving, setDateSaving] = useState(false);
+
+  // Edit Round dialog — date, draft status, UDisc URL, all in one place
+  const [editRoundOpen, setEditRoundOpen] = useState(false);
+  const [editIsDraft, setEditIsDraft] = useState(false);
+  const [editRoundSaving, setEditRoundSaving] = useState(false);
 
   // Facebook link state
   const [facebookUrl, setFacebookUrl] = useState("");
@@ -206,9 +258,14 @@ export default function RoundManagePage({
 
   // UDisc sync state
   const [udiscUrl, setUdiscUrl] = useState("");
-  const [udiscSaving, setUdiscSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<{ blueCount: number; redCount: number; syncedAt: string } | null>(null);
+  const [syncResult, setSyncResult] = useState<{
+    blueCheckIns: number;
+    redCheckIns: number;
+    blueScores: number;
+    redScores: number;
+    syncedAt: string;
+  } | null>(null);
   const [syncError, setSyncError] = useState("");
   const [syncInfo, setSyncInfo] = useState("");
 
@@ -216,6 +273,7 @@ export default function RoundManagePage({
     const data: Round = await fetch(`/api/rounds/${roundId}`).then((r) => r.json());
     setRound(data);
     setRoundDate(new Date(data.date).toISOString().slice(0, 10));
+    setEditIsDraft(data.isDraft);
 
     const loaded = data.ctpWinners.map((w) => ({ player: w.playerName, hole: w.hole, prize: w.prize ?? "" }));
     while (loaded.length < 2) loaded.push({ player: "", hole: 18, prize: "" });
@@ -232,14 +290,35 @@ export default function RoundManagePage({
     const befores: Record<number, string> = {};
     const afters: Record<number, string> = {};
     const leftEarly: Record<number, boolean> = {};
+    // Check-ins seed the tag fields first — for a player without a synced
+    // Result yet, RoundCheckIn.tagBefore/tagAfter is the only place these
+    // edits live. Once a Result exists it takes over as the source of truth.
+    for (const c of data.checkIns) {
+      befores[c.playerId] = c.tagBefore != null ? String(c.tagBefore) : "";
+      afters[c.playerId] = c.tagAfter != null ? String(c.tagAfter) : "";
+      leftEarly[c.playerId] = c.leftEarly;
+    }
     for (const r of data.results) {
-      befores[r.id] = r.tagBefore != null ? String(r.tagBefore) : "";
-      afters[r.id] = r.tagAfter != null ? String(r.tagAfter) : "";
-      leftEarly[r.id] = r.leftEarly;
+      befores[r.playerId] = r.tagBefore != null ? String(r.tagBefore) : "";
+      afters[r.playerId] = r.tagAfter != null ? String(r.tagAfter) : "";
+      leftEarly[r.playerId] = r.leftEarly;
     }
     setTagBefores(befores);
     setTagAfters(afters);
     setLeftEarlys(leftEarly);
+
+    const ciAcePot: Record<number, boolean> = {};
+    const ciPaid: Record<number, boolean> = {};
+    const ciMethods: Record<number, "CASH" | "TAP" | ""> = {};
+    for (const c of data.checkIns) {
+      ciAcePot[c.playerId] = c.acePot;
+      ciPaid[c.playerId] = c.paid;
+      ciMethods[c.playerId] = c.paymentMethod ?? "";
+    }
+    setCheckInAcePot(ciAcePot);
+    setCheckInPaid(ciPaid);
+    setCheckInPaymentMethods(ciMethods);
+
     setFacebookUrl(data.facebookUrl ?? "");
     setFacebookLabel(data.facebookLabel ?? "");
     setUdiscUrl(data.udiscUrl ?? "");
@@ -277,17 +356,26 @@ export default function RoundManagePage({
     load();
   }, [roundId]);
 
-  // Round date
-  async function handleSaveDate() {
+  // Edit Round dialog — date, draft status, UDisc URL, all in one PATCH
+  async function handleSaveRoundEdit() {
     if (!roundDate) return;
-    setDateSaving(true);
+    setEditRoundSaving(true);
     await fetch(`/api/rounds/${roundId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date: roundDate }),
+      body: JSON.stringify({ date: roundDate, isDraft: editIsDraft, udiscUrl }),
     });
     await load();
-    setDateSaving(false);
+    setEditRoundSaving(false);
+    setEditRoundOpen(false);
+  }
+
+  function handleCancelEditRound() {
+    if (!round) return;
+    setRoundDate(new Date(round.date).toISOString().slice(0, 10));
+    setUdiscUrl(round.udiscUrl ?? "");
+    setEditIsDraft(round.isDraft);
+    setEditRoundOpen(false);
   }
 
   // Facebook link
@@ -300,18 +388,6 @@ export default function RoundManagePage({
     });
     await load();
     setFacebookSaving(false);
-  }
-
-  // UDisc sync
-  async function handleSaveUdiscUrl() {
-    setUdiscSaving(true);
-    await fetch(`/api/rounds/${roundId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ udiscUrl }),
-    });
-    await load();
-    setUdiscSaving(false);
   }
 
   async function handleSyncUdisc() {
@@ -329,7 +405,13 @@ export default function RoundManagePage({
       if (data.message) {
         setSyncInfo(data.message);
       } else {
-        setSyncResult({ blueCount: data.blueCount, redCount: data.redCount, syncedAt: data.syncedAt });
+        setSyncResult({
+          blueCheckIns: data.blueCheckIns,
+          redCheckIns: data.redCheckIns,
+          blueScores: data.blueScores,
+          redScores: data.redScores,
+          syncedAt: data.syncedAt,
+        });
         await load();
       }
     } catch {
@@ -409,23 +491,135 @@ export default function RoundManagePage({
     setBobSaving(false);
   }
 
-  async function handleSaveTags() {
+  // Backfills a RoundCheckIn for a row that already has a Result but no
+  // check-in (e.g. an older round, or someone scored without ever being
+  // signed in) — players themselves are brought in by the UDisc sync, not
+  // added manually here.
+  async function handleAddCheckIn(override: { playerId: number; division: "BLUE" | "RED" }) {
+    setAddingCheckIn(true);
+    setCheckInError("");
+    const res = await fetch(`/api/rounds/${roundId}/check-in`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerId: override.playerId, division: override.division }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      setCheckInError(err.error ?? "Failed to sign in player");
+    } else {
+      await load();
+    }
+    setAddingCheckIn(false);
+  }
+
+  async function handleRemoveCheckIn(checkInId: number) {
+    await fetch(`/api/rounds/${roundId}/check-in/${checkInId}`, { method: "DELETE" });
+    await load();
+  }
+
+  // One row per player, merging their RoundCheckIn (sign-in/payment, exists
+  // pre-round) and Result (score/tags, exists once results are synced) —
+  // a player can have either or both.
+  const mergedPlayerRows = useMemo(() => {
+    const byPlayer = new Map<number, MergedPlayerRow>();
+    for (const c of round?.checkIns ?? []) {
+      byPlayer.set(c.playerId, {
+        playerId: c.playerId,
+        playerName: c.player.name,
+        gender: c.player.gender,
+        division: c.division,
+        checkInId: c.id,
+        resultId: null,
+        score: null,
+      });
+    }
+    for (const r of round?.results ?? []) {
+      const existing = byPlayer.get(r.playerId);
+      if (existing) {
+        existing.resultId = r.id;
+        existing.score = r.score;
+        existing.division = r.division as "BLUE" | "RED";
+      } else {
+        byPlayer.set(r.playerId, {
+          playerId: r.playerId,
+          playerName: r.player.name,
+          gender: r.player.gender,
+          division: r.division as "BLUE" | "RED",
+          checkInId: null,
+          resultId: r.id,
+          score: r.score,
+        });
+      }
+    }
+    return [...byPlayer.values()];
+  }, [round?.checkIns, round?.results]);
+
+  // Saves both the sign-in/payment fields (RoundCheckIn) and the tag ladder
+  // fields in one action — they're separate models under the hood, but the
+  // merged table shows them as one row per player. Every row has a
+  // checkInId and/or a resultId; the tags endpoint writes to whichever
+  // exists (preferring the Result once one's been synced).
+  // Check-in tab: sign-in/payment (RoundCheckIn) + the tag a player brought in.
+  async function handleSaveCheckIn() {
     if (!round) return;
-    setTagsSaving(true);
+    setCheckInSaving(true);
+    await Promise.all([
+      fetch(`/api/rounds/${roundId}/check-in`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          checkIns: round.checkIns.map((c) => {
+            const acePot = checkInAcePot[c.playerId] ?? false;
+            const paid = checkInPaid[c.playerId] ?? false;
+            return {
+              id: c.id,
+              acePot,
+              paid,
+              paymentMethod: checkInPaymentMethods[c.playerId] === "TAP" ? "TAP" : "CASH",
+              paymentAmount: paid
+                ? checkInAmount(normalizeTagInput(tagBefores[c.playerId] ?? ""), acePot, round.league)
+                : null,
+            };
+          }),
+        }),
+      }),
+      fetch(`/api/rounds/${roundId}/tags`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tags: mergedPlayerRows.map((r) => ({
+            resultId: r.resultId,
+            checkInId: r.checkInId,
+            tagBefore: normalizeTagInput(tagBefores[r.playerId] ?? ""),
+          })),
+        }),
+      }),
+    ]);
+    await load();
+    setCheckInSaving(false);
+  }
+
+  // Results tab: the tag a player leaves with and whether they left early —
+  // leftEarly can be set as soon as a check-in exists, so it can be flagged
+  // mid-round before a Result is ever synced (see tags route).
+  async function handleSaveResults() {
+    if (!round) return;
+    setResultsSaving(true);
     await fetch(`/api/rounds/${roundId}/tags`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        tags: round.results.map((r) => ({
-          resultId: r.id,
-          tagBefore: normalizeTagInput(tagBefores[r.id] ?? ""),
-          tagAfter: normalizeTagInput(tagAfters[r.id] ?? ""),
-          leftEarly: leftEarlys[r.id] ?? false,
+        tags: mergedPlayerRows.map((r) => ({
+          resultId: r.resultId,
+          checkInId: r.checkInId,
+          tagBefore: normalizeTagInput(tagBefores[r.playerId] ?? ""),
+          tagAfter: normalizeTagInput(tagAfters[r.playerId] ?? ""),
+          leftEarly: leftEarlys[r.playerId] ?? false,
         })),
       }),
     });
     await load();
-    setTagsSaving(false);
+    setResultsSaving(false);
   }
 
   async function handleAutoAssignTags() {
@@ -441,36 +635,43 @@ export default function RoundManagePage({
     setAutoAssigning(false);
   }
 
-  function sortTagResults(results: RoundResult[]): RoundResult[] {
+  function sortPlayerRows(rows: MergedPlayerRow[]): MergedPlayerRow[] {
     const { field, dir } = tagSort;
     const sign = dir === "asc" ? 1 : -1;
-    return [...results].sort((a, b) => {
-      if (field === "name") return sign * a.player.name.localeCompare(b.player.name);
-      return sign * (a.position - b.position);
+    return [...rows].sort((a, b) => {
+      if (field === "name") return sign * a.playerName.localeCompare(b.playerName);
+      if (field === "tagAfter") {
+        return sign * (tagRank(tagAfters[a.playerId] ?? null) - tagRank(tagAfters[b.playerId] ?? null));
+      }
+      // Rows without a score yet (no Result synced) sort to the end either way.
+      if (a.score == null && b.score == null) return 0;
+      if (a.score == null) return 1;
+      if (b.score == null) return -1;
+      return sign * (a.score - b.score);
     });
   }
 
-  function toggleTagSort(field: "position" | "name") {
+  function toggleTagSort(field: "position" | "name" | "tagAfter") {
     setTagSort((prev) =>
       prev.field === field ? { field, dir: prev.dir === "asc" ? "desc" : "asc" } : { field, dir: "asc" }
     );
   }
 
-  function findDuplicateTags(results: RoundResult[], tagValues: Record<number, string>): Set<number> {
+  function findDuplicateTags(rows: MergedPlayerRow[], tagValues: Record<number, string>): Set<number> {
     // BoB is a shared bucket — any number of players can legitimately hold it —
     // so it's excluded from duplicate detection.
     const counts = new Map<string, number>();
-    for (const r of results) {
-      const n = normalizeTagInput(tagValues[r.id] ?? "");
+    for (const r of rows) {
+      const n = normalizeTagInput(tagValues[r.playerId] ?? "");
       if (n != null && n !== BOB_TAG) counts.set(n, (counts.get(n) ?? 0) + 1);
     }
     const dupeNumbers = new Set([...counts.entries()].filter(([, c]) => c > 1).map(([n]) => n));
-    const dupeResultIds = new Set<number>();
-    for (const r of results) {
-      const n = normalizeTagInput(tagValues[r.id] ?? "");
-      if (n != null && dupeNumbers.has(n)) dupeResultIds.add(r.id);
+    const dupePlayerIds = new Set<number>();
+    for (const r of rows) {
+      const n = normalizeTagInput(tagValues[r.playerId] ?? "");
+      if (n != null && dupeNumbers.has(n)) dupePlayerIds.add(r.playerId);
     }
-    return dupeResultIds;
+    return dupePlayerIds;
   }
 
   // Pool winners
@@ -503,18 +704,6 @@ export default function RoundManagePage({
     setDeleting(true);
     await fetch(`/api/rounds/${roundId}`, { method: "DELETE" });
     router.push(`/admin/leagues/${leagueId}`);
-  }
-
-  async function handleToggleDraft() {
-    if (!round) return;
-    setDraftToggling(true);
-    await fetch(`/api/rounds/${roundId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isDraft: !round.isDraft }),
-    });
-    await load();
-    setDraftToggling(false);
   }
 
   function openScoreEditor(result: RoundResult) {
@@ -554,8 +743,51 @@ export default function RoundManagePage({
     setRemovingPlayer(false);
   }
 
-  const blueResults = useMemo(() => round?.results.filter((r) => r.division === "BLUE") ?? [], [round?.results]);
-  const redResults = useMemo(() => round?.results.filter((r) => r.division === "RED") ?? [], [round?.results]);
+  // Shared by the Check-In and Results tabs: both render the same
+  // division/gender-grouped player rows, just with different editable
+  // columns (Check-In edits sign-in/payment/tagBefore, Results edits
+  // tagAfter/score/leftEarly). Tags are only reshuffled within a
+  // division/gender pool (see auto-assign), so the same number can
+  // legitimately show up in two different pools — duplicate detection is
+  // scoped per pool, not across the whole round.
+  const playerGroups = useMemo(() => {
+    return [
+      { label: "🔵 Blue Division", rows: mergedPlayerRows.filter((r) => r.division === "BLUE" && r.gender !== "FEMALE") },
+      { label: "🔵 Blue Division — Female", rows: mergedPlayerRows.filter((r) => r.division === "BLUE" && r.gender === "FEMALE") },
+      { label: "🔴 Red Division", rows: mergedPlayerRows.filter((r) => r.division === "RED" && r.gender !== "FEMALE") },
+      { label: "🔴 Red Division — Female", rows: mergedPlayerRows.filter((r) => r.division === "RED" && r.gender === "FEMALE") },
+    ]
+      .filter(({ label, rows }) => rows.length > 0 || !label.includes("Female"))
+      .map(({ label, rows }) => {
+        const sorted = sortPlayerRows(rows);
+        return {
+          label,
+          rows: sorted,
+          dupeBefore: findDuplicateTags(sorted, tagBefores),
+          dupeAfter: findDuplicateTags(sorted, tagAfters),
+        };
+      });
+  }, [mergedPlayerRows, tagSort, tagBefores, tagAfters]);
+
+  const resultsById = useMemo(() => new Map((round?.results ?? []).map((r) => [r.id, r])), [round?.results]);
+
+  const checkInTotals = useMemo(() => {
+    const checkIns = round?.checkIns ?? [];
+    let cash = 0;
+    let tap = 0;
+    let acePot = 0;
+    for (const c of checkIns) {
+      const isTap = (checkInPaymentMethods[c.playerId] ?? c.paymentMethod ?? "") === "TAP";
+      const acePotChecked = checkInAcePot[c.playerId] ?? c.acePot;
+      const paid = checkInPaid[c.playerId] ?? c.paid;
+      const tag = normalizeTagInput(tagBefores[c.playerId] ?? "");
+      const amount = paid && round ? checkInAmount(tag, acePotChecked, round.league) : 0;
+      if (isTap) tap += amount;
+      else cash += amount;
+      if (acePotChecked) acePot++;
+    }
+    return { count: checkIns.length, cash, tap, acePot };
+  }, [round, checkInPaymentMethods, checkInAcePot, checkInPaid, tagBefores]);
   const poolData = useMemo(
     () => round?.isChampionship ? computePoolGroups(round.results, standings) : null,
     [round?.isChampionship, round?.results, standings]
@@ -617,23 +849,39 @@ export default function RoundManagePage({
             )}
           </h1>
           <div className="flex flex-wrap items-center gap-2 mt-0.5">
-            <Input
-              type="date"
-              value={roundDate}
-              onChange={(e) => setRoundDate(e.target.value)}
-              className="h-7 w-40 text-sm"
-            />
-            {roundDate !== new Date(round.date).toISOString().slice(0, 10) && (
-              <Button size="sm" className="h-7" onClick={handleSaveDate} disabled={dateSaving}>
-                {dateSaving ? "Saving..." : "Save"}
-              </Button>
-            )}
-            <span className="text-sm text-[var(--ink-muted)]">· {round.results.length} players</span>
+            <span className="text-sm text-[var(--ink-muted)]">
+              {new Date(round.date).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
+              {" "}· {round.results.length} players
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7"
+              onClick={handleSyncUdisc}
+              disabled={syncing || !round.udiscUrl}
+              title={!round.udiscUrl ? "Set the UDisc Event URL via Edit first" : undefined}
+            >
+              {syncing ? "Syncing..." : "🔄 Sync from UDisc"}
+            </Button>
           </div>
+          {(syncResult || syncInfo || syncError) && (
+            <div className="mt-1">
+              {syncResult && (
+                <p className="text-sm text-[var(--positive)]">
+                  {syncResult.blueCheckIns + syncResult.redCheckIns} checked in (
+                  {syncResult.blueCheckIns} Blue / {syncResult.redCheckIns} Red) ·{" "}
+                  {syncResult.blueScores + syncResult.redScores} scores (
+                  {syncResult.blueScores} Blue / {syncResult.redScores} Red) — just now
+                </p>
+              )}
+              {syncInfo && <p className="text-sm text-[var(--tint-warn-fg)]">{syncInfo}</p>}
+              {syncError && <p className="text-sm text-red-600">{syncError}</p>}
+            </div>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={handleToggleDraft} disabled={draftToggling}>
-            {draftToggling ? "Saving..." : round.isDraft ? "Remove Draft" : "Mark as Draft"}
+          <Button variant="outline" size="sm" onClick={() => setEditRoundOpen(true)}>
+            Edit
           </Button>
           <Button asChild variant="outline" size="sm">
             <Link href={`/rounds/${roundId}`}>View Public Page</Link>
@@ -641,195 +889,202 @@ export default function RoundManagePage({
         </div>
       </div>
 
-      <Tabs defaultValue="results">
+      <Tabs defaultValue="tags">
         <TabsList className="mb-2">
-          <TabsTrigger value="results">Results</TabsTrigger>
-          <TabsTrigger value="prizes">Prizes & Awards</TabsTrigger>
           <TabsTrigger value="tags">
-            Tags
-            {round.results.some((r) => r.tagAfter != null) && (
+            Check-In
+            {(round.results.some((r) => r.tagAfter != null) || round.checkIns.some((c) => c.tagAfter != null)) && (
               <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-[var(--positive)] inline-block" />
             )}
           </TabsTrigger>
+          <TabsTrigger value="results">Results</TabsTrigger>
+          <TabsTrigger value="prizes">Prizes & Awards</TabsTrigger>
         </TabsList>
 
         {/* ── RESULTS & CTP ── */}
         <TabsContent value="results" className="space-y-6 mt-4 max-w-3xl">
 
-          {/* UDisc Sync */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">🔄 Sync from UDisc</CardTitle>
-              <p className="text-xs text-[var(--ink-muted)]">
-                Pull the latest leaderboard from a UDisc event URL. Safe to re-run any time — existing results are updated, not duplicated.
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">UDisc Event URL</Label>
-                <Input
-                  type="url"
-                  value={udiscUrl}
-                  onChange={(e) => setUdiscUrl(e.target.value)}
-                  placeholder="https://udisc.com/events/..."
-                />
-              </div>
-              <div className="flex items-center gap-3">
-                {udiscUrl !== (round.udiscUrl ?? "") && (
-                  <Button size="sm" variant="outline" onClick={handleSaveUdiscUrl} disabled={udiscSaving}>
-                    {udiscSaving ? "Saving..." : "Save URL"}
-                  </Button>
-                )}
-                <Button size="sm" onClick={handleSyncUdisc} disabled={syncing || !round.udiscUrl}>
-                  {syncing ? "Syncing..." : "Sync Now"}
-                </Button>
-              </div>
-              {syncResult && (
-                <p className="text-sm text-[var(--positive)]">
-                  Synced {syncResult.blueCount} Blue / {syncResult.redCount} Red — just now
-                </p>
-              )}
-              {syncInfo && <p className="text-sm text-[var(--tint-warn-fg)]">{syncInfo}</p>}
-              {syncError && <p className="text-sm text-red-600">{syncError}</p>}
-            </CardContent>
-          </Card>
+          {/* Scores, Tag After & Left Early */}
+          {(() => {
+            const PLAYER_COL_WIDTH = 168;
+            const HEADER_H = 36;
+            const ROW_H = 52;
+            const HEADER_STICKY_TOP = 56;
+            const resultsCols = "minmax(3.5rem,1fr) minmax(3.5rem,1fr) minmax(3rem,0.6fr) 2.5rem";
+            const anyDupes = playerGroups.some((g) => g.dupeBefore.size > 0 || g.dupeAfter.size > 0);
 
-          {/* Results summary */}
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Results Summary</CardTitle>
-                {!round.isChampionship && (blueResults.length > 5 || redResults.length > 5) && (
-                  <button
-                    onClick={() => setResultsExpanded((v) => !v)}
-                    className="text-xs text-[var(--ink-muted)] hover:text-[var(--ink)] transition-colors"
-                  >
-                    {resultsExpanded ? "Show less ↑" : "Show all ↓"}
-                  </button>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              {round.isChampionship && poolData ? (
-                <div className="space-y-5">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    {poolData.groups.map((g) => {
-                      const summary = currentSummaries.find((s) => s.pool === g.pool);
-                      const firstName = summary?.first?.playerName;
-                      const secondName = summary?.second?.playerName;
-                      return (
-                        <div key={g.pool}>
-                          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--tint-warn-fg)] mb-2">{g.label}</p>
-                          <ol className="space-y-1">
-                            {g.results.map((r) => {
-                              const isFirst = r.player.name === firstName;
-                              const isSecond = r.player.name === secondName;
-                              return (
-                                <li key={r.id} className={`text-sm flex items-center gap-2 ${isFirst || isSecond ? "font-semibold" : ""}`}>
-                                  <span className="w-5 text-center">
-                                    {isFirst ? "🥇" : isSecond ? "🥈" : <span className="text-[var(--ink-muted)]">·</span>}
-                                  </span>
-                                  <button
-                                    onClick={() => openScoreEditor(r)}
-                                    className="text-[var(--ink)] hover:text-blue-600 hover:underline text-left"
-                                  >
-                                    {r.player.name}
-                                  </button>
-                                  <span className="ml-auto font-mono text-xs text-[var(--ink-muted)]">{r.score}</span>
-                                </li>
-                              );
-                            })}
-                          </ol>
+            // Explicit tabIndex so Tab moves down a column (Tag, then Tag
+            // After) instead of the browser's default left-to-right order.
+            const tagBeforeTabIndex = new Map<number, number>();
+            const tagAfterTabIndex = new Map<number, number>();
+            let tabCursor = 1;
+            for (const { rows } of playerGroups) {
+              for (const r of rows) tagBeforeTabIndex.set(r.playerId, tabCursor++);
+              for (const r of rows) tagAfterTabIndex.set(r.playerId, tabCursor++);
+            }
+
+            return (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">📊 Scores & Tag Ladder</CardTitle>
+                  <p className="text-xs text-[var(--ink-muted)]">
+                    Tag is the number a player brought in — also editable on the Check-In tab, and kept in
+                    sync since both tabs share the same data. Tag, Tag After, and Left Early can all be set
+                    before a player&apos;s Result is synced. Check Left Early for a player who leaves before
+                    the round ends so they&apos;re excluded from Auto-Assign and can be given a tag manually.
+                    Auto-Assign fills Tag After for everyone else from score and the tag they brought in —
+                    review before saving.
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {playerGroups.map(({ label, rows, dupeBefore, dupeAfter }) => (
+                    <div key={label}>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)] mb-2">{label}</p>
+                      <div
+                        className="flex overflow-clip rounded-[var(--r-card)] border"
+                        style={{ borderColor: "var(--line)", background: "var(--bg-card)" }}
+                      >
+                        {/* Frozen: player name — plain flow, never scrolls. */}
+                        <div className="shrink-0" style={{ width: PLAYER_COL_WIDTH, borderRight: "1px solid var(--line)" }}>
+                          <div
+                            className="flex items-center px-3 sticky z-10"
+                            style={{ height: HEADER_H, top: HEADER_STICKY_TOP, background: "var(--bg-subtle)" }}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => toggleTagSort("name")}
+                              className="text-left flex items-center gap-0.5 text-[11px] font-medium text-[var(--ink-muted)] hover:text-[var(--ink)]"
+                            >
+                              Player{tagSort.field === "name" && (tagSort.dir === "asc" ? " ▲" : " ▼")}
+                            </button>
+                          </div>
+                          {rows.map((r, idx) => (
+                            <div
+                              key={r.playerId}
+                              className="flex items-center px-3"
+                              style={{
+                                height: ROW_H,
+                                background: idx % 2 === 1 ? "var(--row-tint)" : "var(--bg-card)",
+                                borderTop: "1px solid var(--line-3)",
+                              }}
+                            >
+                              {r.resultId ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const res = resultsById.get(r.resultId!);
+                                    if (res) openScoreEditor(res);
+                                  }}
+                                  className="text-sm text-[var(--ink)] truncate hover:text-blue-600 hover:underline text-left"
+                                >
+                                  {r.playerName}
+                                </button>
+                              ) : (
+                                <span className="text-sm text-[var(--ink-muted)] truncate">{r.playerName}</span>
+                              )}
+                            </div>
+                          ))}
+                          {rows.length === 0 && (
+                            <div className="flex items-center px-3" style={{ height: ROW_H }}>
+                              <span className="text-xs text-[var(--ink-muted)]">No players yet.</span>
+                            </div>
+                          )}
                         </div>
-                      );
-                    })}
-                  </div>
-                  {(poolData.blueUnqualified.length > 0 || poolData.redUnqualified.length > 0) && (
-                    <div className="pt-3 border-t border-[var(--line-2)]">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)] mb-3">Did Not Qualify</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                        {poolData.blueUnqualified.length > 0 && (
+
+                        {/* Scrollable: editable columns. */}
+                        <div className="min-w-0 flex-1">
                           <div>
-                            <p className="text-xs text-[var(--ink-muted)] mb-1">🔵 Blue</p>
-                            <ol className="space-y-1">
-                              {poolData.blueUnqualified.map((r, i) => (
-                                <li key={r.id} className="text-sm flex items-center gap-2">
-                                  <span className="text-[var(--ink-muted)] w-4">{i + 1}.</span>
-                                  <button
-                                    onClick={() => openScoreEditor(r)}
-                                    className="text-[var(--ink-muted)] hover:text-blue-600 hover:underline text-left"
-                                  >
-                                    {r.player.name}
-                                  </button>
-                                  <span className="ml-auto font-mono text-xs text-[var(--ink-muted)]">{r.score}</span>
-                                </li>
-                              ))}
-                            </ol>
+                            <div
+                              className="grid gap-2 px-3 items-center text-[11px] font-medium text-[var(--ink-muted)] sticky z-10"
+                              style={{ gridTemplateColumns: resultsCols, height: HEADER_H, top: HEADER_STICKY_TOP, background: "var(--bg-subtle)" }}
+                            >
+                              <span>Tag</span>
+                              <button
+                                type="button"
+                                onClick={() => toggleTagSort("tagAfter")}
+                                className="text-left flex items-center gap-0.5 hover:text-[var(--ink)]"
+                              >
+                                Tag After{tagSort.field === "tagAfter" && (tagSort.dir === "asc" ? " ▲" : " ▼")}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => toggleTagSort("position")}
+                                className="text-left flex items-center gap-0.5 hover:text-[var(--ink)]"
+                              >
+                                Score{tagSort.field === "position" && (tagSort.dir === "asc" ? " ▲" : " ▼")}
+                              </button>
+                              <span className="text-center" title="Left early">Left</span>
+                            </div>
+                            {rows.map((r, idx) => (
+                            <div
+                              key={r.playerId}
+                              className="grid gap-2 items-center px-3"
+                              style={{
+                                gridTemplateColumns: resultsCols,
+                                height: ROW_H,
+                                background: idx % 2 === 1 ? "var(--row-tint)" : "var(--bg-card)",
+                                borderTop: "1px solid var(--line-3)",
+                              }}
+                            >
+                              <Input
+                                type="text"
+                                placeholder={`# or ${BOB_TAG}`}
+                                tabIndex={tagBeforeTabIndex.get(r.playerId)}
+                                className={`h-8 max-w-14 text-sm ${dupeBefore.has(r.playerId) ? "border-[var(--tint-warn-fg)]" : ""}`}
+                                value={tagBefores[r.playerId] ?? ""}
+                                onChange={(e) => setTagBefores((prev) => ({ ...prev, [r.playerId]: e.target.value }))}
+                              />
+
+                              <Input
+                                type="text"
+                                placeholder={`# or ${BOB_TAG}`}
+                                tabIndex={tagAfterTabIndex.get(r.playerId)}
+                                className={`h-8 max-w-14 text-sm ${dupeAfter.has(r.playerId) ? "border-[var(--tint-warn-fg)]" : ""}`}
+                                value={tagAfters[r.playerId] ?? ""}
+                                onChange={(e) => setTagAfters((prev) => ({ ...prev, [r.playerId]: e.target.value }))}
+                              />
+
+                              <span className="text-xs font-mono text-[var(--ink-muted)]">{r.score ?? "—"}</span>
+
+                              {r.resultId || r.checkInId ? (
+                                <input
+                                  type="checkbox"
+                                  title="Left early"
+                                  className="justify-self-center"
+                                  checked={leftEarlys[r.playerId] ?? false}
+                                  onChange={(e) => setLeftEarlys((prev) => ({ ...prev, [r.playerId]: e.target.checked }))}
+                                />
+                              ) : (
+                                <span />
+                              )}
+                            </div>
+                            ))}
+                            {rows.length === 0 && <div style={{ height: ROW_H }} />}
                           </div>
-                        )}
-                        {poolData.redUnqualified.length > 0 && (
-                          <div>
-                            <p className="text-xs text-[var(--ink-muted)] mb-1">🔴 Red</p>
-                            <ol className="space-y-1">
-                              {poolData.redUnqualified.map((r, i) => (
-                                <li key={r.id} className="text-sm flex items-center gap-2">
-                                  <span className="text-[var(--ink-muted)] w-4">{i + 1}.</span>
-                                  <button
-                                    onClick={() => openScoreEditor(r)}
-                                    className="text-[var(--ink-muted)] hover:text-blue-600 hover:underline text-left"
-                                  >
-                                    {r.player.name}
-                                  </button>
-                                  <span className="ml-auto font-mono text-xs text-[var(--ink-muted)]">{r.score}</span>
-                                </li>
-                              ))}
-                            </ol>
-                          </div>
-                        )}
+                        </div>
                       </div>
                     </div>
+                  ))}
+                  {anyDupes && (
+                    <p className="text-xs text-[var(--tint-warn-fg)]">
+                      ⚠ Duplicate tag numbers highlighted above (within the same division/pool) — fix before
+                      saving if that wasn&apos;t intentional.
+                    </p>
                   )}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  {[
-                    { label: "🔵 Blue Division", results: blueResults },
-                    { label: "🔴 Red Division", results: redResults },
-                  ].map(({ label, results }) => {
-                    const visible = resultsExpanded ? results : results.slice(0, 5);
-                    const posCounts = results.reduce<Record<number, number>>((acc, r) => {
-                      acc[r.position] = (acc[r.position] ?? 0) + 1;
-                      return acc;
-                    }, {});
-                    return (
-                      <div key={label}>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)] mb-2">{label}</p>
-                        <ol className="space-y-1">
-                          {visible.map((r) => (
-                            <li key={r.id} className="text-sm flex items-center gap-2">
-                              <span className="text-[var(--ink-muted)] w-7 shrink-0 tabular-nums">
-                                {posCounts[r.position] > 1 ? `T${r.position}` : `${r.position}.`}
-                              </span>
-                              <button
-                                onClick={() => openScoreEditor(r)}
-                                className="text-[var(--ink)] hover:text-blue-600 hover:underline text-left"
-                              >
-                                {r.player.name}
-                              </button>
-                              <span className="ml-auto font-mono text-xs text-[var(--ink-muted)]">{r.score}</span>
-                            </li>
-                          ))}
-                          {!resultsExpanded && results.length > 5 && (
-                            <li className="text-xs text-[var(--ink-muted)]">+{results.length - 5} more</li>
-                          )}
-                        </ol>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+
+                  {tagError && <p className="text-sm text-red-600">{tagError}</p>}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <Button size="sm" variant="outline" onClick={handleAutoAssignTags} disabled={autoAssigning}>
+                      {autoAssigning ? "Assigning..." : "Auto-Assign New Tags"}
+                    </Button>
+                    <Button size="sm" onClick={handleSaveResults} disabled={resultsSaving}>
+                      {resultsSaving ? "Saving..." : "Save"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* Pool Champions override (championship only) */}
           {round.isChampionship && poolData && poolData.groups.length > 0 && (
@@ -896,15 +1151,6 @@ export default function RoundManagePage({
               </CardContent>
             </Card>
           )}
-
-          <div className="pt-4 border-t border-[var(--line)]">
-            <Button variant="destructive" onClick={handleDelete} disabled={deleting} size="sm">
-              {deleting ? "Deleting..." : "Delete Round"}
-            </Button>
-            <p className="text-xs text-[var(--ink-muted)] mt-1">
-              Permanently deletes all results for this round.
-            </p>
-          </div>
         </TabsContent>
 
         {/* ── PRIZES & AWARDS ── */}
@@ -1272,154 +1518,256 @@ export default function RoundManagePage({
           </Card>
         </TabsContent>
 
-        {/* ── TAGS ── */}
+        {/* ── CHECK-IN ── */}
         <TabsContent value="tags" className="space-y-6 mt-4 max-w-3xl">
+          {/* Sign-in & payment — one row per player */}
           {(() => {
-            // Tags are only reshuffled within a division/gender pool (see auto-assign),
-            // so the same number can legitimately show up in two different pools —
-            // duplicate detection is scoped per pool, not across the whole round.
-            const tagGroups = [
-              { label: "🔵 Blue Division", results: blueResults.filter((r) => r.player.gender !== "FEMALE") },
-              { label: "🔵 Blue Division — Female", results: blueResults.filter((r) => r.player.gender === "FEMALE") },
-              { label: "🔴 Red Division", results: redResults.filter((r) => r.player.gender !== "FEMALE") },
-              { label: "🔴 Red Division — Female", results: redResults.filter((r) => r.player.gender === "FEMALE") },
-            ]
-              .filter(({ label, results }) => results.length > 0 || !label.includes("Female"))
-              .map(({ label, results }) => {
-                const sorted = sortTagResults(results);
-                return {
-                  label,
-                  results: sorted,
-                  dupeBefore: findDuplicateTags(sorted, tagBefores),
-                  dupeAfter: findDuplicateTags(sorted, tagAfters),
-                };
-              });
+            const anyDupes = playerGroups.some((g) => g.dupeBefore.size > 0);
 
-            const anyDupes = tagGroups.some((g) => g.dupeBefore.size > 0 || g.dupeAfter.size > 0);
-
-            // Explicit tabIndex so Tab moves down a column (Brought In, then
-            // Tag After) instead of the browser's default left-to-right order.
-            const beforeTabIndex = new Map<number, number>();
-            const afterTabIndex = new Map<number, number>();
+            // Explicit tabIndex so Tab moves straight down the Tag column
+            // instead of the browser's default left-to-right row order.
+            const tagTabIndex = new Map<number, number>();
             let tabCursor = 1;
-            for (const { results } of tagGroups) {
-              for (const r of results) beforeTabIndex.set(r.id, tabCursor++);
-              for (const r of results) afterTabIndex.set(r.id, tabCursor++);
+            for (const { rows } of playerGroups) {
+              for (const r of rows) tagTabIndex.set(r.playerId, tabCursor++);
             }
 
+            // Player name is frozen (plain flow, outside the scroll area) so it
+            // stays visible while scrolling right to edit payment/tag.
+            const PLAYER_COL_WIDTH = 168;
+            const SIGNIN_HEADER_H = 36;
+            const SIGNIN_ROW_H = 52;
+            // Matches AdminNav's sticky height (h-14) so the table header docks
+            // just below the nav bar instead of under it.
+            const SIGNIN_HEADER_STICKY_TOP = 56;
+            const signinCols = "2.5rem 2.5rem 2.5rem minmax(3.5rem,1fr) minmax(4.5rem,1fr) 2rem";
+
             return (
-              <>
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">🎫 Tag Ladder</CardTitle>
-                    <p className="text-xs text-[var(--ink-muted)]">
-                      Record tags brought in, then auto-assign reshuffles them per division/gender pool by
-                      finish position (ties broken by previous tag). Hover a player&apos;s row to mark them
-                      &quot;left early&quot; and set their next tag manually — they&apos;re skipped by auto-assign.
-                    </p>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    {tagGroups.map(({ label, results, dupeBefore, dupeAfter }) => (
-                      <div key={label}>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)] mb-2">{label}</p>
-                        <div className="overflow-x-auto">
-                        <div className="space-y-1.5 min-w-[32rem]">
-                          <div className="grid grid-cols-[1fr_4rem_6rem_6rem_5rem] gap-2 text-[11px] font-medium text-[var(--ink-muted)] px-1">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">✅ Sign-In & Payment</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {playerGroups.map(({ label, rows, dupeBefore }) => (
+                    <div key={label}>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)] mb-2">{label}</p>
+                      <div
+                        className="flex overflow-clip rounded-[var(--r-card)] border"
+                        style={{ borderColor: "var(--line)", background: "var(--bg-card)" }}
+                      >
+                        {/* Frozen: player name — plain flow, never scrolls. */}
+                        <div className="shrink-0" style={{ width: PLAYER_COL_WIDTH, borderRight: "1px solid var(--line)" }}>
+                          <div
+                            className="flex items-center px-3 sticky z-10"
+                            style={{ height: SIGNIN_HEADER_H, top: SIGNIN_HEADER_STICKY_TOP, background: "var(--bg-subtle)" }}
+                          >
                             <button
                               type="button"
                               onClick={() => toggleTagSort("name")}
-                              className="text-left flex items-center gap-0.5 hover:text-[var(--ink)]"
+                              className="text-left flex items-center gap-0.5 text-[11px] font-medium text-[var(--ink-muted)] hover:text-[var(--ink)]"
                             >
                               Player{tagSort.field === "name" && (tagSort.dir === "asc" ? " ▲" : " ▼")}
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => toggleTagSort("position")}
-                              className="text-left flex items-center gap-0.5 hover:text-[var(--ink)]"
-                            >
-                              Score{tagSort.field === "position" && (tagSort.dir === "asc" ? " ▲" : " ▼")}
-                            </button>
-                            <span>Brought In</span>
-                            <span>Tag After</span>
-                            <span />
                           </div>
-                          {results.map((r) => (
+                          {rows.map((r, idx) => (
                             <div
-                              key={r.id}
-                              className="group grid grid-cols-[1fr_4rem_6rem_6rem_5rem] gap-2 items-center"
+                              key={r.playerId}
+                              className="flex items-center px-3"
+                              style={{
+                                height: SIGNIN_ROW_H,
+                                background: idx % 2 === 1 ? "var(--row-tint)" : "var(--bg-card)",
+                                borderTop: "1px solid var(--line-3)",
+                              }}
                             >
-                              <span className="text-sm text-[var(--ink)] truncate">{r.player.name}</span>
-                              <span className="text-xs font-mono text-[var(--ink-muted)]">{r.score}</span>
-                              <Input
-                                type="text"
-                                placeholder={`# or ${BOB_TAG}`}
-                                tabIndex={beforeTabIndex.get(r.id)}
-                                className={`h-8 text-sm ${dupeBefore.has(r.id) ? "border-[var(--tint-warn-fg)]" : ""}`}
-                                value={tagBefores[r.id] ?? ""}
-                                onChange={(e) =>
-                                  setTagBefores((prev) => ({ ...prev, [r.id]: e.target.value }))
-                                }
-                              />
-                              <Input
-                                type="text"
-                                placeholder={`# or ${BOB_TAG}`}
-                                tabIndex={afterTabIndex.get(r.id)}
-                                className={`h-8 text-sm ${dupeAfter.has(r.id) ? "border-[var(--tint-warn-fg)]" : ""}`}
-                                value={tagAfters[r.id] ?? ""}
-                                onChange={(e) =>
-                                  setTagAfters((prev) => ({ ...prev, [r.id]: e.target.value }))
-                                }
-                              />
-                              <label
-                                className={`flex items-center gap-1.5 text-xs text-[var(--ink-muted)] ${
-                                  leftEarlys[r.id] ? "opacity-100" : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-                                }`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={leftEarlys[r.id] ?? false}
-                                  onChange={(e) =>
-                                    setLeftEarlys((prev) => ({ ...prev, [r.id]: e.target.checked }))
-                                  }
-                                />
-                                Left early
-                              </label>
+                              <span className="text-sm text-[var(--ink)] truncate">{r.playerName}</span>
                             </div>
                           ))}
-                          {results.length === 0 && (
-                            <p className="text-xs text-[var(--ink-muted)]">No results yet.</p>
+                          {rows.length === 0 && (
+                            <div className="flex items-center px-3" style={{ height: SIGNIN_ROW_H }}>
+                              <span className="text-xs text-[var(--ink-muted)]">No players yet.</span>
+                            </div>
                           )}
                         </div>
+
+                        {/* Scrollable: everything editable. */}
+                        <div className="min-w-0 flex-1">
+                          <div>
+                            <div
+                              className="grid gap-2 px-3 items-center text-[11px] font-medium text-[var(--ink-muted)] sticky z-10"
+                              style={{ gridTemplateColumns: signinCols, height: SIGNIN_HEADER_H, top: SIGNIN_HEADER_STICKY_TOP, background: "var(--bg-subtle)" }}
+                            >
+                              <span className="text-center" title="Paid">Paid</span>
+                              <span className="text-center">Ace</span>
+                              <span className="text-center" title="Paid via Tap">Tap</span>
+                              <span>Tag</span>
+                              <span>Amount</span>
+                              <span />
+                            </div>
+                            {rows.map((r, idx) => (
+                            <div
+                              key={r.playerId}
+                              className="grid gap-2 items-center px-3"
+                              style={{
+                                gridTemplateColumns: signinCols,
+                                height: SIGNIN_ROW_H,
+                                background: idx % 2 === 1 ? "var(--row-tint)" : "var(--bg-card)",
+                                borderTop: "1px solid var(--line-3)",
+                              }}
+                            >
+                              {r.checkInId ? (
+                                <input
+                                  type="checkbox"
+                                  className="justify-self-center"
+                                  checked={checkInPaid[r.playerId] ?? false}
+                                  onChange={(e) => setCheckInPaid((prev) => ({ ...prev, [r.playerId]: e.target.checked }))}
+                                />
+                              ) : (
+                                <span />
+                              )}
+
+                              {r.checkInId ? (
+                                <input
+                                  type="checkbox"
+                                  className="justify-self-center"
+                                  checked={checkInAcePot[r.playerId] ?? false}
+                                  onChange={(e) => setCheckInAcePot((prev) => ({ ...prev, [r.playerId]: e.target.checked }))}
+                                />
+                              ) : (
+                                <span />
+                              )}
+
+                              {r.checkInId ? (
+                                <input
+                                  type="checkbox"
+                                  className="justify-self-center"
+                                  checked={checkInPaymentMethods[r.playerId] === "TAP"}
+                                  onChange={(e) =>
+                                    setCheckInPaymentMethods((prev) => ({ ...prev, [r.playerId]: e.target.checked ? "TAP" : "" }))
+                                  }
+                                />
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddCheckIn({ playerId: r.playerId, division: r.division })}
+                                  disabled={addingCheckIn}
+                                  className="text-xs text-[var(--ink-muted)] hover:text-[var(--ink)] underline text-left disabled:opacity-50"
+                                >
+                                  + Sign in
+                                </button>
+                              )}
+
+                              <Input
+                                type="text"
+                                placeholder={`# or ${BOB_TAG}`}
+                                tabIndex={tagTabIndex.get(r.playerId)}
+                                className={`h-8 max-w-14 text-sm ${dupeBefore.has(r.playerId) ? "border-[var(--tint-warn-fg)]" : ""}`}
+                                value={tagBefores[r.playerId] ?? ""}
+                                onChange={(e) => setTagBefores((prev) => ({ ...prev, [r.playerId]: e.target.value }))}
+                              />
+
+                              {r.checkInId ? (
+                                <span className="text-sm tabular-nums">
+                                  {checkInPaid[r.playerId]
+                                    ? `$${checkInAmount(normalizeTagInput(tagBefores[r.playerId] ?? ""), checkInAcePot[r.playerId] ?? false, round!.league)}`
+                                    : "—"}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-[var(--ink-muted)]">—</span>
+                              )}
+
+                              {r.checkInId ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveCheckIn(r.checkInId!)}
+                                  className="text-[var(--ink-muted)] hover:text-red-500 text-sm"
+                                  aria-label={`Remove ${r.playerName}`}
+                                >
+                                  ✕
+                                </button>
+                              ) : (
+                                <span />
+                              )}
+                            </div>
+                            ))}
+                            {rows.length === 0 && <div style={{ height: SIGNIN_ROW_H }} />}
+                          </div>
                         </div>
                       </div>
-                    ))}
-                    {anyDupes && (
-                      <p className="text-xs text-[var(--tint-warn-fg)]">
-                        ⚠ Duplicate tag numbers highlighted above (within the same division/pool) — fix before
-                        saving if that wasn&apos;t intentional.
-                      </p>
-                    )}
-                    {tagError && <p className="text-sm text-red-600">{tagError}</p>}
-                    <div className="flex items-center gap-3 pt-1 flex-wrap">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={handleAutoAssignTags}
-                        disabled={autoAssigning}
-                      >
-                        {autoAssigning ? "Assigning..." : "Auto-Assign New Tags"}
-                      </Button>
-                      <Button size="sm" onClick={handleSaveTags} disabled={tagsSaving}>
-                        {tagsSaving ? "Saving..." : "Save Tags"}
-                      </Button>
                     </div>
-                  </CardContent>
-                </Card>
-              </>
+                  ))}
+                  {anyDupes && (
+                    <p className="text-xs text-[var(--tint-warn-fg)]">
+                      ⚠ Duplicate tag numbers highlighted above (within the same division/pool) — fix before
+                      saving if that wasn&apos;t intentional.
+                    </p>
+                  )}
+
+                  {checkInError && <p className="text-sm text-red-600">{checkInError}</p>}
+
+                  <p className="text-sm text-[var(--ink-muted)]">
+                    {checkInTotals.count} checked in · ${checkInTotals.cash} cash · $
+                    {checkInTotals.tap} tap · {checkInTotals.acePot} ace pot
+                  </p>
+
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <Button size="sm" onClick={handleSaveCheckIn} disabled={checkInSaving}>
+                      {checkInSaving ? "Saving..." : "Save"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             );
           })()}
         </TabsContent>
       </Tabs>
+
+      {/* Edit Round Dialog */}
+      <Dialog open={editRoundOpen} onOpenChange={(open) => { if (!open) handleCancelEditRound(); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base">Edit Round</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Date</Label>
+              <Input type="date" value={roundDate} onChange={(e) => setRoundDate(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">UDisc Event URL</Label>
+              <Input
+                type="url"
+                value={udiscUrl}
+                onChange={(e) => setUdiscUrl(e.target.value)}
+                placeholder="https://udisc.com/events/..."
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm text-[var(--ink-2)]">
+              <input
+                type="checkbox"
+                checked={editIsDraft}
+                onChange={(e) => setEditIsDraft(e.target.checked)}
+              />
+              Mark as draft
+            </label>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" size="sm" onClick={handleCancelEditRound} disabled={editRoundSaving}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleSaveRoundEdit} disabled={editRoundSaving || !roundDate}>
+              {editRoundSaving ? "Saving..." : "Save"}
+            </Button>
+          </div>
+          <div className="pt-4 mt-2 border-t border-[var(--line)]">
+            <Button variant="destructive" onClick={handleDelete} disabled={deleting} size="sm">
+              {deleting ? "Deleting..." : "Delete Round"}
+            </Button>
+            <p className="text-xs text-[var(--ink-muted)] mt-1">
+              Permanently deletes all results for this round.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Score Editor Dialog */}
       <Dialog open={!!editingResult} onOpenChange={(open) => { if (!open) setEditingResult(null); }}>

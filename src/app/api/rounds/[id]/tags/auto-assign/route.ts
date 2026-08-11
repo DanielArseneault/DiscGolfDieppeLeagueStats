@@ -23,29 +23,31 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   // everyone else — the two groups never compete for the same tag numbers.
   for (const division of [Division.BLUE, Division.RED]) {
     for (const isFemalePool of [true, false]) {
+      const groupResults = round.results.filter(
+        (r) =>
+          r.division === division &&
+          r.tagBefore != null &&
+          (r.player.gender === Gender.FEMALE) === isFemalePool
+      );
+
       // Ties (equal position) are broken by previous tag — whoever held the lower
       // (better) tag before the round keeps priority for the lower tag after. BoB
       // (no numbered tag) always ranks below every numbered tag.
       //
       // Players marked leftEarly (left the round before it finished and had their
-      // next tag assigned manually) are excluded from the shuffle entirely — their
-      // tagAfter is left untouched, and the tag number they brought in doesn't get
-      // redistributed to anyone else.
-      const pool = round.results
-        .filter(
-          (r) =>
-            r.division === division &&
-            r.tagBefore != null &&
-            !r.leftEarly &&
-            (r.player.gender === Gender.FEMALE) === isFemalePool
-        )
+      // next tag assigned manually) are excluded from the shuffle itself — their
+      // tagAfter is left untouched — but the number they brought in still goes
+      // back into circulation below, since nobody else has claimed it.
+      const pool = groupResults
+        .filter((r) => !r.leftEarly)
         .sort((a, b) => a.position - b.position || tagRank(a.tagBefore) - tagRank(b.tagBefore));
 
-      // The number of numbered tags in circulation is conserved across the shuffle:
-      // the best finishers in the pool take the numbers, and everyone else — even
-      // someone who brought in a number — drops to BoB. BoB itself is an unlimited
-      // shared bucket, so anyone can hold it at once.
-      const numberedTags = pool
+      // The number of numbered tags in circulation is conserved across the shuffle,
+      // including numbers brought in by players who left early: the best finishers
+      // still in the pool take the numbers, and everyone else — even someone who
+      // brought in a number — drops to BoB. BoB itself is an unlimited shared
+      // bucket, so anyone can hold it at once.
+      const numberedTags = groupResults
         .map((r) => r.tagBefore!)
         .filter((t) => t !== BOB_TAG)
         .map((t) => parseInt(t, 10))
