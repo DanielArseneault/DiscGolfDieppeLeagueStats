@@ -4,10 +4,9 @@ import type { ParsedImport } from "@/lib/xlsx-parser";
 import type { ParsedParticipant } from "@/lib/udisc-participants-parser";
 import { findOrCreatePlayer } from "@/lib/players";
 
-/** Upserts a check-in, seeding tagBefore from the player's last known tag
- *  (i.e. last week's tagAfter) so the check-in tab starts pre-filled. Never
- *  overwrites a tagBefore that's already saved on the check-in, whether from
- *  a manual edit or an earlier sync. */
+/** Upserts a check-in. tagBefore is left for the admin to enter manually on
+ *  the check-in tab — never seeded from the player's last known tag, and
+ *  never overwritten once set. */
 async function upsertCheckIn(
   roundId: number,
   player: { id: number; currentTag: string | null },
@@ -19,13 +18,13 @@ async function upsertCheckIn(
 
   if (!existing) {
     return prisma.roundCheckIn.create({
-      data: { roundId, playerId: player.id, division, tagBefore: player.currentTag },
+      data: { roundId, playerId: player.id, division },
     });
   }
 
   return prisma.roundCheckIn.update({
     where: { id: existing.id },
-    data: { division, tagBefore: existing.tagBefore ?? player.currentTag },
+    data: { division },
   });
 }
 
@@ -67,9 +66,9 @@ export async function upsertResultsForRound(
         score: result.roundTotalScore,
         relativeScore: result.roundRelativeScore,
         holeScores: result.holeScores,
-        // Prefer whatever was entered on the check-in tab before the round
-        // started — it's more current than the player's general currentTag.
-        tagBefore: checkIn.tagBefore ?? player.currentTag,
+        // Whatever was entered on the check-in tab before the round started;
+        // left null if the admin hasn't filled it in yet.
+        tagBefore: checkIn.tagBefore,
         tagAfter: checkIn.tagAfter,
         leftEarly: checkIn.leftEarly,
       },
