@@ -13,7 +13,11 @@ interface StandingsTableProps {
 const RANK_W = 56;
 const PLAYER_W = 168;
 const FROZEN_COLS = `${RANK_W}px ${PLAYER_W}px`;
-const SCROLL_COLS = "90px 190px 80px 84px";
+const BEST_W = 90;
+const ROUNDS_W = 80;
+const POOL_W = 84;
+const CHIP_W = 30; // approx width of a score chip (incl. gap) at text-[11px]
+const SCORES_MIN_W = 190;
 const HEADER_H = 32;
 const ROW_H = 44;
 
@@ -53,6 +57,11 @@ export function StandingsTable({ standings, division, bestScoresCount, leagueId 
       </p>
     );
   }
+
+  const maxScores = Math.max(0, ...filtered.map((s) => s.allScores.length));
+  const scoresW = Math.max(SCORES_MIN_W, maxScores * CHIP_W);
+  const SCROLL_COLS = `${BEST_W}px ${scoresW}px ${ROUNDS_W}px ${POOL_W}px`;
+  const minWidth = BEST_W + scoresW + ROUNDS_W + POOL_W;
 
   return (
     <div className="flex" style={{ borderTop: "1px solid var(--line-2)", background: "var(--bg-card)" }}>
@@ -105,7 +114,7 @@ export function StandingsTable({ standings, division, bestScoresCount, leagueId 
 
       {/* Scrollable: Rounds / Best / Scores / Pool. */}
       <div className="min-w-0 flex-1 overflow-x-auto">
-        <div style={{ minWidth: "444px" }}>
+        <div style={{ minWidth: `${minWidth}px` }}>
           <div
             className="grid px-3 font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[.13em]"
             style={{ gridTemplateColumns: SCROLL_COLS, height: HEADER_H, background: "var(--bg-subtle)", color: "var(--ink-muted)" }}
