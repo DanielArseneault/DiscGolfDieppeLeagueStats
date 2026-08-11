@@ -116,7 +116,7 @@ export function StandingsTable({ standings, division, bestScoresCount, leagueId 
       <div className="min-w-0 flex-1 overflow-x-auto">
         <div style={{ minWidth: `${minWidth}px` }}>
           <div
-            className="grid px-3 font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[.13em]"
+            className="grid items-center px-3 font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[.13em]"
             style={{ gridTemplateColumns: SCROLL_COLS, height: HEADER_H, background: "var(--bg-subtle)", color: "var(--ink-muted)" }}
           >
             <div className="text-center">Best {bestScoresCount}</div>
