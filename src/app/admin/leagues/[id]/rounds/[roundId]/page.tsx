@@ -214,6 +214,7 @@ export default function RoundManagePage({
   const [checkInPaymentMethods, setCheckInPaymentMethods] = useState<Record<number, "CASH" | "TAP" | "">>({});
   const [addingCheckIn, setAddingCheckIn] = useState(false);
   const [checkInError, setCheckInError] = useState("");
+  const [savingCheckInRowIds, setSavingCheckInRowIds] = useState<Set<number>>(new Set());
 
   const [tagBefores, setTagBefores] = useState<Record<number, string>>({});
   const [tagAfters, setTagAfters] = useState<Record<number, string>>({});
@@ -512,10 +513,6 @@ export default function RoundManagePage({
     setAddingCheckIn(false);
   }
 
-  async function handleRemoveCheckIn(checkInId: number) {
-    await fetch(`/api/rounds/${roundId}/check-in/${checkInId}`, { method: "DELETE" });
-    await load();
-  }
 
   // One row per player, merging their RoundCheckIn (sign-in/payment, exists
   // pre-round) and Result (score/tags, exists once results are synced) —
@@ -597,6 +594,50 @@ export default function RoundManagePage({
     ]);
     await load();
     setCheckInSaving(false);
+  }
+
+  // Per-row variant of handleSaveCheckIn — saves just one player's sign-in/
+  // payment + tag brought in, so a row can be committed without waiting on
+  // (or accidentally resaving) everyone else's in-progress edits.
+  async function handleSaveCheckInRow(row: MergedPlayerRow) {
+    if (!round || !row.checkInId) return;
+    setSavingCheckInRowIds((prev) => new Set(prev).add(row.playerId));
+    const acePot = checkInAcePot[row.playerId] ?? false;
+    const paid = checkInPaid[row.playerId] ?? false;
+    await Promise.all([
+      fetch(`/api/rounds/${roundId}/check-in`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          checkIns: [{
+            id: row.checkInId,
+            acePot,
+            paid,
+            paymentMethod: checkInPaymentMethods[row.playerId] === "TAP" ? "TAP" : "CASH",
+            paymentAmount: paid
+              ? checkInAmount(normalizeTagInput(tagBefores[row.playerId] ?? ""), acePot, round.league)
+              : null,
+          }],
+        }),
+      }),
+      fetch(`/api/rounds/${roundId}/tags`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tags: [{
+            resultId: row.resultId,
+            checkInId: row.checkInId,
+            tagBefore: normalizeTagInput(tagBefores[row.playerId] ?? ""),
+          }],
+        }),
+      }),
+    ]);
+    await load();
+    setSavingCheckInRowIds((prev) => {
+      const next = new Set(prev);
+      next.delete(row.playerId);
+      return next;
+    });
   }
 
   // Results tab: the tag a player leaves with and whether they left early —
@@ -1540,7 +1581,7 @@ export default function RoundManagePage({
             // Matches AdminNav's sticky height (h-14) so the table header docks
             // just below the nav bar instead of under it.
             const SIGNIN_HEADER_STICKY_TOP = 56;
-            const signinCols = "2.5rem 2.5rem 2.5rem minmax(3.5rem,1fr) minmax(4.5rem,1fr) 2rem";
+            const signinCols = "2.5rem 2.5rem 2.5rem minmax(3.5rem,1fr) minmax(4.5rem,1fr) 3.75rem";
 
             return (
               <Card>
@@ -1676,17 +1717,20 @@ export default function RoundManagePage({
                               )}
 
                               {r.checkInId ? (
-                                <button
+                                <Button
                                   type="button"
-                                  onClick={() => handleRemoveCheckIn(r.checkInId!)}
-                                  className="text-[var(--ink-muted)] hover:text-red-500 text-sm"
-                                  aria-label={`Remove ${r.playerName}`}
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2 text-xs justify-self-start"
+                                  onClick={() => handleSaveCheckInRow(r)}
+                                  disabled={savingCheckInRowIds.has(r.playerId)}
                                 >
-                                  ✕
-                                </button>
+                                  {savingCheckInRowIds.has(r.playerId) ? "..." : "Save"}
+                                </Button>
                               ) : (
                                 <span />
                               )}
+
                             </div>
                             ))}
                             {rows.length === 0 && <div style={{ height: SIGNIN_ROW_H }} />}
