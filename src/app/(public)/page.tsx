@@ -376,39 +376,82 @@ function RecentRound({ round, leagueId, playerLookup }: { round: RoundData; leag
       <CardContent>
         <div className="grid md:grid-cols-2" style={{ gap: "1px", background: "var(--line)" }}>
           {([Division.BLUE, Division.RED] as Division[]).map((div) => {
-            const top3 = round.results.filter((r) => r.division === div).slice(0, 3);
-            const overrideWinner = round.roundWinners.find((w) => w.division === div && w.place === 1);
-            const secondPrize = round.roundWinners.find((w) => w.division === div && w.place === 2 && w.prize)?.prize ?? null;
+            const divResults = round.results.filter((r) => r.division === div);
+            const overrideFirst = round.roundWinners.find((w) => w.division === div && w.place === 1);
+            const overrideSeconds = round.roundWinners.filter((w) => w.division === div && w.place === 2);
+            // Names already spoken for by an override — their raw tied Result
+            // shouldn't also show up as an unlabeled fallback row below.
+            const claimedNames = new Set(
+              [overrideFirst, ...overrideSeconds]
+                .filter((w): w is NonNullable<typeof w> => !!w)
+                .map((w) => w.playerName.toLowerCase().trim())
+            );
+
+            type PodiumRowData = { key: string; name: string; playerId?: number; score: number; relativeScore: number; prize: string | null };
+            const rows: PodiumRowData[] = [];
+
+            const matchResult = (playerName: string) =>
+              divResults.find((r) => r.player.name.toLowerCase().trim() === playerName.toLowerCase().trim());
+
+            if (overrideFirst) {
+              const match = matchResult(overrideFirst.playerName) ?? divResults[0];
+              if (match) {
+                rows.push({
+                  key: `first-${overrideFirst.id}`,
+                  name: overrideFirst.playerName,
+                  playerId: playerLookup.get(overrideFirst.playerName.toLowerCase().trim()) ?? match.player.id,
+                  score: match.score,
+                  relativeScore: match.relativeScore,
+                  prize: overrideFirst.prize,
+                });
+              }
+            } else if (divResults[0]) {
+              const r = divResults[0];
+              rows.push({ key: `real-${r.id}`, name: r.player.name, playerId: r.player.id, score: r.score, relativeScore: r.relativeScore, prize: null });
+            }
+
+            for (const w of overrideSeconds) {
+              if (rows.length >= 3) break;
+              const match = matchResult(w.playerName);
+              if (!match) continue;
+              rows.push({
+                key: `second-${w.id}`,
+                name: w.playerName,
+                playerId: playerLookup.get(w.playerName.toLowerCase().trim()) ?? match.player.id,
+                score: match.score,
+                relativeScore: match.relativeScore,
+                prize: w.prize,
+              });
+            }
+
+            for (const r of divResults) {
+              if (rows.length >= 3) break;
+              if (claimedNames.has(r.player.name.toLowerCase().trim())) continue;
+              rows.push({ key: `real-${r.id}`, name: r.player.name, playerId: r.player.id, score: r.score, relativeScore: r.relativeScore, prize: null });
+            }
+
             return (
               <div key={div} className="p-4" style={{ background: "var(--bg-card)" }}>
                 <p className="mb-2 flex items-center gap-1.5 font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[.13em]" style={{ color: "var(--ink-muted)" }}>
                   <span className="h-2 w-2 rounded-full" style={{ background: div === Division.BLUE ? "var(--blue-dot)" : "var(--red-dot)" }} />
                   {div === Division.BLUE ? "Blue division" : "Red division"}
                 </p>
-                {top3.length === 0 ? (
+                {rows.length === 0 ? (
                   <p className="text-sm" style={{ color: "var(--ink-muted)" }}>No results</p>
                 ) : (
                   <div className="space-y-1">
-                    {top3.map((r, i) => {
-                      const displayName = i === 0 && overrideWinner ? overrideWinner.playerName : r.player.name;
-                      const playerId =
-                        i === 0 && overrideWinner
-                          ? playerLookup.get(overrideWinner.playerName.toLowerCase().trim()) ?? r.player.id
-                          : r.player.id;
-                      const prize = i === 0 ? overrideWinner?.prize ?? null : i === 1 ? secondPrize : null;
-                      return (
-                        <PodiumRow
-                          key={r.id}
-                          place={i + 1}
-                          name={displayName}
-                          playerId={playerId}
-                          leagueId={leagueId}
-                          score={r.score}
-                          relativeScore={r.relativeScore}
-                          prize={prize}
-                        />
-                      );
-                    })}
+                    {rows.map((row, i) => (
+                      <PodiumRow
+                        key={row.key}
+                        place={i + 1}
+                        name={row.name}
+                        playerId={row.playerId}
+                        leagueId={leagueId}
+                        score={row.score}
+                        relativeScore={row.relativeScore}
+                        prize={row.prize}
+                      />
+                    ))}
                   </div>
                 )}
               </div>
