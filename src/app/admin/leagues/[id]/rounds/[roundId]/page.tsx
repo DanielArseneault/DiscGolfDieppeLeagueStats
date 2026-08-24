@@ -254,6 +254,10 @@ export default function RoundManagePage({
     field: "name",
     dir: "asc",
   });
+  // Results tab only — championship rounds default to pool groupings, but
+  // during the tag shuffle itself it's easier to work off plain
+  // division/gender sections instead, so this lets that view toggle off.
+  const [groupByPool, setGroupByPool] = useState(true);
 
   // Round winner overrides (non-championship)
   // 1st place: one per division; 2nd place: multiple allowed (ties)
@@ -889,18 +893,56 @@ export default function RoundManagePage({
     setRemovingPlayer(false);
   }
 
-  // Shared by the Check-In and Results tabs: championship rounds prefer
-  // qualified pool groupings, while unqualified players stay in their
-  // division/gender sections. Tags are only reshuffled within a pool, so the
-  // same number can legitimately show up in two different groups.
+  // Turns labeled row buckets into the shape both tabs render: sorted rows
+  // plus duplicate-tag detection, computed the same way regardless of
+  // whether the buckets came from pools or plain division/gender.
+  function finalizeGroups(baseGroups: { label: string; rows: MergedPlayerRow[] }[]) {
+    return baseGroups.map(({ label, rows }) => {
+      const sorted = sortPlayerRows(rows);
+      return {
+        label,
+        rows: sorted,
+        dupeBefore: findDuplicateTags(sorted, tagBefores),
+        dupeAfter: findDuplicateTags(sorted, tagAfters),
+      };
+    });
+  }
+
+  // Plain division/gender sections, no pool awareness — used whenever pool
+  // grouping doesn't apply or is toggled off.
+  function divisionGenderGroups(rows: MergedPlayerRow[]) {
+    return [
+      { label: "🔵 Blue Division", rows: rows.filter((r) => r.division === "BLUE" && r.gender !== "FEMALE") },
+      { label: "🔵 Blue Division — Female", rows: rows.filter((r) => r.division === "BLUE" && r.gender === "FEMALE") },
+      { label: "🔴 Red Division", rows: rows.filter((r) => r.division === "RED" && r.gender !== "FEMALE") },
+      { label: "🔴 Red Division — Female", rows: rows.filter((r) => r.division === "RED" && r.gender === "FEMALE") },
+    ].filter(({ label, rows }) => rows.length > 0 || !label.includes("Female"));
+  }
+
+  // Check-In tab: always grouped by division/gender only — sign-in and
+  // payment happen before pool assignments are relevant, so pools never
+  // apply here even for championship rounds.
+  const checkInGroups = useMemo(
+    () => finalizeGroups(divisionGenderGroups(mergedPlayerRows)),
+    [mergedPlayerRows, tagSort, tagBefores, tagAfters]
+  );
+
+  // Results tab: championship rounds prefer qualified pool groupings, while
+  // unqualified players stay in their division/gender sections. Tags are
+  // only reshuffled within a pool, so the same number can legitimately show
+  // up in two different groups. `groupByPool` lets that default be toggled
+  // off — handy for actually working through the tag shuffle, which cares
+  // about division/gender, not pool.
   const playerGroups = useMemo(() => {
-    const playerPoolMap = round?.isChampionship
-      ? new Map<number, string>(
-          standings
-            .filter((s) => s.championshipPool)
-            .map((s) => [s.playerId, s.championshipPool!])
-        )
-      : new Map<number, string>();
+    if (!round?.isChampionship || !groupByPool) {
+      return finalizeGroups(divisionGenderGroups(mergedPlayerRows));
+    }
+
+    const playerPoolMap = new Map<number, string>(
+      standings
+        .filter((s) => s.championshipPool)
+        .map((s) => [s.playerId, s.championshipPool!])
+    );
 
     const qualifiedPools: Record<string, { all: MergedPlayerRow[]; women: MergedPlayerRow[]; men: MergedPlayerRow[] }> = {
       A: { all: [], women: [], men: [] },
@@ -926,43 +968,26 @@ export default function RoundManagePage({
       }
     }
 
-    const baseGroups = round?.isChampionship
-      ? [
-          ...(["A", "B", "C", "D"] as const).flatMap((pool) => {
-            const bucket = qualifiedPools[pool];
-            const groups: { label: string; rows: MergedPlayerRow[] }[] = [];
-            if (bucket.men.length > 0) groups.push({ label: CHAMPIONSHIP_POOL_LABELS[pool], rows: bucket.men });
-            if (bucket.women.length > 0) groups.push({ label: `${CHAMPIONSHIP_POOL_LABELS[pool]} — Female`, rows: bucket.women });
-            return groups;
-          }),
-          ...[
-            { label: "🔵 Blue Division", rows: blueUnqualified.filter((r) => r.gender !== "FEMALE") },
-            { label: "🔵 Blue Division — Female", rows: blueUnqualified.filter((r) => r.gender === "FEMALE") },
-            { label: "🔴 Red Division", rows: redUnqualified.filter((r) => r.gender !== "FEMALE") },
-            { label: "🔴 Red Division — Female", rows: redUnqualified.filter((r) => r.gender === "FEMALE") },
-          ]
-            .filter(({ rows }) => rows.length > 0)
-            .map(({ label, rows }) => ({ label, rows }))
-        ]
-      : [
-          { label: "🔵 Blue Division", rows: mergedPlayerRows.filter((r) => r.division === "BLUE" && r.gender !== "FEMALE") },
-          { label: "🔵 Blue Division — Female", rows: mergedPlayerRows.filter((r) => r.division === "BLUE" && r.gender === "FEMALE") },
-          { label: "🔴 Red Division", rows: mergedPlayerRows.filter((r) => r.division === "RED" && r.gender !== "FEMALE") },
-          { label: "🔴 Red Division — Female", rows: mergedPlayerRows.filter((r) => r.division === "RED" && r.gender === "FEMALE") },
-        ]
-          .filter(({ label, rows }) => rows.length > 0 || !label.includes("Female"))
-          .map(({ label, rows }) => ({ label, rows }));
+    const baseGroups = [
+      ...(["A", "B", "C", "D"] as const).flatMap((pool) => {
+        const bucket = qualifiedPools[pool];
+        const groups: { label: string; rows: MergedPlayerRow[] }[] = [];
+        if (bucket.men.length > 0) groups.push({ label: CHAMPIONSHIP_POOL_LABELS[pool], rows: bucket.men });
+        if (bucket.women.length > 0) groups.push({ label: `${CHAMPIONSHIP_POOL_LABELS[pool]} — Female`, rows: bucket.women });
+        return groups;
+      }),
+      ...[
+        { label: "🔵 Blue Division", rows: blueUnqualified.filter((r) => r.gender !== "FEMALE") },
+        { label: "🔵 Blue Division — Female", rows: blueUnqualified.filter((r) => r.gender === "FEMALE") },
+        { label: "🔴 Red Division", rows: redUnqualified.filter((r) => r.gender !== "FEMALE") },
+        { label: "🔴 Red Division — Female", rows: redUnqualified.filter((r) => r.gender === "FEMALE") },
+      ]
+        .filter(({ rows }) => rows.length > 0)
+        .map(({ label, rows }) => ({ label, rows }))
+    ];
 
-    return baseGroups.map(({ label, rows }) => {
-      const sorted = sortPlayerRows(rows);
-      return {
-        label,
-        rows: sorted,
-        dupeBefore: findDuplicateTags(sorted, tagBefores),
-        dupeAfter: findDuplicateTags(sorted, tagAfters),
-      };
-    });
-  }, [mergedPlayerRows, round?.isChampionship, standings, tagSort, tagBefores, tagAfters]);
+    return finalizeGroups(baseGroups);
+  }, [mergedPlayerRows, round?.isChampionship, groupByPool, standings, tagSort, tagBefores, tagAfters]);
 
   const resultsById = useMemo(() => new Map((round?.results ?? []).map((r) => [r.id, r])), [round?.results]);
 
@@ -1140,7 +1165,20 @@ export default function RoundManagePage({
             return (
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">📊 Scores & Tag Ladder</CardTitle>
+                  <div className="flex items-start justify-between gap-3">
+                    <CardTitle className="text-base">📊 Scores & Tag Ladder</CardTitle>
+                    {round.isChampionship && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 shrink-0 text-xs"
+                        onClick={() => setGroupByPool((prev) => !prev)}
+                      >
+                        {groupByPool ? "Grouped by Pool" : "Grouped by Division"}
+                      </Button>
+                    )}
+                  </div>
                   <p className="text-xs text-[var(--ink-muted)]">
                     Tag is the number a player brought in — also editable on the Check-In tab, and kept in
                     sync since both tabs share the same data. Tag, Tag After, and Left Early can all be set
@@ -1756,7 +1794,7 @@ export default function RoundManagePage({
         <TabsContent value="tags" className="space-y-6 mt-4 max-w-3xl">
           {/* Sign-in & payment — player list with per-player check-in modal */}
           {(() => {
-            const anyDupes = playerGroups.some((g) => g.dupeBefore.size > 0);
+            const anyDupes = checkInGroups.some((g) => g.dupeBefore.size > 0);
 
             return (
               <Card>
@@ -1764,7 +1802,7 @@ export default function RoundManagePage({
                   <CardTitle className="text-base">✅ Sign-In & Payment</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {playerGroups.map(({ label, rows }) => (
+                  {checkInGroups.map(({ label, rows }) => (
                     <div key={label}>
                       <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)] mb-2">{label}</p>
                       <div className="space-y-2">
@@ -1816,7 +1854,7 @@ export default function RoundManagePage({
 
                   {anyDupes && (
                     <p className="text-xs text-[var(--tint-warn-fg)]">
-                      ⚠ Duplicate tag numbers highlighted in the same pool — fix before saving if that wasn&apos;t intentional.
+                      ⚠ Duplicate tag numbers highlighted in the same group — fix before saving if that wasn&apos;t intentional.
                     </p>
                   )}
 
