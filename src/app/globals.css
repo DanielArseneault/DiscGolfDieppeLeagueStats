@@ -218,3 +218,14 @@
   text-decoration: none;
 }
 
+/* For a header row that scrolls horizontally in lockstep with a body below it
+   (see the round results table) — the header's own scrollbar is redundant
+   since the body's is the one users grab. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+

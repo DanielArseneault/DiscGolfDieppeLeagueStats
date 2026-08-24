@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use, useMemo } from "react";
+import { useState, useEffect, use, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DollarSign, Smartphone, Target, Check } from "lucide-react";
 
 interface CtpWinner {
   hole: number;
@@ -164,6 +165,13 @@ function computePoolGroups(
   };
 }
 
+const CHAMPIONSHIP_POOL_LABELS: Record<string, string> = {
+  A: "🔵 Pool A",
+  B: "🔵 Pool B",
+  C: "🔴 Pool C",
+  D: "🔴 Pool D",
+};
+
 function checkInAmount(
   tag: string | null,
   acePot: boolean,
@@ -183,6 +191,18 @@ export default function RoundManagePage({
 
   const [round, setRound] = useState<Round | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Results table: header and body scroll horizontally in separate boxes
+  // (the header needs its own so it can stay `sticky` against the page —
+  // nesting it inside the body's horizontally-scrolling box makes that box
+  // the sticky containing block instead, see resultsScrollSync). Synced by
+  // mirroring scrollLeft both ways.
+  const resultsHeaderScrollRefs = useRef(new Map<string, HTMLDivElement>()).current;
+  const resultsBodyScrollRefs = useRef(new Map<string, HTMLDivElement>()).current;
+  function syncResultsScroll(label: string, from: "header" | "body", scrollLeft: number) {
+    const other = (from === "header" ? resultsBodyScrollRefs : resultsHeaderScrollRefs).get(label);
+    if (other && other.scrollLeft !== scrollLeft) other.scrollLeft = scrollLeft;
+  }
 
   // Championship pool state
   const [standings, setStandings] = useState<PlayerStanding[]>([]);
@@ -215,6 +235,13 @@ export default function RoundManagePage({
   const [addingCheckIn, setAddingCheckIn] = useState(false);
   const [checkInError, setCheckInError] = useState("");
   const [savingCheckInRowIds, setSavingCheckInRowIds] = useState<Set<number>>(new Set());
+  const [checkInModalPlayer, setCheckInModalPlayer] = useState<MergedPlayerRow | null>(null);
+  const [checkInModalPaid, setCheckInModalPaid] = useState(false);
+  const [checkInModalAcePot, setCheckInModalAcePot] = useState(false);
+  const [checkInModalTap, setCheckInModalTap] = useState(false);
+  const [checkInModalTag, setCheckInModalTag] = useState("");
+  const [checkInModalIsBob, setCheckInModalIsBob] = useState(false);
+  const [checkInModalSaving, setCheckInModalSaving] = useState(false);
 
   const [tagBefores, setTagBefores] = useState<Record<number, string>>({});
   const [tagAfters, setTagAfters] = useState<Record<number, string>>({});
@@ -513,6 +540,84 @@ export default function RoundManagePage({
     setAddingCheckIn(false);
   }
 
+  function openCheckInModal(row: MergedPlayerRow) {
+    const rawTag = tagBefores[row.playerId] ?? "";
+    const normalized = normalizeTagInput(rawTag);
+    const isBob = normalized === BOB_TAG;
+    setCheckInModalPlayer(row);
+    setCheckInModalPaid(checkInPaid[row.playerId] ?? false);
+    setCheckInModalAcePot(checkInAcePot[row.playerId] ?? false);
+    setCheckInModalTap(checkInPaymentMethods[row.playerId] === "TAP");
+    setCheckInModalTag(isBob ? "" : rawTag);
+    setCheckInModalIsBob(isBob);
+    setCheckInError("");
+  }
+
+  async function handleSaveCheckInModal() {
+    if (!round || !checkInModalPlayer) return;
+    setCheckInModalSaving(true);
+    setCheckInError("");
+
+    const normalizedTag = checkInModalIsBob ? BOB_TAG : normalizeTagInput(checkInModalTag || "");
+    const paymentMethod = checkInModalTap ? "TAP" : "CASH";
+    const amount = checkInModalPaid
+      ? checkInAmount(normalizedTag, checkInModalAcePot, round.league)
+      : 0;
+
+    const checkInId = checkInModalPlayer.checkInId ?? await (async () => {
+      const res = await fetch(`/api/rounds/${roundId}/check-in`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ playerId: checkInModalPlayer.playerId, division: checkInModalPlayer.division }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? "Failed to sign in player");
+      }
+      const data = await res.json();
+      return data.id as number;
+    })();
+
+    try {
+      await fetch(`/api/rounds/${roundId}/check-in`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          checkIns: [{
+            id: checkInId,
+            acePot: checkInModalAcePot,
+            paid: checkInModalPaid,
+            paymentMethod,
+            paymentAmount: checkInModalPaid ? amount : null,
+          }],
+        }),
+      });
+
+      await fetch(`/api/rounds/${roundId}/tags`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tags: [{
+            resultId: checkInModalPlayer.resultId,
+            checkInId,
+            tagBefore: normalizedTag,
+          }],
+        }),
+      });
+
+      setTagBefores((prev) => ({ ...prev, [checkInModalPlayer.playerId]: normalizedTag ?? "" }));
+      setCheckInPaid((prev) => ({ ...prev, [checkInModalPlayer.playerId]: checkInModalPaid }));
+      setCheckInAcePot((prev) => ({ ...prev, [checkInModalPlayer.playerId]: checkInModalAcePot }));
+      setCheckInPaymentMethods((prev) => ({ ...prev, [checkInModalPlayer.playerId]: checkInModalTap ? "TAP" : "CASH" }));
+      await load();
+      setCheckInModalPlayer(null);
+    } catch (error) {
+      setCheckInError(error instanceof Error ? error.message : "Failed to save check-in");
+    } finally {
+      setCheckInModalSaving(false);
+    }
+  }
+
 
   // One row per player, merging their RoundCheckIn (sign-in/payment, exists
   // pre-round) and Result (score/tags, exists once results are synced) —
@@ -784,31 +889,80 @@ export default function RoundManagePage({
     setRemovingPlayer(false);
   }
 
-  // Shared by the Check-In and Results tabs: both render the same
-  // division/gender-grouped player rows, just with different editable
-  // columns (Check-In edits sign-in/payment/tagBefore, Results edits
-  // tagAfter/score/leftEarly). Tags are only reshuffled within a
-  // division/gender pool (see auto-assign), so the same number can
-  // legitimately show up in two different pools — duplicate detection is
-  // scoped per pool, not across the whole round.
+  // Shared by the Check-In and Results tabs: championship rounds prefer
+  // qualified pool groupings, while unqualified players stay in their
+  // division/gender sections. Tags are only reshuffled within a pool, so the
+  // same number can legitimately show up in two different groups.
   const playerGroups = useMemo(() => {
-    return [
-      { label: "🔵 Blue Division", rows: mergedPlayerRows.filter((r) => r.division === "BLUE" && r.gender !== "FEMALE") },
-      { label: "🔵 Blue Division — Female", rows: mergedPlayerRows.filter((r) => r.division === "BLUE" && r.gender === "FEMALE") },
-      { label: "🔴 Red Division", rows: mergedPlayerRows.filter((r) => r.division === "RED" && r.gender !== "FEMALE") },
-      { label: "🔴 Red Division — Female", rows: mergedPlayerRows.filter((r) => r.division === "RED" && r.gender === "FEMALE") },
-    ]
-      .filter(({ label, rows }) => rows.length > 0 || !label.includes("Female"))
-      .map(({ label, rows }) => {
-        const sorted = sortPlayerRows(rows);
-        return {
-          label,
-          rows: sorted,
-          dupeBefore: findDuplicateTags(sorted, tagBefores),
-          dupeAfter: findDuplicateTags(sorted, tagAfters),
-        };
-      });
-  }, [mergedPlayerRows, tagSort, tagBefores, tagAfters]);
+    const playerPoolMap = round?.isChampionship
+      ? new Map<number, string>(
+          standings
+            .filter((s) => s.championshipPool)
+            .map((s) => [s.playerId, s.championshipPool!])
+        )
+      : new Map<number, string>();
+
+    const qualifiedPools: Record<string, { all: MergedPlayerRow[]; women: MergedPlayerRow[]; men: MergedPlayerRow[] }> = {
+      A: { all: [], women: [], men: [] },
+      B: { all: [], women: [], men: [] },
+      C: { all: [], women: [], men: [] },
+      D: { all: [], women: [], men: [] },
+    };
+    const blueUnqualified: MergedPlayerRow[] = [];
+    const redUnqualified: MergedPlayerRow[] = [];
+
+    for (const row of mergedPlayerRows) {
+      const pool = playerPoolMap.get(row.playerId);
+      if (pool) {
+        const poolBucket = qualifiedPools[pool];
+        if (!poolBucket) continue;
+        poolBucket.all.push(row);
+        if (row.gender === "FEMALE") poolBucket.women.push(row);
+        else poolBucket.men.push(row);
+      } else if (row.division === "BLUE") {
+        blueUnqualified.push(row);
+      } else {
+        redUnqualified.push(row);
+      }
+    }
+
+    const baseGroups = round?.isChampionship
+      ? [
+          ...(["A", "B", "C", "D"] as const).flatMap((pool) => {
+            const bucket = qualifiedPools[pool];
+            const groups: { label: string; rows: MergedPlayerRow[] }[] = [];
+            if (bucket.men.length > 0) groups.push({ label: CHAMPIONSHIP_POOL_LABELS[pool], rows: bucket.men });
+            if (bucket.women.length > 0) groups.push({ label: `${CHAMPIONSHIP_POOL_LABELS[pool]} — Female`, rows: bucket.women });
+            return groups;
+          }),
+          ...[
+            { label: "🔵 Blue Division", rows: blueUnqualified.filter((r) => r.gender !== "FEMALE") },
+            { label: "🔵 Blue Division — Female", rows: blueUnqualified.filter((r) => r.gender === "FEMALE") },
+            { label: "🔴 Red Division", rows: redUnqualified.filter((r) => r.gender !== "FEMALE") },
+            { label: "🔴 Red Division — Female", rows: redUnqualified.filter((r) => r.gender === "FEMALE") },
+          ]
+            .filter(({ rows }) => rows.length > 0)
+            .map(({ label, rows }) => ({ label, rows }))
+        ]
+      : [
+          { label: "🔵 Blue Division", rows: mergedPlayerRows.filter((r) => r.division === "BLUE" && r.gender !== "FEMALE") },
+          { label: "🔵 Blue Division — Female", rows: mergedPlayerRows.filter((r) => r.division === "BLUE" && r.gender === "FEMALE") },
+          { label: "🔴 Red Division", rows: mergedPlayerRows.filter((r) => r.division === "RED" && r.gender !== "FEMALE") },
+          { label: "🔴 Red Division — Female", rows: mergedPlayerRows.filter((r) => r.division === "RED" && r.gender === "FEMALE") },
+        ]
+          .filter(({ label, rows }) => rows.length > 0 || !label.includes("Female"))
+          .map(({ label, rows }) => ({ label, rows }));
+
+    return baseGroups.map(({ label, rows }) => {
+      const sorted = sortPlayerRows(rows);
+      return {
+        label,
+        rows: sorted,
+        dupeBefore: findDuplicateTags(sorted, tagBefores),
+        dupeAfter: findDuplicateTags(sorted, tagAfters),
+      };
+    });
+  }, [mergedPlayerRows, round?.isChampionship, standings, tagSort, tagBefores, tagAfters]);
 
   const resultsById = useMemo(() => new Map((round?.results ?? []).map((r) => [r.id, r])), [round?.results]);
 
@@ -951,8 +1105,27 @@ export default function RoundManagePage({
             const HEADER_H = 36;
             const ROW_H = 52;
             const HEADER_STICKY_TOP = 56;
-            const resultsCols = "minmax(3.5rem,1fr) minmax(3.5rem,1fr) minmax(3rem,0.6fr) 2.5rem";
+            // Fixed px widths (not minmax/fr) so the grid has a real total
+            // width — that's what lets the wrapper scroll horizontally
+            // instead of squeezing the inputs on narrow screens.
+            const resultsColWidths = [72, 72, 56, 56, 40]; // Tag, Tag After, Score, Thru, Left
+            const resultsCols = resultsColWidths.map((w) => `${w}px`).join(" ");
+            const resultsGridWidth = resultsColWidths.reduce((a, b) => a + b, 0) + (resultsColWidths.length - 1) * 8 + 24;
             const anyDupes = playerGroups.some((g) => g.dupeBefore.size > 0 || g.dupeAfter.size > 0);
+
+            // Holes actually scored so far, e.g. "14/18", or "F" once the
+            // full card is in — makes a short card (left early, not yet
+            // synced) obvious next to the Score column.
+            function thruDisplay(row: MergedPlayerRow): string {
+              if (!row.resultId) return "—";
+              const result = resultsById.get(row.resultId);
+              if (!result) return "—";
+              const played = Object.values(result.holeScores ?? {}).filter((v) => typeof v === "number" && v > 0).length;
+              if (played === 0) return "—";
+              const layout = row.division === "BLUE" ? round?.blueLayout : round?.redLayout;
+              const total = layout?.holePars.length || 18;
+              return played >= total ? "F" : `${played}/${total}`;
+            }
 
             // Explicit tabIndex so Tab moves down a column (Tag, then Tag
             // After) instead of the browser's default left-to-right order.
@@ -1032,12 +1205,21 @@ export default function RoundManagePage({
                           )}
                         </div>
 
-                        {/* Scrollable: editable columns. */}
+                        {/* Scrollable: editable columns. Header and body are separate
+                            horizontal-scroll boxes (synced via syncResultsScroll) so the
+                            header can stay `sticky` against the page — nesting it inside
+                            the body's own scrolling box would make that box the sticky
+                            containing block instead of the page. */}
                         <div className="min-w-0 flex-1">
-                          <div>
+                          <div
+                            ref={(el) => { if (el) resultsHeaderScrollRefs.set(label, el); }}
+                            className="overflow-x-auto no-scrollbar sticky z-10"
+                            style={{ top: HEADER_STICKY_TOP, background: "var(--bg-subtle)" }}
+                            onScroll={(e) => syncResultsScroll(label, "header", e.currentTarget.scrollLeft)}
+                          >
                             <div
-                              className="grid gap-2 px-3 items-center text-[11px] font-medium text-[var(--ink-muted)] sticky z-10"
-                              style={{ gridTemplateColumns: resultsCols, height: HEADER_H, top: HEADER_STICKY_TOP, background: "var(--bg-subtle)" }}
+                              className="grid gap-2 px-3 items-center text-[11px] font-medium text-[var(--ink-muted)]"
+                              style={{ gridTemplateColumns: resultsCols, height: HEADER_H, minWidth: resultsGridWidth }}
                             >
                               <span>Tag</span>
                               <button
@@ -1054,53 +1236,64 @@ export default function RoundManagePage({
                               >
                                 Score{tagSort.field === "position" && (tagSort.dir === "asc" ? " ▲" : " ▼")}
                               </button>
+                              <span>Thru</span>
                               <span className="text-center" title="Left early">Left</span>
                             </div>
-                            {rows.map((r, idx) => (
-                            <div
-                              key={r.playerId}
-                              className="grid gap-2 items-center px-3"
-                              style={{
-                                gridTemplateColumns: resultsCols,
-                                height: ROW_H,
-                                background: idx % 2 === 1 ? "var(--row-tint)" : "var(--bg-card)",
-                                borderTop: "1px solid var(--line-3)",
-                              }}
-                            >
-                              <Input
-                                type="text"
-                                placeholder={`# or ${BOB_TAG}`}
-                                tabIndex={tagBeforeTabIndex.get(r.playerId)}
-                                className={`h-8 max-w-14 text-sm ${dupeBefore.has(r.playerId) ? "border-[var(--tint-warn-fg)]" : ""}`}
-                                value={tagBefores[r.playerId] ?? ""}
-                                onChange={(e) => setTagBefores((prev) => ({ ...prev, [r.playerId]: e.target.value }))}
-                              />
-
-                              <Input
-                                type="text"
-                                placeholder={`# or ${BOB_TAG}`}
-                                tabIndex={tagAfterTabIndex.get(r.playerId)}
-                                className={`h-8 max-w-14 text-sm ${dupeAfter.has(r.playerId) ? "border-[var(--tint-warn-fg)]" : ""}`}
-                                value={tagAfters[r.playerId] ?? ""}
-                                onChange={(e) => setTagAfters((prev) => ({ ...prev, [r.playerId]: e.target.value }))}
-                              />
-
-                              <span className="text-xs font-mono text-[var(--ink-muted)]">{r.score ?? "—"}</span>
-
-                              {r.resultId || r.checkInId ? (
-                                <input
-                                  type="checkbox"
-                                  title="Left early"
-                                  className="justify-self-center"
-                                  checked={leftEarlys[r.playerId] ?? false}
-                                  onChange={(e) => setLeftEarlys((prev) => ({ ...prev, [r.playerId]: e.target.checked }))}
+                          </div>
+                          <div
+                            ref={(el) => { if (el) resultsBodyScrollRefs.set(label, el); }}
+                            className="overflow-x-auto"
+                            onScroll={(e) => syncResultsScroll(label, "body", e.currentTarget.scrollLeft)}
+                          >
+                            <div style={{ minWidth: resultsGridWidth }}>
+                              {rows.map((r, idx) => (
+                              <div
+                                key={r.playerId}
+                                className="grid gap-2 items-center px-3"
+                                style={{
+                                  gridTemplateColumns: resultsCols,
+                                  height: ROW_H,
+                                  background: idx % 2 === 1 ? "var(--row-tint)" : "var(--bg-card)",
+                                  borderTop: "1px solid var(--line-3)",
+                                }}
+                              >
+                                <Input
+                                  type="text"
+                                  placeholder={`# or ${BOB_TAG}`}
+                                  tabIndex={tagBeforeTabIndex.get(r.playerId)}
+                                  className={`h-8 max-w-14 text-sm ${dupeBefore.has(r.playerId) ? "border-[var(--tint-warn-fg)]" : ""}`}
+                                  value={tagBefores[r.playerId] ?? ""}
+                                  onChange={(e) => setTagBefores((prev) => ({ ...prev, [r.playerId]: e.target.value }))}
                                 />
-                              ) : (
-                                <span />
-                              )}
+
+                                <Input
+                                  type="text"
+                                  placeholder={`# or ${BOB_TAG}`}
+                                  tabIndex={tagAfterTabIndex.get(r.playerId)}
+                                  className={`h-8 max-w-14 text-sm ${dupeAfter.has(r.playerId) ? "border-[var(--tint-warn-fg)]" : ""}`}
+                                  value={tagAfters[r.playerId] ?? ""}
+                                  onChange={(e) => setTagAfters((prev) => ({ ...prev, [r.playerId]: e.target.value }))}
+                                />
+
+                                <span className="text-xs font-mono text-[var(--ink-muted)]">{r.score ?? "—"}</span>
+
+                                <span className="text-xs font-mono text-[var(--ink-muted)]">{thruDisplay(r)}</span>
+
+                                {r.resultId || r.checkInId ? (
+                                  <input
+                                    type="checkbox"
+                                    title="Left early"
+                                    className="justify-self-center"
+                                    checked={leftEarlys[r.playerId] ?? false}
+                                    onChange={(e) => setLeftEarlys((prev) => ({ ...prev, [r.playerId]: e.target.checked }))}
+                                  />
+                                ) : (
+                                  <span />
+                                )}
+                              </div>
+                              ))}
+                              {rows.length === 0 && <div style={{ height: ROW_H }} />}
                             </div>
-                            ))}
-                            {rows.length === 0 && <div style={{ height: ROW_H }} />}
                           </div>
                         </div>
                       </div>
@@ -1561,27 +1754,9 @@ export default function RoundManagePage({
 
         {/* ── CHECK-IN ── */}
         <TabsContent value="tags" className="space-y-6 mt-4 max-w-3xl">
-          {/* Sign-in & payment — one row per player */}
+          {/* Sign-in & payment — player list with per-player check-in modal */}
           {(() => {
             const anyDupes = playerGroups.some((g) => g.dupeBefore.size > 0);
-
-            // Explicit tabIndex so Tab moves straight down the Tag column
-            // instead of the browser's default left-to-right row order.
-            const tagTabIndex = new Map<number, number>();
-            let tabCursor = 1;
-            for (const { rows } of playerGroups) {
-              for (const r of rows) tagTabIndex.set(r.playerId, tabCursor++);
-            }
-
-            // Player name is frozen (plain flow, outside the scroll area) so it
-            // stays visible while scrolling right to edit payment/tag.
-            const PLAYER_COL_WIDTH = 168;
-            const SIGNIN_HEADER_H = 36;
-            const SIGNIN_ROW_H = 52;
-            // Matches AdminNav's sticky height (h-14) so the table header docks
-            // just below the nav bar instead of under it.
-            const SIGNIN_HEADER_STICKY_TOP = 56;
-            const signinCols = "2.5rem 2.5rem 2.5rem minmax(3.5rem,1fr) minmax(4.5rem,1fr) 3.75rem";
 
             return (
               <Card>
@@ -1589,160 +1764,59 @@ export default function RoundManagePage({
                   <CardTitle className="text-base">✅ Sign-In & Payment</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {playerGroups.map(({ label, rows, dupeBefore }) => (
+                  {playerGroups.map(({ label, rows }) => (
                     <div key={label}>
                       <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)] mb-2">{label}</p>
-                      <div
-                        className="flex overflow-clip rounded-[var(--r-card)] border"
-                        style={{ borderColor: "var(--line)", background: "var(--bg-card)" }}
-                      >
-                        {/* Frozen: player name — plain flow, never scrolls. */}
-                        <div className="shrink-0" style={{ width: PLAYER_COL_WIDTH, borderRight: "1px solid var(--line)" }}>
-                          <div
-                            className="flex items-center px-3 sticky z-10"
-                            style={{ height: SIGNIN_HEADER_H, top: SIGNIN_HEADER_STICKY_TOP, background: "var(--bg-subtle)" }}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => toggleTagSort("name")}
-                              className="text-left flex items-center gap-0.5 text-[11px] font-medium text-[var(--ink-muted)] hover:text-[var(--ink)]"
-                            >
-                              Player{tagSort.field === "name" && (tagSort.dir === "asc" ? " ▲" : " ▼")}
-                            </button>
-                          </div>
-                          {rows.map((r, idx) => (
+                      <div className="space-y-2">
+                        {rows.map((row) => {
+                          const isPaid = checkInPaid[row.playerId] ?? false;
+                          const hasAce = checkInAcePot[row.playerId] ?? false;
+                          const tap = checkInPaymentMethods[row.playerId] === "TAP";
+                          const tagValue = normalizeTagInput(tagBefores[row.playerId] ?? "");
+                          return (
                             <div
-                              key={r.playerId}
-                              className="flex items-center px-3"
-                              style={{
-                                height: SIGNIN_ROW_H,
-                                background: idx % 2 === 1 ? "var(--row-tint)" : "var(--bg-card)",
-                                borderTop: "1px solid var(--line-3)",
-                              }}
+                              key={row.playerId}
+                              className="flex items-center justify-between gap-3 rounded-[var(--r-card)] border px-3 py-2"
+                              style={{ borderColor: "var(--line)", background: "var(--bg-card)" }}
                             >
-                              <span className="text-sm text-[var(--ink)] truncate">{r.playerName}</span>
+                              <button
+                                type="button"
+                                onClick={() => openCheckInModal(row)}
+                                className="min-w-0 flex-1 text-left"
+                              >
+                                <p className="truncate text-sm font-medium text-[var(--ink)] hover:text-blue-600 hover:underline">{row.playerName}</p>
+                                <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-[var(--ink-muted)]">
+                                  {isPaid && <span className="rounded bg-[var(--positive)]/10 px-1.5 py-0.5 text-[var(--positive)]">Paid</span>}
+                                  {hasAce && <span className="rounded bg-[var(--tint-warn-bg)] px-1.5 py-0.5 text-[var(--tint-warn-fg)]">Ace</span>}
+                                  {tap && <span className="rounded bg-[var(--blue-dot)]/10 px-1.5 py-0.5 text-[var(--blue-dot)]">Tap</span>}
+                                  {tagValue && <span className="rounded bg-[var(--bg-subtle)] px-1.5 py-0.5">{tagValue}</span>}
+                                </div>
+                              </button>
+                              <span
+                                className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-medium uppercase tracking-wide ${
+                                  checkInPaid[row.playerId] ?? false
+                                    ? "border-[var(--positive)] bg-[var(--positive)]/10 text-[var(--positive)]"
+                                    : row.checkInId
+                                      ? "border-[var(--line)] bg-[var(--bg-subtle)] text-[var(--ink-muted)]"
+                                      : "border-[var(--tint-warn-fg)] bg-[var(--tint-warn-bg)] text-[var(--tint-warn-fg)]"
+                                }`}
+                              >
+                                {checkInPaid[row.playerId] ?? false
+                                  ? "Checked In"
+                                  : row.checkInId
+                                    ? "Signed In"
+                                    : "Needs Check-In"}
+                              </span>
                             </div>
-                          ))}
-                          {rows.length === 0 && (
-                            <div className="flex items-center px-3" style={{ height: SIGNIN_ROW_H }}>
-                              <span className="text-xs text-[var(--ink-muted)]">No players yet.</span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Scrollable: everything editable. */}
-                        <div className="min-w-0 flex-1">
-                          <div>
-                            <div
-                              className="grid gap-2 px-3 items-center text-[11px] font-medium text-[var(--ink-muted)] sticky z-10"
-                              style={{ gridTemplateColumns: signinCols, height: SIGNIN_HEADER_H, top: SIGNIN_HEADER_STICKY_TOP, background: "var(--bg-subtle)" }}
-                            >
-                              <span className="text-center" title="Paid">Paid</span>
-                              <span className="text-center">Ace</span>
-                              <span className="text-center" title="Paid via Tap">Tap</span>
-                              <span>Tag</span>
-                              <span>Amount</span>
-                              <span />
-                            </div>
-                            {rows.map((r, idx) => (
-                            <div
-                              key={r.playerId}
-                              className="grid gap-2 items-center px-3"
-                              style={{
-                                gridTemplateColumns: signinCols,
-                                height: SIGNIN_ROW_H,
-                                background: idx % 2 === 1 ? "var(--row-tint)" : "var(--bg-card)",
-                                borderTop: "1px solid var(--line-3)",
-                              }}
-                            >
-                              {r.checkInId ? (
-                                <input
-                                  type="checkbox"
-                                  className="justify-self-center"
-                                  checked={checkInPaid[r.playerId] ?? false}
-                                  onChange={(e) => setCheckInPaid((prev) => ({ ...prev, [r.playerId]: e.target.checked }))}
-                                />
-                              ) : (
-                                <span />
-                              )}
-
-                              {r.checkInId ? (
-                                <input
-                                  type="checkbox"
-                                  className="justify-self-center"
-                                  checked={checkInAcePot[r.playerId] ?? false}
-                                  onChange={(e) => setCheckInAcePot((prev) => ({ ...prev, [r.playerId]: e.target.checked }))}
-                                />
-                              ) : (
-                                <span />
-                              )}
-
-                              {r.checkInId ? (
-                                <input
-                                  type="checkbox"
-                                  className="justify-self-center"
-                                  checked={checkInPaymentMethods[r.playerId] === "TAP"}
-                                  onChange={(e) =>
-                                    setCheckInPaymentMethods((prev) => ({ ...prev, [r.playerId]: e.target.checked ? "TAP" : "" }))
-                                  }
-                                />
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => handleAddCheckIn({ playerId: r.playerId, division: r.division })}
-                                  disabled={addingCheckIn}
-                                  className="text-xs text-[var(--ink-muted)] hover:text-[var(--ink)] underline text-left disabled:opacity-50"
-                                >
-                                  + Sign in
-                                </button>
-                              )}
-
-                              <Input
-                                type="text"
-                                placeholder={`# or ${BOB_TAG}`}
-                                tabIndex={tagTabIndex.get(r.playerId)}
-                                className={`h-8 max-w-14 text-sm ${dupeBefore.has(r.playerId) ? "border-[var(--tint-warn-fg)]" : ""}`}
-                                value={tagBefores[r.playerId] ?? ""}
-                                onChange={(e) => setTagBefores((prev) => ({ ...prev, [r.playerId]: e.target.value }))}
-                              />
-
-                              {r.checkInId ? (
-                                <span className="text-sm tabular-nums">
-                                  {checkInPaid[r.playerId]
-                                    ? `$${checkInAmount(normalizeTagInput(tagBefores[r.playerId] ?? ""), checkInAcePot[r.playerId] ?? false, round!.league)}`
-                                    : "—"}
-                                </span>
-                              ) : (
-                                <span className="text-xs text-[var(--ink-muted)]">—</span>
-                              )}
-
-                              {r.checkInId ? (
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 px-2 text-xs justify-self-start"
-                                  onClick={() => handleSaveCheckInRow(r)}
-                                  disabled={savingCheckInRowIds.has(r.playerId)}
-                                >
-                                  {savingCheckInRowIds.has(r.playerId) ? "..." : "Save"}
-                                </Button>
-                              ) : (
-                                <span />
-                              )}
-
-                            </div>
-                            ))}
-                            {rows.length === 0 && <div style={{ height: SIGNIN_ROW_H }} />}
-                          </div>
-                        </div>
+                          );
+                        })}
                       </div>
                     </div>
                   ))}
+
                   {anyDupes && (
                     <p className="text-xs text-[var(--tint-warn-fg)]">
-                      ⚠ Duplicate tag numbers highlighted above (within the same division/pool) — fix before
-                      saving if that wasn&apos;t intentional.
+                      ⚠ Duplicate tag numbers highlighted in the same pool — fix before saving if that wasn&apos;t intentional.
                     </p>
                   )}
 
@@ -1752,12 +1826,6 @@ export default function RoundManagePage({
                     {checkInTotals.count} checked in · ${checkInTotals.cash} cash · $
                     {checkInTotals.tap} tap · {checkInTotals.acePot} ace pot
                   </p>
-
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <Button size="sm" onClick={handleSaveCheckIn} disabled={checkInSaving}>
-                      {checkInSaving ? "Saving..." : "Save"}
-                    </Button>
-                  </div>
                 </CardContent>
               </Card>
             );
@@ -1810,6 +1878,115 @@ export default function RoundManagePage({
               Permanently deletes all results for this round.
             </p>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Check-In Modal */}
+      <Dialog open={!!checkInModalPlayer} onOpenChange={(open) => { if (!open) setCheckInModalPlayer(null); }}>
+        <DialogContent className="max-w-md p-5 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base pr-6">Check-In — {checkInModalPlayer?.playerName}</DialogTitle>
+          </DialogHeader>
+
+          {checkInModalPlayer && (
+            <div className="space-y-5">
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCheckInModalPaid((prev) => !prev)}
+                  className={`relative flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-[var(--r-control)] border-2 px-2 py-2 text-sm font-medium transition-colors ${
+                    checkInModalPaid
+                      ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]"
+                      : "border-[var(--line)] bg-[var(--bg-card)] text-[var(--ink)]"
+                  }`}
+                >
+                  {checkInModalPaid && <Check className="absolute right-1 top-1 h-3.5 w-3.5" />}
+                  <DollarSign className="h-5 w-5" />
+                  Paid
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCheckInModalAcePot((prev) => !prev)}
+                  className={`relative flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-[var(--r-control)] border-2 px-2 py-2 text-sm font-medium transition-colors ${
+                    checkInModalAcePot
+                      ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]"
+                      : "border-[var(--line)] bg-[var(--bg-card)] text-[var(--ink)]"
+                  }`}
+                >
+                  {checkInModalAcePot && <Check className="absolute right-1 top-1 h-3.5 w-3.5" />}
+                  <span className="text-lg leading-none">🦅</span>
+                  Ace
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCheckInModalTap((prev) => !prev)}
+                  className={`relative flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-[var(--r-control)] border-2 px-2 py-2 text-sm font-medium transition-colors ${
+                    checkInModalTap
+                      ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]"
+                      : "border-[var(--line)] bg-[var(--bg-card)] text-[var(--ink)]"
+                  }`}
+                >
+                  {checkInModalTap && <Check className="absolute right-1 top-1 h-3.5 w-3.5" />}
+                  <Smartphone className="h-5 w-5" />
+                  Tap
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs">Tag</Label>
+                <div className="flex items-stretch gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={999}
+                    value={checkInModalIsBob ? "" : checkInModalTag}
+                    onChange={(e) => setCheckInModalTag(e.target.value)}
+                    disabled={checkInModalIsBob}
+                    placeholder="Tag #"
+                    className="h-12 flex-1 text-base"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !checkInModalIsBob;
+                      setCheckInModalIsBob(next);
+                      if (next) setCheckInModalTag("");
+                    }}
+                    className={`flex h-12 items-center gap-1.5 whitespace-nowrap rounded-[var(--r-control)] border-2 px-4 text-sm font-medium transition-colors ${
+                      checkInModalIsBob
+                        ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]"
+                        : "border-[var(--line)] bg-[var(--bg-card)] text-[var(--ink)]"
+                    }`}
+                  >
+                    <Target className="h-4 w-4" />
+                    BoB
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--bg-subtle)] p-3">
+                <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--ink-muted)]">Total</div>
+                <div className="mt-1 text-2xl font-semibold text-[var(--ink)]">
+                  ${checkInModalPaid ? checkInAmount(checkInModalIsBob ? BOB_TAG : normalizeTagInput(checkInModalTag || ""), checkInModalAcePot, round.league) : 0}
+                </div>
+              </div>
+
+              {checkInError && <p className="text-sm text-red-600">{checkInError}</p>}
+
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant="outline"
+                  className="h-11"
+                  onClick={() => setCheckInModalPlayer(null)}
+                >
+                  Cancel
+                </Button>
+                <Button className="h-11" onClick={handleSaveCheckInModal} disabled={checkInModalSaving}>
+                  {checkInModalSaving ? "Saving..." : "Save"}
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
