@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { computePoolSummaries } from "@/lib/pool-utils";
 import { normalizeTagInput, BOB_TAG, tagRank } from "@/lib/tags";
+import { toPar, signInk } from "@/lib/design-helpers";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -165,6 +166,19 @@ function computePoolGroups(
   };
 }
 
+interface SyncStats {
+  blueCheckIns: number;
+  redCheckIns: number;
+  blueScores: number;
+  redScores: number;
+  syncedAt: string;
+}
+
+type SyncOutcome =
+  | { ok: true; stats: SyncStats }
+  | { ok: true; message: string }
+  | { ok: false; error: string };
+
 const CHAMPIONSHIP_POOL_LABELS: Record<string, string> = {
   A: "🔵 Pool A",
   B: "🔵 Pool B",
@@ -250,7 +264,7 @@ export default function RoundManagePage({
   const [resultsSaving, setResultsSaving] = useState(false);
   const [autoAssigning, setAutoAssigning] = useState(false);
   const [tagError, setTagError] = useState("");
-  const [tagSort, setTagSort] = useState<{ field: "position" | "name" | "tagAfter"; dir: "asc" | "desc" }>({
+  const [tagSort, setTagSort] = useState<{ field: "position" | "name" | "tagBefore" | "tagAfter"; dir: "asc" | "desc" }>({
     field: "name",
     dir: "asc",
   });
@@ -291,13 +305,7 @@ export default function RoundManagePage({
   // UDisc sync state
   const [udiscUrl, setUdiscUrl] = useState("");
   const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<{
-    blueCheckIns: number;
-    redCheckIns: number;
-    blueScores: number;
-    redScores: number;
-    syncedAt: string;
-  } | null>(null);
+  const [syncResult, setSyncResult] = useState<SyncStats | null>(null);
   const [syncError, setSyncError] = useState("");
   const [syncInfo, setSyncInfo] = useState("");
 
@@ -422,35 +430,45 @@ export default function RoundManagePage({
     setFacebookSaving(false);
   }
 
-  async function handleSyncUdisc() {
-    setSyncing(true);
-    setSyncError("");
-    setSyncInfo("");
-    setSyncResult(null);
+  // Pure fetch + outcome, no component state — shared by the standalone Sync
+  // button and by Auto-Assign (which syncs first so it never shuffles tags
+  // against stale positions/scores).
+  async function performSync(): Promise<SyncOutcome> {
     try {
       const res = await fetch(`/api/rounds/${roundId}/sync-udisc`, { method: "POST" });
       const data = await res.json();
-      if (!res.ok) {
-        setSyncError(data.error ?? "Sync failed");
-        return;
-      }
-      if (data.message) {
-        setSyncInfo(data.message);
-      } else {
-        setSyncResult({
+      if (!res.ok) return { ok: false, error: data.error ?? "Sync failed" };
+      if (data.message) return { ok: true, message: data.message };
+      return {
+        ok: true,
+        stats: {
           blueCheckIns: data.blueCheckIns,
           redCheckIns: data.redCheckIns,
           blueScores: data.blueScores,
           redScores: data.redScores,
           syncedAt: data.syncedAt,
-        });
-        await load();
-      }
+        },
+      };
     } catch {
-      setSyncError("Failed to sync. Try again in a moment.");
-    } finally {
-      setSyncing(false);
+      return { ok: false, error: "Failed to sync. Try again in a moment." };
     }
+  }
+
+  async function handleSyncUdisc() {
+    setSyncing(true);
+    setSyncError("");
+    setSyncInfo("");
+    setSyncResult(null);
+    const outcome = await performSync();
+    if (!outcome.ok) {
+      setSyncError(outcome.error);
+    } else if ("message" in outcome) {
+      setSyncInfo(outcome.message);
+    } else {
+      setSyncResult(outcome.stats);
+      await load();
+    }
+    setSyncing(false);
   }
 
   // Round winner overrides
@@ -749,12 +767,11 @@ export default function RoundManagePage({
     });
   }
 
-  // Results tab: the tag a player leaves with and whether they left early —
-  // leftEarly can be set as soon as a check-in exists, so it can be flagged
-  // mid-round before a Result is ever synced (see tags route).
-  async function handleSaveResults() {
-    if (!round) return;
-    setResultsSaving(true);
+  // Pure PUT of whatever's currently in the Tag/Tag After/Left Early inputs,
+  // no component state — shared by the plain Save button and by Auto-Assign
+  // (which must persist in-progress edits before it reads tagBefore/leftEarly
+  // back out of the database).
+  async function saveTagsToServer() {
     await fetch(`/api/rounds/${roundId}/tags`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -768,21 +785,61 @@ export default function RoundManagePage({
         })),
       }),
     });
+  }
+
+  // Results tab: the tag a player leaves with and whether they left early —
+  // leftEarly can be set as soon as a check-in exists, so it can be flagged
+  // mid-round before a Result is ever synced (see tags route).
+  async function handleSaveResults() {
+    if (!round) return;
+    setResultsSaving(true);
+    await saveTagsToServer();
     await load();
     setResultsSaving(false);
   }
 
+  // Auto-Assign reads tagBefore/leftEarly/position straight from the Result
+  // table, so it always runs save → sync → assign in that order: unsaved
+  // edits get persisted first, then a fresh UDisc sync brings positions up
+  // to date (sync never touches tagBefore/tagAfter/leftEarly on an existing
+  // Result — see import-results.ts), and only then does the shuffle run
+  // against data that actually matches the screen. One click covers all
+  // three steps so there's no stale-data window to click through.
   async function handleAutoAssignTags() {
+    if (!round) return;
     setAutoAssigning(true);
     setTagError("");
-    const res = await fetch(`/api/rounds/${roundId}/tags/auto-assign`, { method: "POST" });
-    if (!res.ok) {
-      const err = await res.json();
-      setTagError(err.error ?? "Failed to auto-assign tags");
-    } else {
+    setSyncError("");
+    setSyncInfo("");
+    setSyncResult(null);
+    try {
+      await saveTagsToServer();
+
+      if (round.udiscUrl) {
+        const outcome = await performSync();
+        if (!outcome.ok) {
+          setSyncError(outcome.error);
+          setTagError("Sync failed — tags were not reassigned.");
+          return;
+        }
+        if ("message" in outcome) {
+          setSyncInfo(outcome.message);
+          setTagError("Nothing new on UDisc yet — tags were not reassigned.");
+          return;
+        }
+        setSyncResult(outcome.stats);
+      }
+
+      const res = await fetch(`/api/rounds/${roundId}/tags/auto-assign`, { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json();
+        setTagError(err.error ?? "Failed to auto-assign tags");
+        return;
+      }
       await load();
+    } finally {
+      setAutoAssigning(false);
     }
-    setAutoAssigning(false);
   }
 
   function sortPlayerRows(rows: MergedPlayerRow[]): MergedPlayerRow[] {
@@ -790,6 +847,9 @@ export default function RoundManagePage({
     const sign = dir === "asc" ? 1 : -1;
     return [...rows].sort((a, b) => {
       if (field === "name") return sign * a.playerName.localeCompare(b.playerName);
+      if (field === "tagBefore") {
+        return sign * (tagRank(tagBefores[a.playerId] ?? null) - tagRank(tagBefores[b.playerId] ?? null));
+      }
       if (field === "tagAfter") {
         return sign * (tagRank(tagAfters[a.playerId] ?? null) - tagRank(tagAfters[b.playerId] ?? null));
       }
@@ -801,7 +861,7 @@ export default function RoundManagePage({
     });
   }
 
-  function toggleTagSort(field: "position" | "name" | "tagAfter") {
+  function toggleTagSort(field: "position" | "name" | "tagBefore" | "tagAfter") {
     setTagSort((prev) =>
       prev.field === field ? { field, dir: prev.dir === "asc" ? "desc" : "asc" } : { field, dir: "asc" }
     );
@@ -944,23 +1004,14 @@ export default function RoundManagePage({
         .map((s) => [s.playerId, s.championshipPool!])
     );
 
-    const qualifiedPools: Record<string, { all: MergedPlayerRow[]; women: MergedPlayerRow[]; men: MergedPlayerRow[] }> = {
-      A: { all: [], women: [], men: [] },
-      B: { all: [], women: [], men: [] },
-      C: { all: [], women: [], men: [] },
-      D: { all: [], women: [], men: [] },
-    };
+    const qualifiedPools: Record<string, MergedPlayerRow[]> = { A: [], B: [], C: [], D: [] };
     const blueUnqualified: MergedPlayerRow[] = [];
     const redUnqualified: MergedPlayerRow[] = [];
 
     for (const row of mergedPlayerRows) {
       const pool = playerPoolMap.get(row.playerId);
       if (pool) {
-        const poolBucket = qualifiedPools[pool];
-        if (!poolBucket) continue;
-        poolBucket.all.push(row);
-        if (row.gender === "FEMALE") poolBucket.women.push(row);
-        else poolBucket.men.push(row);
+        qualifiedPools[pool]?.push(row);
       } else if (row.division === "BLUE") {
         blueUnqualified.push(row);
       } else {
@@ -969,21 +1020,13 @@ export default function RoundManagePage({
     }
 
     const baseGroups = [
-      ...(["A", "B", "C", "D"] as const).flatMap((pool) => {
-        const bucket = qualifiedPools[pool];
-        const groups: { label: string; rows: MergedPlayerRow[] }[] = [];
-        if (bucket.men.length > 0) groups.push({ label: CHAMPIONSHIP_POOL_LABELS[pool], rows: bucket.men });
-        if (bucket.women.length > 0) groups.push({ label: `${CHAMPIONSHIP_POOL_LABELS[pool]} — Female`, rows: bucket.women });
-        return groups;
-      }),
+      ...(["A", "B", "C", "D"] as const)
+        .filter((pool) => qualifiedPools[pool].length > 0)
+        .map((pool) => ({ label: CHAMPIONSHIP_POOL_LABELS[pool], rows: qualifiedPools[pool] })),
       ...[
-        { label: "🔵 Blue Division", rows: blueUnqualified.filter((r) => r.gender !== "FEMALE") },
-        { label: "🔵 Blue Division — Female", rows: blueUnqualified.filter((r) => r.gender === "FEMALE") },
-        { label: "🔴 Red Division", rows: redUnqualified.filter((r) => r.gender !== "FEMALE") },
-        { label: "🔴 Red Division — Female", rows: redUnqualified.filter((r) => r.gender === "FEMALE") },
-      ]
-        .filter(({ rows }) => rows.length > 0)
-        .map(({ label, rows }) => ({ label, rows }))
+        { label: "🔵 Blue Division", rows: blueUnqualified },
+        { label: "🔴 Red Division", rows: redUnqualified },
+      ].filter(({ rows }) => rows.length > 0)
     ];
 
     return finalizeGroups(baseGroups);
@@ -1133,7 +1176,7 @@ export default function RoundManagePage({
             // Fixed px widths (not minmax/fr) so the grid has a real total
             // width — that's what lets the wrapper scroll horizontally
             // instead of squeezing the inputs on narrow screens.
-            const resultsColWidths = [72, 72, 56, 56, 40]; // Tag, Tag After, Score, Thru, Left
+            const resultsColWidths = [72, 72, 56, 56, 56, 40]; // Tag, Tag After, Total, Score, Thru, Left
             const resultsCols = resultsColWidths.map((w) => `${w}px`).join(" ");
             const resultsGridWidth = resultsColWidths.reduce((a, b) => a + b, 0) + (resultsColWidths.length - 1) * 8 + 24;
             const anyDupes = playerGroups.some((g) => g.dupeBefore.size > 0 || g.dupeAfter.size > 0);
@@ -1150,6 +1193,14 @@ export default function RoundManagePage({
               const layout = row.division === "BLUE" ? round?.blueLayout : round?.redLayout;
               const total = layout?.holePars.length || 18;
               return played >= total ? "F" : `${played}/${total}`;
+            }
+
+            // Score relative to par, e.g. "+3", "E", "−2".
+            function totalDisplay(row: MergedPlayerRow): { text: string; ink?: string } {
+              if (!row.resultId) return { text: "—" };
+              const result = resultsById.get(row.resultId);
+              if (!result) return { text: "—" };
+              return { text: toPar(result.relativeScore), ink: signInk(result.relativeScore) };
             }
 
             // Explicit tabIndex so Tab moves down a column (Tag, then Tag
@@ -1184,8 +1235,8 @@ export default function RoundManagePage({
                     sync since both tabs share the same data. Tag, Tag After, and Left Early can all be set
                     before a player&apos;s Result is synced. Check Left Early for a player who leaves before
                     the round ends so they&apos;re excluded from Auto-Assign and can be given a tag manually.
-                    Auto-Assign fills Tag After for everyone else from score and the tag they brought in —
-                    review before saving.
+                    Auto-Assign saves your edits, re-syncs from UDisc, then fills and commits Tag After for
+                    everyone else from the final score and the tag they brought in — all in one click.
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -1259,13 +1310,26 @@ export default function RoundManagePage({
                               className="grid gap-2 px-3 items-center text-[11px] font-medium text-[var(--ink-muted)]"
                               style={{ gridTemplateColumns: resultsCols, height: HEADER_H, minWidth: resultsGridWidth }}
                             >
-                              <span>Tag</span>
+                              <button
+                                type="button"
+                                onClick={() => toggleTagSort("tagBefore")}
+                                className="text-left flex items-center gap-0.5 hover:text-[var(--ink)]"
+                              >
+                                Tag{tagSort.field === "tagBefore" && (tagSort.dir === "asc" ? " ▲" : " ▼")}
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => toggleTagSort("tagAfter")}
                                 className="text-left flex items-center gap-0.5 hover:text-[var(--ink)]"
                               >
                                 Tag After{tagSort.field === "tagAfter" && (tagSort.dir === "asc" ? " ▲" : " ▼")}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => toggleTagSort("position")}
+                                className="text-left flex items-center gap-0.5 hover:text-[var(--ink)]"
+                              >
+                                Total{tagSort.field === "position" && (tagSort.dir === "asc" ? " ▲" : " ▼")}
                               </button>
                               <button
                                 type="button"
@@ -1313,6 +1377,10 @@ export default function RoundManagePage({
                                   onChange={(e) => setTagAfters((prev) => ({ ...prev, [r.playerId]: e.target.value }))}
                                 />
 
+                                <span className="text-xs font-mono" style={{ color: totalDisplay(r).ink ?? "var(--ink-muted)" }}>
+                                  {totalDisplay(r).text}
+                                </span>
+
                                 <span className="text-xs font-mono text-[var(--ink-muted)]">{r.score ?? "—"}</span>
 
                                 <span className="text-xs font-mono text-[var(--ink-muted)]">{thruDisplay(r)}</span>
@@ -1347,7 +1415,7 @@ export default function RoundManagePage({
                   {tagError && <p className="text-sm text-red-600">{tagError}</p>}
                   <div className="flex items-center gap-3 flex-wrap">
                     <Button size="sm" variant="outline" onClick={handleAutoAssignTags} disabled={autoAssigning}>
-                      {autoAssigning ? "Assigning..." : "Auto-Assign New Tags"}
+                      {autoAssigning ? "Syncing & assigning..." : "Sync & Auto-Assign Tags"}
                     </Button>
                     <Button size="sm" onClick={handleSaveResults} disabled={resultsSaving}>
                       {resultsSaving ? "Saving..." : "Save"}
