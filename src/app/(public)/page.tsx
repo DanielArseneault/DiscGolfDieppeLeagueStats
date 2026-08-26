@@ -635,6 +635,17 @@ function PoolColumn({
                   prize={w.second.prize}
                 />
               )}
+              {w.third && (
+                <PodiumRow
+                  place={3}
+                  name={w.third.playerName}
+                  playerId={playerLookup.get(w.third.playerName.toLowerCase().trim())}
+                  leagueId={leagueId}
+                  score={w.third.score}
+                  relativeScore={w.third.relativeScore}
+                  prize={w.third.prize}
+                />
+              )}
             </div>
           ))}
         </div>

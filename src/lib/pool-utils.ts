@@ -11,6 +11,7 @@ export type PoolSummary = {
   pool: string;
   first: PoolPlacement | null;
   second: PoolPlacement | null;
+  third: PoolPlacement | null;
 };
 
 type ResultLike = {
@@ -77,9 +78,19 @@ export function computePoolSummaries(
         ? (items.find((r) => r.player.name === secondOv.playerName) ?? items.find((r) => r !== firstItem))
         : items.find((r) => r !== firstItem);
 
+      const thirdOv = poolOv.get(3);
+      const thirdItem = thirdOv
+        ? (items.find((r) => r.player.name === thirdOv.playerName) ?? items.find((r) => r !== firstItem && r !== secondItem))
+        : items.find((r) => r !== firstItem && r !== secondItem);
+
       const toPlacement = (r: ResultLike | undefined, ov?: { playerName: string; prize?: string | null }): PoolPlacement | null =>
         r ? { playerName: r.player.name, score: r.score, relativeScore: r.relativeScore, prize: ov?.prize } : null;
 
-      return { pool, first: toPlacement(firstItem, firstOv), second: toPlacement(secondItem, secondOv) };
+      return {
+        pool,
+        first: toPlacement(firstItem, firstOv),
+        second: toPlacement(secondItem, secondOv),
+        third: toPlacement(thirdItem, thirdOv),
+      };
     });
 }

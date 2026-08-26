@@ -892,7 +892,8 @@ export default function RoundManagePage({
       for (const g of poolData.groups) {
         const computedFirst = g.results[0]?.player.name ?? "";
         const computedSecond = g.results.find((r) => r.player.name !== computedFirst)?.player.name ?? "";
-        for (const [place, computedName] of [[1, computedFirst], [2, computedSecond]] as const) {
+        const computedThird = g.results.find((r) => r.player.name !== computedFirst && r.player.name !== computedSecond)?.player.name ?? "";
+        for (const [place, computedName] of [[1, computedFirst], [2, computedSecond], [3, computedThird]] as const) {
           const key = `${g.pool}-${place}`;
           const playerName = poolWinnerOverrides[key] || computedName;
           const prize = poolWinnerPrizes[key]?.trim() || undefined;
@@ -1441,17 +1442,20 @@ export default function RoundManagePage({
                     const summary = currentSummaries.find((s) => s.pool === g.pool);
                     const computedFirst = g.results[0]?.player.name ?? "";
                     const computedSecond = g.results.find((r) => r.player.name !== computedFirst)?.player.name ?? "";
+                    const computedThird = g.results.find((r) => r.player.name !== computedFirst && r.player.name !== computedSecond)?.player.name ?? "";
                     const currentFirst = poolWinnerOverrides[`${g.pool}-1`] ?? computedFirst;
                     const currentSecond = poolWinnerOverrides[`${g.pool}-2`] ?? computedSecond;
+                    const currentThird = poolWinnerOverrides[`${g.pool}-3`] ?? computedThird;
                     const firstOverridden = !!poolWinnerOverrides[`${g.pool}-1`] && poolWinnerOverrides[`${g.pool}-1`] !== computedFirst;
                     const secondOverridden = !!poolWinnerOverrides[`${g.pool}-2`] && poolWinnerOverrides[`${g.pool}-2`] !== computedSecond;
+                    const thirdOverridden = !!poolWinnerOverrides[`${g.pool}-3`] && poolWinnerOverrides[`${g.pool}-3`] !== computedThird;
 
                     void summary;
 
                     return (
                       <div key={g.pool} className="space-y-3">
                         <p className="text-xs font-semibold text-[var(--ink-2)]">{g.label}</p>
-                        {([{ place: 1, label: "🥇 1st Place", current: currentFirst, overridden: firstOverridden }, { place: 2, label: "🥈 2nd Place", current: currentSecond, overridden: secondOverridden }] as const).map(({ place, label, current, overridden }) => (
+                        {([{ place: 1, label: "🥇 1st Place", current: currentFirst, overridden: firstOverridden }, { place: 2, label: "🥈 2nd Place", current: currentSecond, overridden: secondOverridden }, { place: 3, label: "🥉 3rd Place", current: currentThird, overridden: thirdOverridden }] as const).map(({ place, label, current, overridden }) => (
                           <div key={place} className="space-y-1.5">
                             <Label className="text-xs flex items-center gap-1.5">
                               {label}

@@ -530,6 +530,9 @@ function PoolWinnerRows({ pools, playerLookup, leagueId }: { pools: PoolSummary[
           {w.second && (
             <PodiumEntry place={2} name={w.second.playerName} playerId={playerLookup.get(w.second.playerName.toLowerCase().trim())} leagueId={leagueId} relativeScore={w.second.relativeScore} prize={w.second.prize} />
           )}
+          {w.third && (
+            <PodiumEntry place={3} name={w.third.playerName} playerId={playerLookup.get(w.third.playerName.toLowerCase().trim())} leagueId={leagueId} relativeScore={w.third.relativeScore} prize={w.third.prize} />
+          )}
         </div>
       ))}
     </>
